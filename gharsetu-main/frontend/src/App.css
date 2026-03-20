@@ -1,0 +1,106 @@
+/* GharSetu Custom Styles */
+
+.App {
+  min-height: 100vh;
+}
+
+/* Animation Classes */
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.6s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes scaleIn {
+  from { 
+    opacity: 0; 
+    transform: scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+/* Stagger Animation */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* Property Card Hover Effects */
+.card-property:hover .property-image {
+  transform: scale(1.1);
+}
+
+/* Custom Focus States */
+input:focus, 
+textarea:focus, 
+select:focus,
+button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(6, 78, 59, 0.2);
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #064e3b;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Toast Customization */
+[data-sonner-toast] {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .container-main {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .section-padding {
+    padding-top: 3rem;
+    padding-bottom: 3rem;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}

@@ -1,0 +1,474 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { useAuth } from '../context/AuthContext';
+import { usersAPI, listingsAPI } from '../lib/api';
+import { Header, Footer } from './Layout';
+import { Button } from './ui/button';
+import { Card, CardContent } from './ui/card';
+import { Badge } from './ui/badge';
+import { toast } from 'sonner';
+import {
+  User,
+  MapPin,
+  Calendar,
+  Play,
+  Grid3X3,
+  Heart,
+  Eye,
+  Users,
+  UserPlus,
+  UserMinus,
+  MessageCircle,
+  CheckCircle,
+  Shield,
+  Home,
+  Building2,
+  Hotel,
+  PartyPopper,
+  Wrench,
+  Loader2,
+  ArrowLeft,
+} from 'lucide-react';
+
+const categoryIcons = {
+  home: Home,
+  business: Building2,
+  stay: Hotel,
+  event: PartyPopper,
+  services: Wrench,
+};
+
+const categoryColors = {
+  home: 'bg-emerald-500',
+  business: 'bg-blue-500',
+  stay: 'bg-purple-500',
+  event: 'bg-pink-500',
+  services: 'bg-orange-500',
+};
+
+export const OwnerProfilePage = () => {
+  const { ownerId } = useParams();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
+  const [owner, setOwner] = useState(null);
+  const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('reels');
+
+  useEffect(() => {
+    fetchOwnerProfile();
+  }, [ownerId]);
+
+  const fetchOwnerProfile = async () => {
+    try {
+      const [profileRes, listingsRes] = await Promise.all([
+        usersAPI.getProfile(ownerId),
+        listingsAPI.getAll({ owner_id: ownerId, limit: 20 }),
+      ]);
+      
+      setOwner(profileRes.data);
+      setListings(listingsRes.data.listings || []);
+      
+      // Check if current user is following this owner
+      if (isAuthenticated && user) {
+        const followingRes = await usersAPI.getFollowing(user.id).catch(() => ({ data: { users: [] } }));
+        setIsFollowing(followingRes.data.users?.some(u => u.id === ownerId) || false);
+      }
+    } catch (error) {
+      console.error('Failed to fetch owner profile:', error);
+      toast.error('Failed to load profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!isAuthenticated) {
+      toast.error('Login કરો follow કરવા માટે');
+      navigate('/login');
+      return;
+    }
+
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await usersAPI.unfollow(ownerId);
+        setIsFollowing(false);
+        setOwner(prev => ({ ...prev, followers_count: (prev.followers_count || 1) - 1 }));
+        toast.success('Unfollowed');
+      } else {
+        await usersAPI.follow(ownerId);
+        setIsFollowing(true);
+        setOwner(prev => ({ ...prev, followers_count: (prev.followers_count || 0) + 1 }));
+        toast.success('Following!');
+      }
+    } catch (error) {
+      toast.error('Action failed');
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleMessage = () => {
+    if (!isAuthenticated) {
+      toast.error('Login કરો message કરવા માટે');
+      navigate('/login');
+      return;
+    }
+    // Navigate to chat with this owner
+    navigate(`/chat/${ownerId}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-stone-50">
+        <Header />
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!owner) {
+    return (
+      <div className="min-h-screen bg-stone-50">
+        <Header />
+        <div className="container-main py-20 text-center">
+          <User className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+          <h2 className="font-heading text-2xl font-bold mb-2">Owner Not Found</h2>
+          <p className="text-muted-foreground mb-6">This profile doesn't exist or has been removed.</p>
+          <Button onClick={() => navigate(-1)} className="btn-primary">
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Go Back
+          </Button>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  const isOwnProfile = user?.id === ownerId;
+
+  return (
+    <div className="min-h-screen bg-stone-50" data-testid="owner-profile-page">
+      <Header />
+
+      {/* Profile Header */}
+      <div className="bg-white border-b">
+        <div className="container-main py-8">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
+            {/* Profile Picture */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="relative"
+            >
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-orange-500 p-1">
+                <div className="w-full h-full rounded-full bg-white p-1">
+                  <div className="w-full h-full rounded-full bg-primary flex items-center justify-center">
+                    <User className="w-16 h-16 md:w-20 md:h-20 text-white" />
+                  </div>
+                </div>
+              </div>
+              {owner.aadhar_verified && (
+                <div className="absolute bottom-2 right-2 w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center border-2 border-white">
+                  <CheckCircle className="w-5 h-5 text-white" />
+                </div>
+              )}
+            </motion.div>
+
+            {/* Profile Info */}
+            <div className="flex-1 text-center md:text-left">
+              <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+                <h1 className="font-heading text-2xl md:text-3xl font-bold" data-testid="owner-name">
+                  {owner.name}
+                </h1>
+                {!isOwnProfile && (
+                  <div className="flex items-center justify-center md:justify-start gap-2">
+                    <Button
+                      onClick={handleFollow}
+                      disabled={followLoading}
+                      className={isFollowing ? 'btn-outline' : 'btn-primary'}
+                      data-testid="follow-btn"
+                    >
+                      {followLoading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : isFollowing ? (
+                        <>
+                          <UserMinus className="w-4 h-4 mr-2" />
+                          Unfollow
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="w-4 h-4 mr-2" />
+                          Follow
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={handleMessage}
+                      data-testid="message-btn"
+                    >
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      Message
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Stats */}
+              <div className="flex items-center justify-center md:justify-start gap-8 mb-4">
+                <div className="text-center">
+                  <p className="font-bold text-xl">{owner.reels?.length || 0}</p>
+                  <p className="text-muted-foreground text-sm">Reels</p>
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-xl">{listings.length}</p>
+                  <p className="text-muted-foreground text-sm">Listings</p>
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-xl">{owner.followers_count || 0}</p>
+                  <p className="text-muted-foreground text-sm">Followers</p>
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-xl">{owner.following_count || 0}</p>
+                  <p className="text-muted-foreground text-sm">Following</p>
+                </div>
+              </div>
+
+              {/* Badges */}
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-4">
+                {owner.role && owner.role !== 'user' && (
+                  <Badge className="bg-primary/10 text-primary capitalize">
+                    {owner.role.replace('_', ' ')}
+                  </Badge>
+                )}
+                {owner.aadhar_verified && (
+                  <Badge className="bg-blue-100 text-blue-700">
+                    <Shield className="w-3 h-3 mr-1" />
+                    Verified
+                  </Badge>
+                )}
+                {owner.city && (
+                  <Badge variant="outline" className="text-muted-foreground">
+                    <MapPin className="w-3 h-3 mr-1" />
+                    {owner.city}
+                  </Badge>
+                )}
+              </div>
+
+              {/* Bio */}
+              {owner.bio && (
+                <p className="text-muted-foreground max-w-md">{owner.bio}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white border-b sticky top-16 z-10">
+        <div className="container-main">
+          <div className="flex items-center justify-center gap-8">
+            <button
+              onClick={() => setActiveTab('reels')}
+              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${
+                activeTab === 'reels'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              data-testid="reels-tab"
+            >
+              <Play className="w-4 h-4" />
+              <span className="font-medium">Reels</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('listings')}
+              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${
+                activeTab === 'listings'
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+              data-testid="listings-tab"
+            >
+              <Grid3X3 className="w-4 h-4" />
+              <span className="font-medium">Listings</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="container-main py-8">
+        {activeTab === 'reels' && (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4" data-testid="reels-grid">
+            {owner.reels?.length > 0 ? (
+              owner.reels.map((reel) => (
+                <ReelCard key={reel.id} reel={reel} />
+              ))
+            ) : (
+              <div className="col-span-full py-16 text-center">
+                <Play className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-heading text-xl font-semibold mb-2">No Reels Yet</h3>
+                <p className="text-muted-foreground">
+                  {isOwnProfile ? 'Upload your first reel!' : 'This owner hasn\'t uploaded any reels yet.'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'listings' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="listings-grid">
+            {listings.length > 0 ? (
+              listings.map((listing) => (
+                <ListingCard key={listing.id} listing={listing} />
+              ))
+            ) : (
+              <div className="col-span-full py-16 text-center">
+                <Home className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                <h3 className="font-heading text-xl font-semibold mb-2">No Listings Yet</h3>
+                <p className="text-muted-foreground">
+                  {isOwnProfile ? 'Create your first listing!' : 'This owner hasn\'t added any listings yet.'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Footer />
+    </div>
+  );
+};
+
+const ReelCard = ({ reel }) => {
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    navigate(`/reels?video=${reel.id}`);
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      whileHover={{ scale: 1.02 }}
+      className="aspect-[9/16] relative rounded-lg overflow-hidden cursor-pointer group bg-stone-900"
+      onClick={handleClick}
+      data-testid={`reel-card-${reel.id}`}
+    >
+      {reel.thumbnail_url ? (
+        <img
+          src={reel.thumbnail_url}
+          alt={reel.title}
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <video
+          src={reel.video_url || reel.url}
+          className="w-full h-full object-cover"
+          muted
+          preload="metadata"
+        />
+      )}
+      
+      {/* Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      
+      {/* Play Icon */}
+      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center">
+          <Play className="w-6 h-6 text-white ml-1" />
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="absolute bottom-2 left-2 right-2 flex items-center gap-3 text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+        <span className="flex items-center gap-1">
+          <Eye className="w-4 h-4" />
+          {reel.views?.toLocaleString() || 0}
+        </span>
+        <span className="flex items-center gap-1">
+          <Heart className="w-4 h-4" />
+          {reel.likes || 0}
+        </span>
+      </div>
+    </motion.div>
+  );
+};
+
+const ListingCard = ({ listing }) => {
+  const Icon = categoryIcons[listing.category] || Home;
+  const bgColor = categoryColors[listing.category] || 'bg-primary';
+
+  const formatPrice = (price, type) => {
+    if (price >= 10000000) return `₹${(price / 10000000).toFixed(2)} Cr`;
+    if (price >= 100000) return `₹${(price / 100000).toFixed(2)} L`;
+    return `₹${price?.toLocaleString('en-IN')}${type === 'rent' ? '/mo' : ''}`;
+  };
+
+  return (
+    <Link
+      to={`/listing/${listing.id}`}
+      className="group relative overflow-hidden rounded-2xl bg-white border border-stone-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
+      data-testid={`listing-card-${listing.id}`}
+    >
+      {/* Image */}
+      <div className="relative aspect-[4/3] overflow-hidden">
+        <img
+          src={listing.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400'}
+          alt={listing.title}
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        
+        {/* Category Badge */}
+        <div className="absolute top-3 left-3">
+          <div className={`${bgColor} px-3 py-1 rounded-full flex items-center gap-1`}>
+            <Icon className="w-3 h-3 text-white" />
+            <span className="text-white text-xs font-medium capitalize">{listing.category}</span>
+          </div>
+        </div>
+
+        {/* Type Badge */}
+        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full">
+          <span className="text-xs font-semibold text-stone-700 capitalize">
+            {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
+          </span>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        <h3 className="font-heading font-semibold text-lg text-stone-900 line-clamp-1 group-hover:text-primary transition-colors">
+          {listing.title}
+        </h3>
+        
+        <div className="flex items-center gap-1 mt-2 text-muted-foreground">
+          <MapPin className="w-4 h-4 flex-shrink-0" />
+          <span className="text-sm line-clamp-1">{listing.location}, {listing.city}</span>
+        </div>
+
+        <div className="flex items-center justify-between mt-4 pt-4 border-t border-stone-100">
+          <p className="font-heading font-bold text-xl text-primary">
+            {formatPrice(listing.price, listing.listing_type)}
+          </p>
+          <div className="flex items-center gap-3 text-muted-foreground text-sm">
+            <span className="flex items-center gap-1">
+              <Eye className="w-4 h-4" />
+              {listing.views?.toLocaleString() || 0}
+            </span>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+export default OwnerProfilePage;

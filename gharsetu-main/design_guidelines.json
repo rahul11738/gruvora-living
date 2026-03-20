@@ -1,0 +1,156 @@
+{
+  "design_system": {
+    "identity": {
+      "name": "GharSetu",
+      "tagline": "Connecting You to Your Perfect Space",
+      "tone": "Trustworthy, Warm, Modern Indian, Efficient",
+      "theme_mode": "light",
+      "archetype": "Organic & Earthy (Trust, Growth)"
+    },
+    "typography": {
+      "font_family": {
+        "heading": "Outfit, sans-serif",
+        "body": "Plus Jakarta Sans, sans-serif",
+        "mono": "JetBrains Mono, monospace",
+        "accent": "Playfair Display, serif"
+      },
+      "scale": {
+        "h1": "text-5xl md:text-7xl font-bold tracking-tight leading-[1.1]",
+        "h2": "text-4xl md:text-5xl font-semibold tracking-tight",
+        "h3": "text-2xl md:text-3xl font-medium",
+        "body_lg": "text-lg leading-relaxed text-muted-foreground",
+        "body_base": "text-base leading-relaxed text-foreground",
+        "caption": "text-sm text-muted-foreground uppercase tracking-wider"
+      },
+      "imports": [
+        "@fontsource/outfit/300.css",
+        "@fontsource/outfit/400.css",
+        "@fontsource/outfit/500.css",
+        "@fontsource/outfit/600.css",
+        "@fontsource/outfit/700.css",
+        "@fontsource/plus-jakarta-sans/400.css",
+        "@fontsource/plus-jakarta-sans/500.css",
+        "@fontsource/plus-jakarta-sans/600.css",
+        "@fontsource/plus-jakarta-sans/700.css"
+      ]
+    },
+    "colors": {
+      "primary": {
+        "DEFAULT": "#064e3b",
+        "foreground": "#ffffff",
+        "50": "#ecfdf5",
+        "100": "#d1fae5",
+        "200": "#a7f3d0",
+        "300": "#6ee7b7",
+        "400": "#34d399",
+        "500": "#10b981",
+        "600": "#059669",
+        "700": "#047857",
+        "800": "#065f46",
+        "900": "#064e3b",
+        "950": "#022c22"
+      },
+      "secondary": {
+        "DEFAULT": "#c2410c",
+        "foreground": "#ffffff",
+        "50": "#fff7ed",
+        "100": "#ffedd5",
+        "200": "#fed7aa",
+        "300": "#fdba74",
+        "400": "#fb923c",
+        "500": "#f97316",
+        "600": "#ea580c",
+        "700": "#c2410c",
+        "800": "#9a3412",
+        "900": "#7c2d12",
+        "950": "#431407"
+      },
+      "background": {
+        "DEFAULT": "#fafaf9",
+        "paper": "#ffffff",
+        "subtle": "#f5f5f4"
+      },
+      "accent": {
+        "gold": "#d97706",
+        "blue": "#0ea5e9"
+      },
+      "semantic": {
+        "success": "#10b981",
+        "warning": "#f59e0b",
+        "error": "#ef4444",
+        "info": "#3b82f6"
+      }
+    },
+    "visual_enhancers": {
+      "radius": "0.75rem",
+      "shadows": {
+        "card": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)",
+        "hover": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05)",
+        "dropdown": "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)"
+      },
+      "glassmorphism": {
+        "header": "bg-white/80 backdrop-blur-md border-b border-stone-200/50",
+        "card": "bg-white/60 backdrop-blur-sm border border-white/40 shadow-sm"
+      },
+      "texture": "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E\")"
+    },
+    "layout_strategies": {
+      "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+      "spacing": {
+        "section": "py-24 md:py-32",
+        "element": "space-y-6"
+      },
+      "grids": {
+        "bento": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6",
+        "tetris": "grid grid-cols-1 md:grid-cols-12 gap-8 auto-rows-[300px]",
+        "dashboard": "grid grid-cols-1 md:grid-cols-[280px_1fr] min-h-screen"
+      }
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_home": "https://images.unsplash.com/photo-1744311971549-9c529b60b98a?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "hero_interior": "https://images.unsplash.com/photo-1760072513442-9872656c1b07?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "trust_keys": "https://images.unsplash.com/photo-1742318592061-15c5f19e1e47?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "service_plumber": "https://images.unsplash.com/photo-1726931535180-d27a2ffd7474?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "service_cleaning": "https://images.unsplash.com/photo-1664008760004-182420e58e7c?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "office_space": "https://images.unsplash.com/photo-1761818645915-260598d569a7?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "event_hall": "https://images.unsplash.com/photo-1763553113332-800519753e40?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "family_happy": "https://images.unsplash.com/photo-1743487014165-c26c868b8186?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "icons": {
+      "library": "lucide-react",
+      "fallback": "@heroicons/react"
+    }
+  },
+  "components_instructions": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md transition-all active:scale-95 rounded-full px-8 py-6 font-medium tracking-wide",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/90 shadow-sm transition-all active:scale-95 rounded-full px-6 py-4",
+      "outline": "border-2 border-primary text-primary hover:bg-primary/5 transition-all rounded-full px-6 py-4"
+    },
+    "cards": {
+      "property": "group relative overflow-hidden rounded-2xl bg-white border border-stone-100 shadow-card hover:shadow-hover transition-all duration-300",
+      "service": "bg-white p-8 rounded-xl border border-stone-100 hover:border-secondary/30 hover:bg-secondary/5 transition-all duration-300"
+    },
+    "inputs": {
+      "base": "flex h-12 w-full rounded-lg border border-input bg-background px-4 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all",
+      "label": "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 mb-2 block text-stone-700"
+    }
+  },
+  "universal_guidelines": [
+    "NEVER use generic AI emojis (🤖, 🚀, 💡) in UI.",
+    "Do NOT use gradients for text.",
+    "Ensure all interactive elements have a `data-testid` attribute.",
+    "Use `framer-motion` for page transitions and micro-interactions.",
+    "Mobile-first: Always verify layouts on mobile viewports (grid-cols-1).",
+    "Use generous padding (py-24+) for sections to create breathing room.",
+    "Text readability is paramount: Ensure high contrast (WCAG AA) for all text.",
+    "Use `sonner` for toast notifications.",
+    "For dates, use `date-fns` and Shadcn Calendar.",
+    "Avoid centering text in large blocks; left-align for readability.",
+    "Components must use named exports.",
+    "Pages must use default exports.",
+    "Use the provided image URLs for specific sections."
+  ]
+}
