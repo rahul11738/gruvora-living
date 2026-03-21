@@ -24,6 +24,7 @@ import {
   Shield,
   LogOut,
   Loader2,
+  RotateCcw,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -42,6 +43,34 @@ export const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [listings, setListings] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditActionFilter, setAuditActionFilter] = useState('all');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditFromDate, setAuditFromDate] = useState('');
+  const [auditToDate, setAuditToDate] = useState('');
+  const [auditDateError, setAuditDateError] = useState('');
+  const [auditRangeLabel, setAuditRangeLabel] = useState('Custom');
+  const [auditLogsPage, setAuditLogsPage] = useState(1);
+  const [auditLogsTotalPages, setAuditLogsTotalPages] = useState(1);
+  const [auditLogsTotal, setAuditLogsTotal] = useState(0);
+  const [auditActionCounts, setAuditActionCounts] = useState({});
+  const [exportingAudit, setExportingAudit] = useState(false);
+  const [mediaJobs, setMediaJobs] = useState([]);
+  const [mediaJobStatus, setMediaJobStatus] = useState('failed');
+  const [mediaJobsPage, setMediaJobsPage] = useState(1);
+  const [mediaJobsTotalPages, setMediaJobsTotalPages] = useState(1);
+  const [mediaJobsTotal, setMediaJobsTotal] = useState(0);
+  const [mediaJobMaxAttempts, setMediaJobMaxAttempts] = useState(5);
+  const [mediaJobCounts, setMediaJobCounts] = useState({
+    pending: 0,
+    processing: 0,
+    retry: 0,
+    completed: 0,
+    failed: 0,
+  });
+  const [retryingJobId, setRetryingJobId] = useState(null);
+  const [resettingJobId, setResettingJobId] = useState(null);
+  const [mediaAutoRefreshEnabled, setMediaAutoRefreshEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -54,23 +83,271 @@ export const AdminDashboard = () => {
     fetchDashboardData();
   }, [isAdmin, navigate]);
 
+  useEffect(() => {
+    if (activeTab !== 'media-jobs' || !mediaAutoRefreshEnabled) return undefined;
+
+    const intervalId = setInterval(() => {
+      fetchMediaJobs(mediaJobStatus, mediaJobsPage);
+    }, 15000);
+
+    return () => clearInterval(intervalId);
+  }, [activeTab, mediaJobStatus, mediaJobsPage, mediaAutoRefreshEnabled]);
+
+  useEffect(() => {
+    if (activeTab !== 'audit-logs') return;
+    if (!auditFromDate && !auditToDate) {
+      const today = new Date();
+      const start = new Date();
+      start.setDate(today.getDate() - 6);
+      const toISODate = (d) => d.toISOString().slice(0, 10);
+      const defaultFrom = toISODate(start);
+      const defaultTo = toISODate(today);
+      setAuditFromDate(defaultFrom);
+      setAuditToDate(defaultTo);
+      setAuditRangeLabel('Last 7 Days');
+      fetchAuditLogs(auditActionFilter, 1, defaultFrom, defaultTo);
+      return;
+    }
+    fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== 'audit-logs') return undefined;
+
+    const handle = setTimeout(() => {
+      fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, auditSearch);
+    }, 300);
+
+    return () => clearTimeout(handle);
+  }, [auditSearch]);
+
+  const isAuditDateRangeValid = (fromDate = auditFromDate, toDate = auditToDate) => {
+    if (!fromDate || !toDate) {
+      setAuditDateError('');
+      return true;
+    }
+    if (fromDate > toDate) {
+      setAuditDateError('From date cannot be later than To date');
+      return false;
+    }
+    setAuditDateError('');
+    return true;
+  };
+
+  const formatAsDateInput = (date) => date.toISOString().slice(0, 10);
+
+  const applyAuditPreset = async (preset) => {
+    const today = new Date();
+    const start = new Date(today);
+
+    if (preset === 'today') {
+      // same day range
+    } else if (preset === '7d') {
+      start.setDate(today.getDate() - 6);
+    } else if (preset === '30d') {
+      start.setDate(today.getDate() - 29);
+    }
+
+    const from = formatAsDateInput(start);
+    const to = formatAsDateInput(today);
+    setAuditFromDate(from);
+    setAuditToDate(to);
+    const presetLabel = preset === 'today' ? 'Today' : preset === '7d' ? 'Last 7 Days' : 'Last 30 Days';
+    setAuditRangeLabel(presetLabel);
+    setAuditLogsPage(1);
+    await fetchAuditLogs(auditActionFilter, 1, from, to);
+  };
+
   const fetchDashboardData = async () => {
     try {
-      const [statsRes, usersRes, listingsRes, bookingsRes] = await Promise.all([
+      const [statsRes, usersRes, listingsRes, bookingsRes, mediaJobsRes] = await Promise.all([
         adminAPI.getStats(),
         adminAPI.getUsers({ limit: 50 }),
         adminAPI.getListings({ limit: 50 }),
         adminAPI.getBookings({ limit: 50 }),
+        adminAPI.getMediaDeleteJobs({ status: mediaJobStatus, page: 1, limit: 20 }),
       ]);
       setStats(statsRes.data);
       setUsers(usersRes.data.users);
       setListings(listingsRes.data.listings);
       setBookings(bookingsRes.data.bookings);
+      setMediaJobs(mediaJobsRes.data.jobs || []);
+      setMediaJobsTotal(mediaJobsRes.data.total || 0);
+      setMediaJobsPage(mediaJobsRes.data.page || 1);
+      setMediaJobsTotalPages(mediaJobsRes.data.total_pages || 1);
+      setMediaJobMaxAttempts(mediaJobsRes.data.max_attempts || 5);
+      setMediaJobCounts(mediaJobsRes.data.status_counts || {
+        pending: 0,
+        processing: 0,
+        retry: 0,
+        completed: 0,
+        failed: 0,
+      });
     } catch (error) {
       console.error('Failed to fetch admin data:', error);
       toast.error('Failed to load admin dashboard');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMediaJobs = async (status = mediaJobStatus, page = mediaJobsPage) => {
+    try {
+      const res = await adminAPI.getMediaDeleteJobs({ status, page, limit: 20 });
+      setMediaJobs(res.data.jobs || []);
+      setMediaJobsTotal(res.data.total || 0);
+      setMediaJobsPage(res.data.page || page);
+      setMediaJobsTotalPages(res.data.total_pages || 1);
+      setMediaJobMaxAttempts(res.data.max_attempts || 5);
+      setMediaJobCounts(res.data.status_counts || {
+        pending: 0,
+        processing: 0,
+        retry: 0,
+        completed: 0,
+        failed: 0,
+      });
+    } catch (error) {
+      console.error('Failed to fetch media jobs:', error);
+      toast.error('Failed to load media jobs');
+    }
+  };
+
+  const fetchAuditLogs = async (
+    action = auditActionFilter,
+    page = auditLogsPage,
+    fromDate = auditFromDate,
+    toDate = auditToDate,
+    search = auditSearch,
+  ) => {
+    if (!isAuditDateRangeValid(fromDate, toDate)) {
+      return;
+    }
+    try {
+      const params = { page, limit: 20 };
+      if (action && action !== 'all') {
+        params.action = action;
+      }
+      if (fromDate) {
+        params.from_date = `${fromDate}T00:00:00`;
+      }
+      if (toDate) {
+        params.to_date = `${toDate}T23:59:59`;
+      }
+      if (search && search.trim()) {
+        params.q = search.trim();
+      }
+      const res = await adminAPI.getAuditLogs(params);
+      setAuditLogs(res.data.logs || []);
+      setAuditLogsTotal(res.data.total || 0);
+      setAuditLogsPage(res.data.page || page);
+      setAuditLogsTotalPages(res.data.total_pages || 1);
+      setAuditActionCounts(res.data.action_counts || {});
+    } catch (error) {
+      console.error('Failed to fetch audit logs:', error);
+      toast.error('Failed to load audit logs');
+    }
+  };
+
+  const handleAuditActionFilterChange = async (action) => {
+    setAuditActionFilter(action);
+    setAuditLogsPage(1);
+    await fetchAuditLogs(action, 1, auditFromDate, auditToDate);
+  };
+
+  const handleAuditDateFilterApply = async () => {
+    if (!isAuditDateRangeValid(auditFromDate, auditToDate)) {
+      return;
+    }
+    setAuditLogsPage(1);
+    await fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, auditSearch);
+  };
+
+  const handleAuditSearchApply = async () => {
+    setAuditLogsPage(1);
+    await fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, auditSearch);
+  };
+
+  const handleAuditSearchClear = async () => {
+    setAuditSearch('');
+    setAuditLogsPage(1);
+    await fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, '');
+  };
+
+  const handleExportAuditLogs = async () => {
+    if (!isAuditDateRangeValid(auditFromDate, auditToDate)) {
+      return;
+    }
+    setExportingAudit(true);
+    try {
+      const params = { limit: 5000 };
+      if (auditActionFilter !== 'all') {
+        params.action = auditActionFilter;
+      }
+      if (auditSearch && auditSearch.trim()) {
+        params.q = auditSearch.trim();
+      }
+      if (auditFromDate) {
+        params.from_date = `${auditFromDate}T00:00:00`;
+      }
+      if (auditToDate) {
+        params.to_date = `${auditToDate}T23:59:59`;
+      }
+
+      const response = await adminAPI.getAuditLogsCsv(params);
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
+      const url = window.URL.createObjectURL(blob);
+      const actionPart = auditActionFilter === 'all' ? 'all' : auditActionFilter;
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+      const fileName = `audit_logs_${actionPart}_${timestamp}.csv`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Audit logs CSV exported');
+    } catch (error) {
+      console.error('Failed to export audit logs:', error);
+      toast.error('Failed to export CSV');
+    } finally {
+      setExportingAudit(false);
+    }
+  };
+
+  const handleMediaStatusChange = async (status) => {
+    setMediaJobStatus(status);
+    setMediaJobsPage(1);
+    await fetchMediaJobs(status, 1);
+  };
+
+  const handleRetryMediaJob = async (jobId) => {
+    setRetryingJobId(jobId);
+    try {
+      await adminAPI.retryMediaDeleteJob(jobId);
+      toast.success('Retry queued');
+      await fetchMediaJobs(mediaJobStatus, mediaJobsPage);
+    } catch (error) {
+      console.error('Failed to retry media job:', error);
+      toast.error(error?.response?.data?.detail || 'Failed to retry job');
+    } finally {
+      setRetryingJobId(null);
+    }
+  };
+
+  const handleResetRetryMediaJob = async (jobId) => {
+    setResettingJobId(jobId);
+    try {
+      await adminAPI.resetRetryMediaDeleteJob(jobId);
+      toast.success('Attempts reset and retry queued');
+      await fetchMediaJobs(mediaJobStatus, mediaJobsPage);
+    } catch (error) {
+      console.error('Failed to reset/retry media job:', error);
+      toast.error(error?.response?.data?.detail || 'Failed to reset/retry job');
+    } finally {
+      setResettingJobId(null);
     }
   };
 
@@ -221,6 +498,8 @@ export const AdminDashboard = () => {
             <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
             <TabsTrigger value="listings">Listings ({listings.length})</TabsTrigger>
             <TabsTrigger value="bookings">Bookings ({bookings.length})</TabsTrigger>
+            <TabsTrigger value="media-jobs">Media Jobs ({mediaJobs.length})</TabsTrigger>
+            <TabsTrigger value="audit-logs">Audit Logs ({auditLogsTotal})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -442,6 +721,320 @@ export const AdminDashboard = () => {
                       <p className="font-bold text-primary">₹{booking.total_price?.toLocaleString('en-IN')}</p>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="media-jobs">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle>Media Delete Jobs</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={mediaJobStatus}
+                      onChange={(e) => handleMediaStatusChange(e.target.value)}
+                      className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+                    >
+                      <option value="failed">Failed</option>
+                      <option value="retry">Retry</option>
+                      <option value="pending">Pending</option>
+                      <option value="processing">Processing</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <Button variant="outline" size="sm" onClick={() => fetchMediaJobs(mediaJobStatus, mediaJobsPage)}>
+                      Refresh
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMediaAutoRefreshEnabled((prev) => !prev)}
+                    >
+                      {mediaAutoRefreshEnabled ? 'Pause Auto' : 'Resume Auto'}
+                    </Button>
+                    {activeTab === 'media-jobs' && (
+                      <Badge className={mediaAutoRefreshEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-200 text-stone-700'}>
+                        {mediaAutoRefreshEnabled ? 'Auto refresh: 15s' : 'Auto refresh: paused'}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+                  <div className="rounded-lg bg-red-50 p-3">
+                    <p className="text-xs text-red-700">Failed</p>
+                    <p className="text-xl font-bold text-red-700">{mediaJobCounts.failed || 0}</p>
+                  </div>
+                  <div className="rounded-lg bg-amber-50 p-3">
+                    <p className="text-xs text-amber-700">Retry</p>
+                    <p className="text-xl font-bold text-amber-700">{mediaJobCounts.retry || 0}</p>
+                  </div>
+                  <div className="rounded-lg bg-blue-50 p-3">
+                    <p className="text-xs text-blue-700">Pending</p>
+                    <p className="text-xl font-bold text-blue-700">{mediaJobCounts.pending || 0}</p>
+                  </div>
+                  <div className="rounded-lg bg-indigo-50 p-3">
+                    <p className="text-xs text-indigo-700">Processing</p>
+                    <p className="text-xl font-bold text-indigo-700">{mediaJobCounts.processing || 0}</p>
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 p-3">
+                    <p className="text-xs text-emerald-700">Completed</p>
+                    <p className="text-xl font-bold text-emerald-700">{mediaJobCounts.completed || 0}</p>
+                  </div>
+                </div>
+
+                {mediaJobs.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No media jobs found</p>
+                ) : (
+                  <div className="space-y-3">
+                    {mediaJobs.map((job) => (
+                      <div key={job.id} className="flex items-center justify-between gap-4 p-4 bg-stone-50 rounded-lg">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{job.public_id}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Status: {job.status} | Attempts: {job.attempts || 0}
+                          </p>
+                          {job.last_error && (
+                            <p className="text-xs text-red-600 mt-1 truncate">Error: {job.last_error}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {(job.status === 'failed' || job.status === 'retry') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRetryMediaJob(job.id)}
+                              disabled={retryingJobId === job.id || (job.attempts || 0) >= mediaJobMaxAttempts}
+                            >
+                              {retryingJobId === job.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <RotateCcw className="w-4 h-4" />
+                              )}
+                            </Button>
+                          )}
+                          {job.status === 'failed' && (job.attempts || 0) >= mediaJobMaxAttempts && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleResetRetryMediaJob(job.id)}
+                              disabled={resettingJobId === job.id}
+                            >
+                              {resettingJobId === job.id ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                'Reset+Retry'
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-5 flex items-center justify-between border-t pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Page {mediaJobsPage} of {mediaJobsTotalPages} • Total {mediaJobsTotal}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchMediaJobs(mediaJobStatus, Math.max(1, mediaJobsPage - 1))}
+                      disabled={mediaJobsPage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchMediaJobs(mediaJobStatus, Math.min(mediaJobsTotalPages, mediaJobsPage + 1))}
+                      disabled={mediaJobsPage >= mediaJobsTotalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="audit-logs">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle>Admin Audit Logs</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={auditActionFilter}
+                      onChange={(e) => handleAuditActionFilterChange(e.target.value)}
+                      className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+                    >
+                      <option value="all">All Actions</option>
+                      <option value="media_delete_job_retry">Retry</option>
+                      <option value="media_delete_job_reset_retry">Reset Retry</option>
+                    </select>
+                    <Button variant="outline" size="sm" onClick={() => fetchAuditLogs(auditActionFilter, auditLogsPage)}>
+                      Refresh
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportAuditLogs}
+                      disabled={exportingAudit}
+                    >
+                      {exportingAudit ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Export CSV'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAuditSearchApply();
+                      }
+                    }}
+                    placeholder="Search actor/job/public_id"
+                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm min-w-[240px]"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleAuditSearchApply}>
+                    Search
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleAuditSearchClear}>
+                    Clear Search
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => applyAuditPreset('today')}>
+                    Today
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => applyAuditPreset('7d')}>
+                    Last 7 Days
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => applyAuditPreset('30d')}>
+                    Last 30 Days
+                  </Button>
+                  <input
+                    type="date"
+                    value={auditFromDate}
+                    onChange={(e) => {
+                      setAuditFromDate(e.target.value);
+                      setAuditRangeLabel('Custom');
+                      if (auditDateError) {
+                        isAuditDateRangeValid(e.target.value, auditToDate);
+                      }
+                    }}
+                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+                  />
+                  <input
+                    type="date"
+                    value={auditToDate}
+                    onChange={(e) => {
+                      setAuditToDate(e.target.value);
+                      setAuditRangeLabel('Custom');
+                      if (auditDateError) {
+                        isAuditDateRangeValid(auditFromDate, e.target.value);
+                      }
+                    }}
+                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+                  />
+                  <Button variant="outline" size="sm" onClick={handleAuditDateFilterApply}>
+                    Apply Dates
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setAuditFromDate('');
+                      setAuditToDate('');
+                      setAuditDateError('');
+                      setAuditRangeLabel('All Time');
+                      setAuditLogsPage(1);
+                      await fetchAuditLogs(auditActionFilter, 1, '', '', auditSearch);
+                    }}
+                  >
+                    Clear Dates
+                  </Button>
+                  <Badge className="bg-stone-200 text-stone-700">Range: {auditRangeLabel}</Badge>
+                </div>
+                {auditDateError && (
+                  <p className="mt-2 text-sm text-red-600">{auditDateError}</p>
+                )}
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                  <div className="rounded-lg bg-stone-100 p-3">
+                    <p className="text-xs text-stone-600">Total Logs</p>
+                    <p className="text-xl font-bold text-stone-800">{auditLogsTotal}</p>
+                  </div>
+                  <div className="rounded-lg bg-blue-50 p-3">
+                    <p className="text-xs text-blue-700">Retry Actions</p>
+                    <p className="text-xl font-bold text-blue-700">{auditActionCounts.media_delete_job_retry || 0}</p>
+                  </div>
+                  <div className="rounded-lg bg-indigo-50 p-3">
+                    <p className="text-xs text-blue-700">Reset Retry Actions</p>
+                    <p className="text-xl font-bold text-blue-700">{auditActionCounts.media_delete_job_reset_retry || 0}</p>
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 p-3 md:col-span-1">
+                    <p className="text-xs text-emerald-700">Visible Rows</p>
+                    <p className="text-xl font-bold text-emerald-700">{auditLogs.length}</p>
+                  </div>
+                </div>
+
+                {auditLogs.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No audit logs found</p>
+                ) : (
+                  <div className="space-y-3">
+                    {auditLogs.map((log) => (
+                      <div key={log.id} className="p-4 bg-stone-50 rounded-lg">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-medium">{log.action}</p>
+                          <Badge className="bg-stone-200 text-stone-700">{new Date(log.created_at).toLocaleString('en-IN')}</Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Actor: {log.actor_email || log.actor_id} | Target: {log.target_type} ({log.target_id})
+                        </p>
+                        {log.meta && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Prev status: {log.meta.previous_status || '-'} | Prev attempts: {log.meta.previous_attempts ?? '-'}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-5 flex items-center justify-between border-t pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Page {auditLogsPage} of {auditLogsTotalPages} • Total {auditLogsTotal}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchAuditLogs(auditActionFilter, Math.max(1, auditLogsPage - 1))}
+                      disabled={auditLogsPage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchAuditLogs(auditActionFilter, Math.min(auditLogsTotalPages, auditLogsPage + 1))}
+                      disabled={auditLogsPage >= auditLogsTotalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

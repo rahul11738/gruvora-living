@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -13,10 +13,18 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import bcrypt
 import json
+import csv
+import io
 from enum import Enum
 import asyncio
 from collections import defaultdict
+import hashlib
 import socketio
+from pymongo import ReturnDocument
+try:
+    import redis.asyncio as redis_asyncio
+except ImportError:
+    redis_asyncio = None
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -189,6 +197,200 @@ class ReviewCreate(BaseModel):
 
 class ChatMessage(BaseModel):
     message: str
+
+class UploadSignatureRequest(BaseModel):
+    folder: str = "listings"
+    resource_type: str = "auto"
+
+class UploadDeleteRequest(BaseModel):
+    public_id: str
+    resource_type: str = "image"
+
+ALLOWED_UPLOAD_FOLDERS = {"listings", "reels", "profile"}
+_upload_rate_limit_windows: Dict[str, List[datetime]] = defaultdict(list)
+redis_url = os.environ.get("REDIS_URL", "")
+redis_client = None
+delete_worker_task = None
+DELETE_JOB_MAX_ATTEMPTS = 5
+DELETE_RETRY_DELAYS_SECONDS = [30, 120, 600, 1800, 3600]
+
+OWNER_UPLOAD_ROLES = {
+    UserRole.PROPERTY_OWNER,
+    UserRole.SERVICE_PROVIDER,
+    UserRole.HOTEL_OWNER,
+    UserRole.EVENT_OWNER,
+    UserRole.ADMIN,
+}
+
+async def enforce_upload_rate_limit(user_id: str, action: str, max_requests: int = 30, window_seconds: int = 60) -> None:
+    """Redis-backed rate limit guard with in-memory fallback."""
+    if redis_client:
+        key = f"rl:{action}:{user_id}"
+        current_count = await redis_client.incr(key)
+        if current_count == 1:
+            await redis_client.expire(key, window_seconds)
+        if current_count > max_requests:
+            raise HTTPException(status_code=429, detail="Too many upload requests. Please retry shortly.")
+        return
+
+    # Fallback for local/dev if Redis is unavailable.
+    now = datetime.now(timezone.utc)
+    key = f"{action}:{user_id}"
+    window = _upload_rate_limit_windows[key]
+    cutoff = now - timedelta(seconds=window_seconds)
+
+    while window and window[0] < cutoff:
+        window.pop(0)
+
+    if len(window) >= max_requests:
+        raise HTTPException(status_code=429, detail="Too many upload requests. Please retry shortly.")
+
+    window.append(now)
+
+def ensure_folder_access(user: Dict[str, Any], folder: str) -> None:
+    """Authorize uploads/deletes by user role and folder."""
+    role = user.get("role")
+
+    # Profile media is allowed for any authenticated user.
+    if folder == "profile":
+        return
+
+    # Listings/reels media requires owner-capable roles.
+    if folder in {"listings", "reels"} and role in OWNER_UPLOAD_ROLES:
+        return
+
+    raise HTTPException(status_code=403, detail="Not authorized for this media folder")
+
+def build_delete_job_id(user_id: str, public_id: str, resource_type: str, idempotency_key: Optional[str] = None) -> str:
+    seed = idempotency_key or f"{user_id}:{public_id}:{resource_type}"
+    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+    return f"del_{digest[:32]}"
+
+async def process_media_delete_job(job_doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Try one Cloudinary delete attempt and update retry state."""
+    attempts = int(job_doc.get("attempts", 0)) + 1
+    job_id = job_doc["id"]
+    public_id = job_doc["public_id"]
+    resource_type = job_doc["resource_type"]
+    now = datetime.now(timezone.utc)
+
+    try:
+        delete_call = partial(
+            cloudinary.uploader.destroy,
+            public_id,
+            resource_type=resource_type,
+            invalidate=True,
+        )
+        delete_result = await asyncio.get_event_loop().run_in_executor(None, delete_call)
+        result_status = delete_result.get("result", "unknown")
+        success = result_status in {"ok", "not found"}
+
+        if success:
+            await db.media_delete_jobs.update_one(
+                {"id": job_id},
+                {
+                    "$set": {
+                        "status": "completed",
+                        "result": result_status,
+                        "attempts": attempts,
+                        "updated_at": now,
+                        "completed_at": now,
+                        "last_error": None,
+                    }
+                },
+            )
+            return {"success": True, "result": result_status}
+
+        if attempts >= DELETE_JOB_MAX_ATTEMPTS:
+            await db.media_delete_jobs.update_one(
+                {"id": job_id},
+                {
+                    "$set": {
+                        "status": "failed",
+                        "attempts": attempts,
+                        "updated_at": now,
+                        "last_error": f"Cloudinary result: {result_status}",
+                    }
+                },
+            )
+            return {"success": False, "result": result_status}
+
+        retry_delay = DELETE_RETRY_DELAYS_SECONDS[min(attempts - 1, len(DELETE_RETRY_DELAYS_SECONDS) - 1)]
+        await db.media_delete_jobs.update_one(
+            {"id": job_id},
+            {
+                "$set": {
+                    "status": "retry",
+                    "attempts": attempts,
+                    "updated_at": now,
+                    "last_error": f"Cloudinary result: {result_status}",
+                    "next_retry_at": now + timedelta(seconds=retry_delay),
+                }
+            },
+        )
+        return {"success": False, "result": result_status}
+
+    except Exception as e:
+        logger.error(f"Cloudinary delete exception for {public_id}: {e}")
+        if attempts >= DELETE_JOB_MAX_ATTEMPTS:
+            await db.media_delete_jobs.update_one(
+                {"id": job_id},
+                {
+                    "$set": {
+                        "status": "failed",
+                        "attempts": attempts,
+                        "updated_at": now,
+                        "last_error": str(e),
+                    }
+                },
+            )
+            return {"success": False, "result": "failed"}
+
+        retry_delay = DELETE_RETRY_DELAYS_SECONDS[min(attempts - 1, len(DELETE_RETRY_DELAYS_SECONDS) - 1)]
+        await db.media_delete_jobs.update_one(
+            {"id": job_id},
+            {
+                "$set": {
+                    "status": "retry",
+                    "attempts": attempts,
+                    "updated_at": now,
+                    "last_error": str(e),
+                    "next_retry_at": now + timedelta(seconds=retry_delay),
+                }
+            },
+        )
+        return {"success": False, "result": "retry"}
+
+async def media_delete_retry_worker():
+    """Background worker that retries failed/pending Cloudinary deletes."""
+    logger.info("Media delete retry worker started")
+    try:
+        while True:
+            now = datetime.now(timezone.utc)
+            job = await db.media_delete_jobs.find_one_and_update(
+                {
+                    "status": {"$in": ["pending", "retry"]},
+                    "next_retry_at": {"$lte": now},
+                },
+                {
+                    "$set": {
+                        "status": "processing",
+                        "updated_at": now,
+                    }
+                },
+                sort=[("next_retry_at", 1)],
+                return_document=ReturnDocument.AFTER,
+            )
+
+            if not job:
+                await asyncio.sleep(5)
+                continue
+
+            await process_media_delete_job(job)
+    except asyncio.CancelledError:
+        logger.info("Media delete retry worker stopped")
+    except Exception as e:
+        logger.error(f"Media delete retry worker crashed: {e}")
 
 class MessageCreate(BaseModel):
     receiver_id: str
@@ -1067,6 +1269,442 @@ if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
     logger.info(f"✅ Cloudinary configured: {CLOUDINARY_CLOUD_NAME}")
 else:
     logger.warning("⚠️ Cloudinary not configured - running in demo mode")
+
+@api_router.post("/upload/signature")
+async def get_upload_signature(
+    payload: UploadSignatureRequest,
+    user: dict = Depends(get_current_user)
+):
+    """Generate short-lived Cloudinary signature for direct frontend uploads."""
+    if not CLOUDINARY_CLOUD_NAME or not CLOUDINARY_API_KEY or not CLOUDINARY_API_SECRET:
+        raise HTTPException(status_code=503, detail="Cloudinary is not configured")
+
+    await enforce_upload_rate_limit(user["id"], "upload_signature", max_requests=30, window_seconds=60)
+
+    allowed_resource_types = {"image", "video", "auto"}
+    resource_type = payload.resource_type if payload.resource_type in allowed_resource_types else "auto"
+    folder = payload.folder.strip() if payload.folder else "listings"
+    folder = folder.replace("..", "").strip("/") or "listings"
+    if folder not in ALLOWED_UPLOAD_FOLDERS:
+        raise HTTPException(status_code=400, detail="Invalid upload folder")
+    ensure_folder_access(user, folder)
+    cloudinary_folder = f"gharsetu/{folder}"
+
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    params_to_sign = {
+        "folder": cloudinary_folder,
+        "timestamp": timestamp,
+    }
+    signature = cloudinary.utils.api_sign_request(params_to_sign, CLOUDINARY_API_SECRET)
+
+    return {
+        "cloud_name": CLOUDINARY_CLOUD_NAME,
+        "api_key": CLOUDINARY_API_KEY,
+        "signature": signature,
+        "timestamp": timestamp,
+        "folder": cloudinary_folder,
+        "resource_type": resource_type,
+    }
+
+@api_router.post("/upload/delete")
+async def delete_uploaded_media(
+    payload: UploadDeleteRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(get_current_user)
+):
+    """Delete uploaded Cloudinary media by public_id with idempotent retry queue."""
+    if not CLOUDINARY_CLOUD_NAME or not CLOUDINARY_API_KEY or not CLOUDINARY_API_SECRET:
+        raise HTTPException(status_code=503, detail="Cloudinary is not configured")
+
+    await enforce_upload_rate_limit(user["id"], "upload_delete", max_requests=20, window_seconds=60)
+
+    public_id = payload.public_id.strip() if payload.public_id else ""
+    if not public_id:
+        raise HTTPException(status_code=400, detail="public_id is required")
+
+    # Only allow deleting assets in the app namespace.
+    if not public_id.startswith("gharsetu/"):
+        raise HTTPException(status_code=400, detail="Invalid public_id")
+
+    folder_part = public_id.split("/", 2)[1] if public_id.count("/") >= 1 else ""
+    if folder_part not in ALLOWED_UPLOAD_FOLDERS:
+        raise HTTPException(status_code=400, detail="Invalid media folder")
+    ensure_folder_access(user, folder_part)
+
+    allowed_resource_types = {"image", "video", "raw"}
+    resource_type = payload.resource_type if payload.resource_type in allowed_resource_types else "image"
+    now = datetime.now(timezone.utc)
+    job_id = build_delete_job_id(user["id"], public_id, resource_type, idempotency_key)
+
+    existing_job = await db.media_delete_jobs.find_one({"id": job_id}, {"_id": 0})
+    if existing_job and existing_job.get("status") == "completed":
+        return {
+            "success": True,
+            "result": existing_job.get("result", "ok"),
+            "public_id": public_id,
+            "job_id": job_id,
+            "idempotent_replay": True,
+        }
+
+    if not existing_job:
+        await db.media_delete_jobs.insert_one({
+            "id": job_id,
+            "user_id": user["id"],
+            "public_id": public_id,
+            "resource_type": resource_type,
+            "status": "pending",
+            "attempts": 0,
+            "result": None,
+            "last_error": None,
+            "next_retry_at": now,
+            "created_at": now,
+            "updated_at": now,
+        })
+
+    claimed_job = await db.media_delete_jobs.find_one_and_update(
+        {
+            "id": job_id,
+            "status": {"$in": ["pending", "retry"]},
+        },
+        {
+            "$set": {
+                "status": "processing",
+                "updated_at": now,
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+
+    if claimed_job:
+        attempt_result = await process_media_delete_job(claimed_job)
+        final_doc = await db.media_delete_jobs.find_one({"id": job_id}, {"_id": 0})
+        return {
+            "success": bool(final_doc and final_doc.get("status") == "completed"),
+            "result": final_doc.get("result") if final_doc else attempt_result.get("result", "unknown"),
+            "public_id": public_id,
+            "job_id": job_id,
+            "queued": bool(final_doc and final_doc.get("status") in {"retry", "pending", "processing"}),
+            "attempts": final_doc.get("attempts", 0) if final_doc else 0,
+        }
+
+    in_progress = await db.media_delete_jobs.find_one({"id": job_id}, {"_id": 0, "status": 1, "attempts": 1})
+    return {
+        "success": False,
+        "result": "queued",
+        "public_id": public_id,
+        "job_id": job_id,
+        "queued": True,
+        "status": in_progress.get("status", "pending") if in_progress else "pending",
+        "attempts": in_progress.get("attempts", 0) if in_progress else 0,
+    }
+
+@api_router.get("/admin/media-delete-jobs")
+async def get_media_delete_jobs(
+    status: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    admin: dict = Depends(get_admin_user)
+):
+    """Admin endpoint to inspect media delete jobs and their states."""
+    skip = (page - 1) * limit
+    query: Dict[str, Any] = {}
+    if status:
+        allowed_statuses = {"pending", "processing", "retry", "completed", "failed"}
+        if status not in allowed_statuses:
+            raise HTTPException(status_code=400, detail="Invalid status filter")
+        query["status"] = status
+
+    jobs = await db.media_delete_jobs.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.media_delete_jobs.count_documents(query)
+
+    status_counts_cursor = db.media_delete_jobs.aggregate([
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ])
+    status_counts_docs = await status_counts_cursor.to_list(length=20)
+    status_counts = {
+        "pending": 0,
+        "processing": 0,
+        "retry": 0,
+        "completed": 0,
+        "failed": 0,
+    }
+    for item in status_counts_docs:
+        key = item.get("_id")
+        if key in status_counts:
+            status_counts[key] = item.get("count", 0)
+
+    return {
+        "jobs": jobs,
+        "total": total,
+        "limit": limit,
+        "page": page,
+        "total_pages": (total + limit - 1) // limit if limit else 1,
+        "status": status,
+        "status_counts": status_counts,
+        "max_attempts": DELETE_JOB_MAX_ATTEMPTS,
+    }
+
+@api_router.post("/admin/media-delete-jobs/{job_id}/retry")
+async def retry_media_delete_job(
+    job_id: str,
+    admin: dict = Depends(get_admin_user)
+):
+    """Admin endpoint to force retry a failed media delete job."""
+    now = datetime.now(timezone.utc)
+    job = await db.media_delete_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Delete job not found")
+
+    if job.get("status") == "completed":
+        return {
+            "success": True,
+            "message": "Job already completed",
+            "job_id": job_id,
+        }
+
+    if job.get("status") == "processing":
+        raise HTTPException(status_code=409, detail="Job is currently processing")
+
+    attempts = int(job.get("attempts", 0))
+    if attempts >= DELETE_JOB_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Retry limit reached ({DELETE_JOB_MAX_ATTEMPTS} attempts)",
+        )
+
+    await db.media_delete_jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "status": "retry",
+                "next_retry_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+
+    audit_doc = {
+        "id": str(uuid.uuid4()),
+        "action": "media_delete_job_retry",
+        "actor_id": admin.get("id"),
+        "actor_email": admin.get("email"),
+        "target_id": job_id,
+        "target_type": "media_delete_job",
+        "meta": {
+            "attempts": attempts,
+            "previous_status": job.get("status", "unknown"),
+            "public_id": job.get("public_id"),
+        },
+        "created_at": now,
+    }
+    await db.admin_audit_logs.insert_one(audit_doc)
+
+    return {
+        "success": True,
+        "message": "Retry queued",
+        "job_id": job_id,
+    }
+
+@api_router.post("/admin/media-delete-jobs/{job_id}/reset-retry")
+async def reset_retry_media_delete_job(
+    job_id: str,
+    admin: dict = Depends(get_admin_user)
+):
+    """Admin endpoint to reset attempts and requeue a delete job."""
+    now = datetime.now(timezone.utc)
+    job = await db.media_delete_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Delete job not found")
+
+    if job.get("status") == "processing":
+        raise HTTPException(status_code=409, detail="Job is currently processing")
+
+    if job.get("status") == "completed":
+        return {
+            "success": True,
+            "message": "Job already completed",
+            "job_id": job_id,
+        }
+
+    previous_attempts = int(job.get("attempts", 0))
+    previous_status = job.get("status", "unknown")
+
+    await db.media_delete_jobs.update_one(
+        {"id": job_id},
+        {
+            "$set": {
+                "status": "retry",
+                "attempts": 0,
+                "next_retry_at": now,
+                "updated_at": now,
+                "last_error": None,
+            }
+        },
+    )
+
+    audit_doc = {
+        "id": str(uuid.uuid4()),
+        "action": "media_delete_job_reset_retry",
+        "actor_id": admin.get("id"),
+        "actor_email": admin.get("email"),
+        "target_id": job_id,
+        "target_type": "media_delete_job",
+        "meta": {
+            "previous_attempts": previous_attempts,
+            "previous_status": previous_status,
+            "public_id": job.get("public_id"),
+        },
+        "created_at": now,
+    }
+    await db.admin_audit_logs.insert_one(audit_doc)
+
+    return {
+        "success": True,
+        "message": "Attempts reset and retry queued",
+        "job_id": job_id,
+    }
+
+@api_router.get("/admin/audit-logs")
+async def get_admin_audit_logs(
+    action: Optional[str] = None,
+    q: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=200),
+    admin: dict = Depends(get_admin_user)
+):
+    """Admin endpoint to inspect operational audit logs."""
+    skip = (page - 1) * limit
+    query: Dict[str, Any] = {}
+    if action:
+        query["action"] = action
+
+    if q:
+        search_text = q.strip()
+        if search_text:
+            query["$or"] = [
+                {"actor_email": {"$regex": search_text, "$options": "i"}},
+                {"actor_id": {"$regex": search_text, "$options": "i"}},
+                {"target_id": {"$regex": search_text, "$options": "i"}},
+                {"target_type": {"$regex": search_text, "$options": "i"}},
+                {"meta.public_id": {"$regex": search_text, "$options": "i"}},
+            ]
+
+    date_filter: Dict[str, Any] = {}
+    if from_date:
+        try:
+            from_dt = datetime.fromisoformat(from_date)
+            date_filter["$gte"] = from_dt
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid from_date format")
+    if to_date:
+        try:
+            to_dt = datetime.fromisoformat(to_date)
+            date_filter["$lte"] = to_dt
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid to_date format")
+    if date_filter:
+        query["created_at"] = date_filter
+
+    logs = await db.admin_audit_logs.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.admin_audit_logs.count_documents(query)
+
+    action_counts_cursor = db.admin_audit_logs.aggregate([
+        {"$group": {"_id": "$action", "count": {"$sum": 1}}}
+    ])
+    action_counts_docs = await action_counts_cursor.to_list(length=100)
+    action_counts = {item.get("_id", "unknown"): item.get("count", 0) for item in action_counts_docs}
+
+    return {
+        "logs": logs,
+        "total": total,
+        "limit": limit,
+        "page": page,
+        "total_pages": (total + limit - 1) // limit if limit else 1,
+        "action": action,
+        "q": q,
+        "from_date": from_date,
+        "to_date": to_date,
+        "action_counts": action_counts,
+    }
+
+@api_router.get("/admin/audit-logs/export")
+async def export_admin_audit_logs_csv(
+    action: Optional[str] = None,
+    q: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    limit: int = Query(2000, ge=1, le=10000),
+    admin: dict = Depends(get_admin_user)
+):
+    """Export admin audit logs as CSV for compliance/reporting workflows."""
+    query: Dict[str, Any] = {}
+    if action:
+        query["action"] = action
+
+    if q:
+        search_text = q.strip()
+        if search_text:
+            query["$or"] = [
+                {"actor_email": {"$regex": search_text, "$options": "i"}},
+                {"actor_id": {"$regex": search_text, "$options": "i"}},
+                {"target_id": {"$regex": search_text, "$options": "i"}},
+                {"target_type": {"$regex": search_text, "$options": "i"}},
+                {"meta.public_id": {"$regex": search_text, "$options": "i"}},
+            ]
+
+    date_filter: Dict[str, Any] = {}
+    if from_date:
+        try:
+            from_dt = datetime.fromisoformat(from_date)
+            date_filter["$gte"] = from_dt
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid from_date format")
+    if to_date:
+        try:
+            to_dt = datetime.fromisoformat(to_date)
+            date_filter["$lte"] = to_dt
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid to_date format")
+    if date_filter:
+        query["created_at"] = date_filter
+
+    logs = await db.admin_audit_logs.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+
+    csv_stream = io.StringIO()
+    writer = csv.writer(csv_stream)
+    writer.writerow([
+        "id",
+        "action",
+        "actor_id",
+        "actor_email",
+        "target_type",
+        "target_id",
+        "meta",
+        "created_at",
+    ])
+
+    for log in logs:
+        writer.writerow([
+            log.get("id", ""),
+            log.get("action", ""),
+            log.get("actor_id", ""),
+            log.get("actor_email", ""),
+            log.get("target_type", ""),
+            log.get("target_id", ""),
+            json.dumps(log.get("meta", {}), ensure_ascii=False),
+            str(log.get("created_at", "")),
+        ])
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    filename = f"admin_audit_logs_{timestamp}.csv"
+
+    return Response(
+        content=csv_stream.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 # ============ IMAGE UPLOAD ROUTE ============
 @api_router.post("/upload/image")
@@ -3000,6 +3638,40 @@ async def send_notification(user_id: str, notification_type: str, title: str, me
 # Mount Socket.IO on the app
 socket_app = socketio.ASGIApp(sio, app)
 
+@app.on_event("startup")
+async def startup_services():
+    global redis_client, delete_worker_task
+    if redis_asyncio and redis_url:
+        try:
+            redis_client = redis_asyncio.from_url(redis_url, encoding="utf-8", decode_responses=True)
+            await redis_client.ping()
+            logger.info("Redis rate limiter enabled")
+        except Exception as e:
+            redis_client = None
+            logger.warning(f"Redis unavailable, using in-memory rate limiter: {e}")
+    else:
+        logger.warning("Redis client not configured, using in-memory rate limiter")
+
+    await db.media_delete_jobs.create_index("id", unique=True)
+    await db.media_delete_jobs.create_index([("status", 1), ("next_retry_at", 1)])
+    await db.media_delete_jobs.create_index([("created_at", -1)])
+    await db.admin_audit_logs.create_index("id", unique=True)
+    await db.admin_audit_logs.create_index([("action", 1), ("created_at", -1)])
+    await db.admin_audit_logs.create_index([("created_at", -1)])
+
+    delete_worker_task = asyncio.create_task(media_delete_retry_worker())
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
+    global redis_client, delete_worker_task
+    if delete_worker_task:
+        delete_worker_task.cancel()
+        try:
+            await delete_worker_task
+        except asyncio.CancelledError:
+            pass
+        delete_worker_task = None
+
     client.close()
+    if redis_client:
+        await redis_client.close()

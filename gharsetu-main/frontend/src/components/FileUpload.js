@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { uploadAPI } from '../lib/api';
+import api from '../lib/api';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 import {
@@ -15,6 +15,53 @@ import {
   Trash2,
 } from 'lucide-react';
 
+const getSignedUploadParams = async (folder, resourceType) => {
+  const response = await api.post('/upload/signature', {
+    folder,
+    resource_type: resourceType,
+  });
+  return response.data;
+};
+
+const uploadToCloudinary = async (file, { folder = 'listings', resourceType = 'auto' } = {}) => {
+  const signed = await getSignedUploadParams(folder, resourceType);
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('api_key', signed.api_key);
+  formData.append('timestamp', String(signed.timestamp));
+  formData.append('signature', signed.signature);
+  formData.append('folder', signed.folder);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${signed.cloud_name}/${signed.resource_type}/upload`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    const message = errorData?.error?.message || 'Cloudinary upload failed';
+    throw new Error(message);
+  }
+
+  return response.json();
+};
+
+const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
+  if (!publicId) return;
+  const idempotencyKey = `del-${resourceType}-${publicId}`;
+  await api.post('/upload/delete', {
+    public_id: publicId,
+    resource_type: resourceType,
+  }, {
+    headers: {
+      'Idempotency-Key': idempotencyKey,
+    },
+  });
+};
+
 // Image Upload Component
 export const ImageUploader = ({ 
   images = [], 
@@ -24,7 +71,6 @@ export const ImageUploader = ({
   className = ''
 }) => {
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({});
   const fileInputRef = useRef(null);
 
   const handleFileSelect = async (e) => {
@@ -55,13 +101,19 @@ export const ImageUploader = ({
     setUploading(true);
     
     try {
-      const response = await uploadAPI.uploadImages(validFiles, folder);
-      const uploadedImages = response.data.images
-        .filter(img => img.success)
-        .map(img => ({
-          url: img.url,
-          public_id: img.public_id,
-          filename: img.filename
+      const results = await Promise.allSettled(
+        validFiles.map(file => uploadToCloudinary(file, { folder, resourceType: 'image' }))
+      );
+
+      const uploadedImages = results
+        .filter(result => result.status === 'fulfilled')
+        .map(result => ({
+          url: result.value.secure_url,
+          public_id: result.value.public_id,
+          filename: result.value.original_filename || result.value.public_id,
+          width: result.value.width,
+          height: result.value.height,
+          format: result.value.format,
         }));
 
       if (uploadedImages.length > 0) {
@@ -69,7 +121,7 @@ export const ImageUploader = ({
         toast.success(`${uploadedImages.length} image(s) uploaded`);
       }
 
-      const failed = response.data.images.filter(img => !img.success);
+      const failed = results.filter(result => result.status === 'rejected');
       if (failed.length > 0) {
         toast.error(`${failed.length} image(s) failed to upload`);
       }
@@ -84,10 +136,20 @@ export const ImageUploader = ({
     }
   };
 
-  const removeImage = (index) => {
-    const newImages = [...images];
-    newImages.splice(index, 1);
-    onImagesChange(newImages);
+  const removeImage = async (index) => {
+    const imageToRemove = images[index];
+    const nextImages = [...images];
+    nextImages.splice(index, 1);
+    onImagesChange(nextImages);
+
+    if (imageToRemove?.public_id) {
+      try {
+        await deleteFromCloudinary(imageToRemove.public_id, 'image');
+      } catch (error) {
+        console.error('Image delete failed:', error);
+        toast.error('Image removed locally, but Cloudinary delete failed');
+      }
+    }
   };
 
   return (
@@ -184,9 +246,7 @@ export const VideoUploader = ({
   className = ''
 }) => {
   const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const fileInputRef = useRef(null);
-  const [preview, setPreview] = useState(null);
 
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -203,29 +263,54 @@ export const VideoUploader = ({
       return;
     }
 
-    // Create preview
-    const previewUrl = URL.createObjectURL(file);
-    setPreview(previewUrl);
+    setUploading(true);
 
-    // Pass the file to parent - actual upload happens on form submit
-    onVideoChange({
-      file,
-      previewUrl,
-      name: file.name,
-      size: file.size
-    });
+    try {
+      const uploaded = await uploadToCloudinary(file, { folder, resourceType: 'video' });
+      const cloudNameMatch = uploaded.secure_url
+        ? uploaded.secure_url.match(/res\.cloudinary\.com\/([^/]+)\//)
+        : null;
+      const cloudName = cloudNameMatch?.[1] || '';
+      const thumbnailUrl = cloudName
+        ? `https://res.cloudinary.com/${cloudName}/video/upload/so_0/${uploaded.public_id}.jpg`
+        : '';
+
+      onVideoChange({
+        url: uploaded.secure_url,
+        public_id: uploaded.public_id,
+        thumbnail_url: thumbnailUrl,
+        name: file.name,
+        size: file.size,
+        duration: uploaded.duration,
+        format: uploaded.format,
+      });
+
+      toast.success('Video uploaded successfully');
+    } catch (error) {
+      console.error('Video upload failed:', error);
+      toast.error(error.message || 'Failed to upload video');
+      onVideoChange(null);
+    } finally {
+      setUploading(false);
+    }
 
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  const removeVideo = () => {
-    if (preview) {
-      URL.revokeObjectURL(preview);
-    }
-    setPreview(null);
+  const removeVideo = async () => {
+    const publicId = video?.public_id;
     onVideoChange(null);
+
+    if (publicId) {
+      try {
+        await deleteFromCloudinary(publicId, 'video');
+      } catch (error) {
+        console.error('Video delete failed:', error);
+        toast.error('Video removed locally, but Cloudinary delete failed');
+      }
+    }
   };
 
   const formatFileSize = (bytes) => {

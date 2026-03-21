@@ -208,6 +208,13 @@ export const adminAPI = {
   getBookings: (params) => api.get('/admin/bookings', { params }),
   getStats: () => api.get('/admin/stats'),
   createAdmin: (data) => api.post('/admin/create', data),
+  getMediaDeleteJobs: (params) => api.get('/admin/media-delete-jobs', { params }),
+  retryMediaDeleteJob: (jobId) => api.post(`/admin/media-delete-jobs/${jobId}/retry`),
+  resetRetryMediaDeleteJob: (jobId) => api.post(`/admin/media-delete-jobs/${jobId}/reset-retry`),
+  // params: { action?, from_date?, to_date?, page?, limit? }
+  getAuditLogs: (params) => api.get('/admin/audit-logs', { params }),
+  // params: { action?, from_date?, to_date?, limit? }
+  getAuditLogsCsv: (params) => api.get('/admin/audit-logs/export', { params, responseType: 'blob' }),
 };
 
 // Subscription APIs (Service Provider)
