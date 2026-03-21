@@ -3749,7 +3749,41 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
             'Direct customer inquiries'
         ]
     }
+# ============ RATE LIMITING MIDDLEWARE ============
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
+        super().__init__(app)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self._requests: Dict[str, List[datetime]] = defaultdict(list)
+
+    async def dispatch(self, request, call_next):
+        # Skip rate limit for health check
+        if request.url.path == "/api/health":
+            return await call_next(request)
+
+        client_ip = request.client.host if request.client else "unknown"
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=self.window_seconds)
+
+        # Clean old requests
+        self._requests[client_ip] = [
+            t for t in self._requests[client_ip] if t > cutoff
+        ]
+
+        if len(self._requests[client_ip]) >= self.max_requests:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please slow down."}
+            )
+
+        self._requests[client_ip].append(now)
+        return await call_next(request)
+
+app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 # Include the router in the main app
 app.add_middleware(
     CORSMiddleware,
@@ -3758,6 +3792,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 
 app.include_router(api_router)
 
