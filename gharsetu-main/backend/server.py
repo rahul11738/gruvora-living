@@ -2167,7 +2167,7 @@ async def like_video(video_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.post("/videos/{video_id}/save")
 async def save_video(video_id: str, user: dict = Depends(get_current_user)):
-        await enforce_upload_rate_limit(user["id"], "video_save", max_requests=80, window_seconds=60)
+    await enforce_upload_rate_limit(user["id"], "video_save", max_requests=80, window_seconds=60)
 
     video = await db.videos.find_one({"id": video_id})
     if not video:

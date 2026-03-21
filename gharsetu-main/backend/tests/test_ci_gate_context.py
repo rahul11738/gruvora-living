@@ -1,5 +1,9 @@
 import json
+import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from ci_gate_context import _gate_severity, _release_decision, build_context
 
@@ -110,8 +114,8 @@ def test_build_context_threshold_failure_has_priority_recommendation(tmp_path: P
 
     assert ctx["status"] == "FAIL"
     assert ctx["threshold_status"] == "failed"
-    assert ctx["gate_severity"] == "warning"
-    assert ctx["release_decision"] == "manual-review"
+    assert ctx["gate_severity"] == "critical"  # 2 failed gates (threshold + regression)
+    assert ctx["release_decision"] == "block"
     assert "threshold failures" in ctx["recommendation"].lower()
     assert ctx["top_failures_line"] == "like success_rate=0.80 < min=0.99 ; view error_rate=0.05 > max=0.01"
 
