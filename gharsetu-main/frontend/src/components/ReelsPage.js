@@ -229,6 +229,11 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
   const [saved, setSaved] = useState(video.user_saved || false);
   const [following, setFollowing] = useState(video.user_following || false);
   const [likes, setLikes] = useState(video.likes || 0);
+  const [shares, setShares] = useState(video.shares || 0);
+  const [likeLoading, setLikeLoading] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
   const [progress, setProgress] = useState(0);
   const lastTap = useRef(0);
@@ -299,12 +304,29 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
       toast.error('Login to like');
       return;
     }
+    if (likeLoading) return;
+
+    const prevLiked = liked;
+    const prevLikes = likes;
+    const optimisticLiked = !prevLiked;
+    const optimisticLikes = Math.max(0, prevLikes + (optimisticLiked ? 1 : -1));
+    setLiked(optimisticLiked);
+    setLikes(optimisticLikes);
+    setLikeLoading(true);
+
     try {
-      await videosAPI.like(video.id);
-      setLiked(!liked);
-      setLikes(liked ? likes - 1 : likes + 1);
+      const res = await videosAPI.like(video.id);
+      setLiked(Boolean(res?.data?.liked));
+      if (typeof res?.data?.likes === 'number') {
+        setLikes(res.data.likes);
+      }
     } catch (error) {
       console.error('Like failed:', error);
+      setLiked(prevLiked);
+      setLikes(prevLikes);
+      toast.error('Failed to update like');
+    } finally {
+      setLikeLoading(false);
     }
   };
 
@@ -313,17 +335,26 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
       toast.error('Login to save');
       return;
     }
+    if (saveLoading) return;
+
+    const prevSaved = saved;
+    setSaved(!prevSaved);
+    setSaveLoading(true);
+
     try {
-      if (saved) {
+      if (prevSaved) {
         await videosAPI.unsave(video.id);
         toast.success('Removed from saved');
       } else {
         await videosAPI.save(video.id);
         toast.success('Saved to your collection');
       }
-      setSaved(!saved);
     } catch (error) {
       console.error('Save failed:', error);
+      setSaved(prevSaved);
+      toast.error('Failed to update saved state');
+    } finally {
+      setSaveLoading(false);
     }
   };
 
@@ -333,21 +364,30 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
       return;
     }
     if (video.owner_id === userId) return;
+    if (followLoading) return;
+
+    const prevFollowing = following;
+    setFollowing(!prevFollowing);
+    setFollowLoading(true);
     
     try {
-      if (following) {
-        await usersAPI.unfollow(video.owner_id);
-      } else {
-        await usersAPI.follow(video.owner_id);
-      }
-      setFollowing(!following);
-      toast.success(following ? 'Unfollowed' : 'Following');
+      const res = await usersAPI.follow(video.owner_id);
+      const nextFollowing = typeof res?.data?.following === 'boolean' ? res.data.following : !prevFollowing;
+      setFollowing(nextFollowing);
+      toast.success(nextFollowing ? 'Following' : 'Unfollowed');
     } catch (error) {
       console.error('Follow failed:', error);
+      setFollowing(prevFollowing);
+      toast.error('Failed to update follow status');
+    } finally {
+      setFollowLoading(false);
     }
   };
 
   const handleShare = async () => {
+    if (shareLoading) return;
+    setShareLoading(true);
+
     const shareUrl = `${window.location.origin}/reels/${video.id}`;
     if (navigator.share) {
       try {
@@ -359,6 +399,19 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
     } else {
       navigator.clipboard.writeText(shareUrl);
       toast.success('Link copied!');
+    }
+
+    try {
+      const res = await videosAPI.share(video.id);
+      if (typeof res?.data?.shares === 'number') {
+        setShares(res.data.shares);
+      } else {
+        setShares((prev) => prev + 1);
+      }
+    } catch (error) {
+      console.error('Share track failed:', error);
+    } finally {
+      setShareLoading(false);
     }
   };
 
@@ -439,7 +492,8 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
           {!following && video.owner_id !== userId && (
             <button
               onClick={handleFollow}
-              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center border-2 border-black"
+              disabled={followLoading}
+              className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center border-2 border-black disabled:opacity-60"
               data-testid="follow-btn"
             >
               <Plus className="w-3 h-3 text-white" />
@@ -448,7 +502,7 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
         </div>
 
         {/* Like */}
-        <button onClick={handleLike} className="flex flex-col items-center" data-testid="like-btn">
+        <button onClick={handleLike} disabled={likeLoading} className="flex flex-col items-center disabled:opacity-60" data-testid="like-btn">
           <motion.div whileTap={{ scale: 0.9 }}>
             <Heart className={`w-8 h-8 ${liked ? 'text-red-500 fill-red-500' : 'text-white'}`} />
           </motion.div>
@@ -462,13 +516,13 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
         </button>
 
         {/* Share */}
-        <button onClick={handleShare} className="flex flex-col items-center" data-testid="share-btn">
+        <button onClick={handleShare} disabled={shareLoading} className="flex flex-col items-center disabled:opacity-60" data-testid="share-btn">
           <Send className="w-7 h-7 text-white transform rotate-12" />
-          <span className="text-white text-xs mt-1 font-semibold">{formatNumber(video.shares || 0)}</span>
+          <span className="text-white text-xs mt-1 font-semibold">{formatNumber(shares)}</span>
         </button>
 
         {/* Save */}
-        <button onClick={handleSave} className="flex flex-col items-center" data-testid="save-btn">
+        <button onClick={handleSave} disabled={saveLoading} className="flex flex-col items-center disabled:opacity-60" data-testid="save-btn">
           <motion.div whileTap={{ scale: 0.9 }}>
             <Bookmark className={`w-8 h-8 ${saved ? 'text-white fill-white' : 'text-white'}`} />
           </motion.div>
@@ -493,7 +547,8 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
           {!following && video.owner_id !== userId && (
             <button
               onClick={(e) => { e.preventDefault(); handleFollow(); }}
-              className="px-2 py-0.5 border border-white rounded text-white text-xs font-semibold ml-2"
+              disabled={followLoading}
+              className="px-2 py-0.5 border border-white rounded text-white text-xs font-semibold ml-2 disabled:opacity-60"
             >
               Follow
             </button>

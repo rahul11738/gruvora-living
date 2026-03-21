@@ -93,9 +93,11 @@ export const reviewsAPI = {
 // Videos APIs
 export const videosAPI = {
   getAll: (params) => api.get('/videos', { params }),
+  getOne: (id) => api.get(`/videos/${id}`),
   getFeed: (page = 1) => api.get('/videos/feed', { params: { page } }),
   create: (data) => api.post('/videos', data),
   like: (id) => api.post(`/videos/${id}/like`),
+  share: (id) => api.post(`/videos/${id}/share`),
   save: (id) => api.post(`/videos/${id}/save`),
   unsave: (id) => api.delete(`/videos/${id}/save`),
   getSaved: () => api.get('/videos/saved'),
