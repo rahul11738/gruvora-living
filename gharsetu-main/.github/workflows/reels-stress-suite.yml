@@ -1,0 +1,532 @@
+name: Reels Stress Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      reel_id:
+        description: Reel ID to stress test
+        required: true
+        type: string
+      rounds:
+        description: Toggle rounds per user
+        required: false
+        default: "1"
+        type: string
+      workers:
+        description: Concurrent workers
+        required: false
+        default: "40"
+        type: string
+      min_tokens:
+        description: Minimum token count gate
+        required: false
+        default: "20"
+        type: string
+      min_success_rate:
+        description: Minimum per-action success rate
+        required: false
+        default: "0.99"
+        type: string
+      max_error_rate:
+        description: Maximum per-action error rate
+        required: false
+        default: "0.01"
+        type: string
+      max_elapsed_seconds:
+        description: Maximum stress step duration in seconds (0 disables)
+        required: false
+        default: "120"
+        type: string
+  schedule:
+    - cron: "30 2 * * *"
+
+jobs:
+  reels-stress:
+    name: Run Reels Stress Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: reels-stress-suite
+      cancel-in-progress: false
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      BASE_URL: ${{ secrets.REELS_BASE_URL }}
+      USERS: ${{ secrets.REELS_STRESS_USERS }}
+      WEBHOOK_URL: ${{ secrets.REELS_STRESS_WEBHOOK_URL }}
+      REEL_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.reel_id || vars.REELS_NIGHTLY_REEL_ID }}
+      ROUNDS: ${{ github.event_name == 'workflow_dispatch' && inputs.rounds || vars.REELS_NIGHTLY_ROUNDS }}
+      WORKERS: ${{ github.event_name == 'workflow_dispatch' && inputs.workers || vars.REELS_NIGHTLY_WORKERS }}
+      MIN_TOKENS: ${{ github.event_name == 'workflow_dispatch' && inputs.min_tokens || vars.REELS_NIGHTLY_MIN_TOKENS }}
+      MIN_SUCCESS_RATE: ${{ github.event_name == 'workflow_dispatch' && inputs.min_success_rate || vars.REELS_NIGHTLY_MIN_SUCCESS_RATE }}
+      MAX_ERROR_RATE: ${{ github.event_name == 'workflow_dispatch' && inputs.max_error_rate || vars.REELS_NIGHTLY_MAX_ERROR_RATE }}
+      MAX_ELAPSED_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.max_elapsed_seconds || vars.REELS_NIGHTLY_MAX_ELAPSED_SECONDS }}
+      REPORT_DIR: ../test_reports
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate required secrets
+        run: |
+          if [ -z "$BASE_URL" ]; then echo "Missing secret REELS_BASE_URL"; exit 1; fi
+          if [ -z "$USERS" ]; then echo "Missing secret REELS_STRESS_USERS"; exit 1; fi
+          if [ -z "$REEL_ID" ]; then echo "Missing REEL_ID. For scheduled runs set repo variable REELS_NIGHTLY_REEL_ID"; exit 1; fi
+          if [ -z "$ROUNDS" ]; then echo "Missing ROUNDS. For scheduled runs set repo variable REELS_NIGHTLY_ROUNDS"; exit 1; fi
+          if [ -z "$WORKERS" ]; then echo "Missing WORKERS. For scheduled runs set repo variable REELS_NIGHTLY_WORKERS"; exit 1; fi
+          if [ -z "$MIN_TOKENS" ]; then echo "Missing MIN_TOKENS. For scheduled runs set repo variable REELS_NIGHTLY_MIN_TOKENS"; exit 1; fi
+          if [ -z "$MIN_SUCCESS_RATE" ]; then echo "Missing MIN_SUCCESS_RATE. For scheduled runs set repo variable REELS_NIGHTLY_MIN_SUCCESS_RATE"; exit 1; fi
+          if [ -z "$MAX_ERROR_RATE" ]; then echo "Missing MAX_ERROR_RATE. For scheduled runs set repo variable REELS_NIGHTLY_MAX_ERROR_RATE"; exit 1; fi
+          if [ -z "$MAX_ELAPSED_SECONDS" ]; then echo "Missing MAX_ELAPSED_SECONDS. For scheduled runs set repo variable REELS_NIGHTLY_MAX_ELAPSED_SECONDS"; exit 1; fi
+
+      - name: Run stress suite
+        run: python run_reels_stress_suite.py
+
+      - name: Publish job summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import glob
+          import json
+          import os
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          if not summary_path:
+            raise RuntimeError("GITHUB_STEP_SUMMARY is not available")
+
+          report_paths = sorted(glob.glob("../test_reports/reels_stress_suite_*.json"))
+          if not report_paths:
+            with open(summary_path, "a", encoding="utf-8") as out:
+              out.write("## Reels Stress Suite\n\n")
+              out.write("No report file found.\n")
+            raise SystemExit(0)
+
+          latest = report_paths[-1]
+          previous = report_paths[-2] if len(report_paths) >= 2 else ""
+          with open(latest, "r", encoding="utf-8") as f:
+            report = json.load(f)
+
+          previous_report = {}
+          if previous:
+            with open(previous, "r", encoding="utf-8") as f:
+              previous_report = json.load(f)
+
+          suite_pass = bool(report.get("suite_pass", False))
+          status = "PASS" if suite_pass else "FAIL"
+          config = report.get("config", {})
+          action_stats = report.get("action_stats", {})
+          threshold_failures = report.get("threshold_failures", [])
+
+          with open(summary_path, "a", encoding="utf-8") as out:
+            out.write("## Reels Stress Suite\n\n")
+            out.write(f"**Status: {status}**\n\n")
+            out.write("### Run Details\n")
+            out.write(f"- report: `{latest}`\n")
+            out.write(f"- reel_id: `{config.get('reel_id', '')}`\n")
+            out.write(f"- rounds: `{config.get('rounds', '')}`\n")
+            out.write(f"- workers: `{config.get('workers', '')}`\n")
+            out.write(f"- token_count: `{report.get('token_count', 0)}`\n")
+            out.write(f"- overall_from_stress_output: `{report.get('overall_from_stress_output', 'UNKNOWN')}`\n\n")
+
+            out.write("### Action Scoreboard\n\n")
+            out.write("| Action | Success % | Error % | Success | Errors | Total |\n")
+            out.write("|---|---:|---:|---:|---:|---:|\n")
+            for action in ["like", "share", "view", "follow"]:
+              stats = action_stats.get(action, {})
+              total = int(stats.get("total", 0))
+              success = int(stats.get("success", 0))
+              errors = int(stats.get("errors", 0))
+              success_pct = stats.get("success_rate_bps", 0) / 100.0
+              error_pct = stats.get("error_rate_bps", 0) / 100.0
+              out.write(
+                f"| {action} | {success_pct:.2f}% | {error_pct:.2f}% | {success} | {errors} | {total} |\n"
+              )
+            out.write("\n")
+
+            out.write("### Threshold Failures\n")
+            if threshold_failures:
+              for failure in threshold_failures[:10]:
+                out.write(f"- {failure}\n")
+            else:
+              out.write("- none\n")
+
+            out.write("\n### Trend vs Previous\n")
+            if not previous_report:
+              out.write("- No previous report available in this run context.\n")
+            else:
+              out.write(f"- previous_report: `{previous}`\n")
+              prev_action_stats = previous_report.get("action_stats", {})
+              out.write("\n| Action | Success Δ (pp) | Error Δ (pp) |\n")
+              out.write("|---|---:|---:|\n")
+              for action in ["like", "share", "view", "follow"]:
+                cur = action_stats.get(action, {})
+                prev = prev_action_stats.get(action, {})
+                cur_success = cur.get("success_rate_bps", 0) / 100.0
+                prev_success = prev.get("success_rate_bps", 0) / 100.0
+                cur_error = cur.get("error_rate_bps", 0) / 100.0
+                prev_error = prev.get("error_rate_bps", 0) / 100.0
+                delta_success = cur_success - prev_success
+                delta_error = cur_error - prev_error
+                out.write(
+                  f"| {action} | {delta_success:+.2f} | {delta_error:+.2f} |\n"
+                )
+          PY
+
+      - name: Enforce regression gate
+        id: regression_gate
+        if: always()
+        run: |
+          python - <<'PY'
+          import glob
+          import json
+          import os
+
+          max_success_drop_pp = float(os.environ.get("REGRESSION_MAX_SUCCESS_DROP_PP", "0"))
+          max_error_increase_pp = float(os.environ.get("REGRESSION_MAX_ERROR_INCREASE_PP", "0"))
+          output_path = os.environ.get("GITHUB_OUTPUT", "")
+
+          def set_outputs(status: str, message: str) -> None:
+            if not output_path:
+              return
+            with open(output_path, "a", encoding="utf-8") as out:
+              out.write(f"gate_status={status}\n")
+              out.write(f"gate_message<<EOF\n{message}\nEOF\n")
+
+          if max_success_drop_pp <= 0 and max_error_increase_pp <= 0:
+            print("Regression gate disabled (both thresholds <= 0).")
+            set_outputs("disabled", "Regression gate disabled")
+            raise SystemExit(0)
+
+          report_paths = sorted(glob.glob("../test_reports/reels_stress_suite_*.json"))
+          if len(report_paths) < 2:
+            print("Regression gate skipped: previous report not available in this run context.")
+            set_outputs("skipped", "Previous report unavailable")
+            raise SystemExit(0)
+
+          latest = report_paths[-1]
+          previous = report_paths[-2]
+          with open(latest, "r", encoding="utf-8") as f:
+            current = json.load(f)
+          with open(previous, "r", encoding="utf-8") as f:
+            prior = json.load(f)
+
+          cur_stats = current.get("action_stats", {})
+          prev_stats = prior.get("action_stats", {})
+
+          violations = []
+          for action in ["like", "share", "view", "follow"]:
+            cur = cur_stats.get(action, {})
+            prev = prev_stats.get(action, {})
+
+            cur_success = cur.get("success_rate_bps", 0) / 100.0
+            prev_success = prev.get("success_rate_bps", 0) / 100.0
+            cur_error = cur.get("error_rate_bps", 0) / 100.0
+            prev_error = prev.get("error_rate_bps", 0) / 100.0
+
+            success_drop = prev_success - cur_success
+            error_increase = cur_error - prev_error
+
+            if max_success_drop_pp > 0 and success_drop > max_success_drop_pp:
+              violations.append(
+                f"{action}: success dropped by {success_drop:.2f}pp (max {max_success_drop_pp:.2f}pp)"
+              )
+            if max_error_increase_pp > 0 and error_increase > max_error_increase_pp:
+              violations.append(
+                f"{action}: error increased by {error_increase:.2f}pp (max {max_error_increase_pp:.2f}pp)"
+              )
+
+          if violations:
+            print("Regression gate failed:")
+            for v in violations:
+              print(f"- {v}")
+            set_outputs("failed", "; ".join(violations))
+            raise SystemExit(0)
+
+          print("Regression gate passed.")
+          set_outputs("passed", "No regression violations")
+          PY
+        env:
+          REGRESSION_MAX_SUCCESS_DROP_PP: ${{ vars.REELS_REGRESSION_MAX_SUCCESS_DROP_PP }}
+          REGRESSION_MAX_ERROR_INCREASE_PP: ${{ vars.REELS_REGRESSION_MAX_ERROR_INCREASE_PP }}
+
+      - name: Fail on regression violations
+        if: steps.regression_gate.outputs.gate_status == 'failed'
+        run: |
+          echo "Regression gate failed: ${{ steps.regression_gate.outputs.gate_message }}"
+          exit 1
+
+      - name: Upload stress reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reels-stress-reports-${{ github.run_id }}
+          path: test_reports/reels_stress_suite_*.json
+          if-no-files-found: warn
+
+      - name: Build webhook summary
+        if: always() && env.WEBHOOK_URL != ''
+        id: summary
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          cmd = [
+            "python",
+            "ci_gate_context.py",
+            "--report-glob",
+            "../test_reports/reels_stress_suite_*.json",
+            "--regression-status",
+            os.environ.get("REGRESSION_STATUS", "unknown"),
+            "--regression-message",
+            os.environ.get("REGRESSION_MESSAGE", ""),
+            "--webhook-enabled",
+            "false",
+            "--webhook-outcome",
+            "skipped",
+          ]
+          result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+          ctx = json.loads(result.stdout)
+
+          release_decision = ctx.get("release_decision", "manual-review")
+          gate_severity = ctx.get("gate_severity", "warning")
+          status = ctx.get("status", "FAIL")
+          token_count = ctx.get("token_count", 0)
+          overall = ctx.get("overall", "UNKNOWN")
+          reel_id = ctx.get("reel_id", os.environ.get("REEL_ID", ""))
+          workers = ctx.get("workers", os.environ.get("WORKERS", ""))
+          rounds = ctx.get("rounds", os.environ.get("ROUNDS", ""))
+          threshold_status = ctx.get("threshold_status", "unknown")
+          regression_status = ctx.get("regression_status", "unknown")
+          total_count = int(ctx.get("gate_score", {}).get("total", 0))
+          top_failures_line = ctx.get("top_failures_line", "none")
+          failures_text = ctx.get("failures_text", "none")
+          action_line = ctx.get("action_line", "action stats unavailable")
+          severity = "good" if release_decision == "allow" else "danger"
+
+          message = (
+              f"[Reels Stress Suite] decision={release_decision} severity={gate_severity} status={status} "
+              f"| run={os.environ.get('GITHUB_RUN_ID')} "
+              f"| reel_id={reel_id} | workers={workers} | rounds={rounds} "
+            f"| token_count={token_count} | overall={overall}"
+          )
+          details = (
+            f"Gate summary: threshold={threshold_status}, regression={regression_status}, active={total_count}\n"
+            f"Top failures: {top_failures_line}\n"
+            f"Threshold failures: {failures_text}\n"
+            f"Action summary: {action_line}"
+          )
+
+          output_path = os.environ["GITHUB_OUTPUT"]
+          with open(output_path, "a", encoding="utf-8") as out:
+              out.write(f"message<<EOF\n{message}\nEOF\n")
+              out.write(f"details<<EOF\n{details}\nEOF\n")
+              out.write(f"severity={severity}\n")
+          PY
+
+      - name: Send webhook notification
+        id: webhook_notify
+        if: always() && env.WEBHOOK_URL != ''
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+
+          message = os.environ.get("SUMMARY_MESSAGE", "Reels stress suite completed")
+          details = os.environ.get("SUMMARY_DETAILS", "")
+          severity = os.environ.get("SUMMARY_SEVERITY", "danger")
+          webhook_url = os.environ.get("WEBHOOK_URL", "")
+          retry_attempts = int(os.environ.get("WEBHOOK_RETRY_ATTEMPTS", "3"))
+          retry_backoff_seconds = float(os.environ.get("WEBHOOK_RETRY_BACKOFF_SECONDS", "1.5"))
+          fail_on_error = os.environ.get("WEBHOOK_FAIL_ON_ERROR", "0") == "1"
+
+          is_discord = "discord.com/api/webhooks" in webhook_url
+          is_slack = "hooks.slack.com/services" in webhook_url
+
+          if is_discord:
+            payload = {
+              "content": f"{message}\n{details}".strip()
+            }
+          elif is_slack:
+            color = "#2eb886" if severity == "good" else "#a30200"
+            payload = {
+              "text": message,
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{message}*"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": details or "No additional details"
+                  }
+                }
+              ],
+              "attachments": [
+                {
+                  "color": color,
+                  "text": "Reels stress suite summary"
+                }
+              ]
+            }
+          else:
+            payload = {
+              "text": message,
+              "content": f"{message}\n{details}".strip()
+            }
+
+          data = json.dumps(payload, ensure_ascii=True).encode("utf-8")
+          last_error = None
+          for attempt in range(1, max(1, retry_attempts) + 1):
+            try:
+              req = urllib.request.Request(
+                webhook_url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=20) as resp:
+                _ = resp.read()
+              print(f"Webhook delivered on attempt {attempt}")
+              last_error = None
+              break
+            except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError) as err:
+              last_error = err
+              print(f"Webhook attempt {attempt} failed: {err}")
+              if attempt < max(1, retry_attempts):
+                sleep_seconds = retry_backoff_seconds * (2 ** (attempt - 1))
+                time.sleep(sleep_seconds)
+
+          if last_error is not None:
+            msg = f"Webhook delivery failed after {max(1, retry_attempts)} attempts: {last_error}"
+            if fail_on_error:
+              raise RuntimeError(msg)
+            print(msg)
+          PY
+        env:
+          REGRESSION_STATUS: ${{ steps.regression_gate.outputs.gate_status }}
+          REGRESSION_MESSAGE: ${{ steps.regression_gate.outputs.gate_message }}
+          SUMMARY_MESSAGE: ${{ steps.summary.outputs.message }}
+          SUMMARY_DETAILS: ${{ steps.summary.outputs.details }}
+          SUMMARY_SEVERITY: ${{ steps.summary.outputs.severity }}
+          WEBHOOK_RETRY_ATTEMPTS: ${{ vars.REELS_WEBHOOK_RETRY_ATTEMPTS }}
+          WEBHOOK_RETRY_BACKOFF_SECONDS: ${{ vars.REELS_WEBHOOK_RETRY_BACKOFF_SECONDS }}
+          WEBHOOK_FAIL_ON_ERROR: ${{ vars.REELS_WEBHOOK_FAIL_ON_ERROR }}
+
+      - name: Append gates at a glance
+        id: gate_summary
+        if: always()
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+          if not summary_path:
+            raise SystemExit(0)
+
+          cmd = [
+            "python",
+            "ci_gate_context.py",
+            "--report-glob",
+            "../test_reports/reels_stress_suite_*.json",
+            "--regression-status",
+            os.environ.get("REGRESSION_STATUS", "unknown"),
+            "--regression-message",
+            os.environ.get("REGRESSION_MESSAGE", ""),
+            "--webhook-enabled",
+            os.environ.get("WEBHOOK_ENABLED", "false"),
+            "--webhook-outcome",
+            os.environ.get("WEBHOOK_OUTCOME", "skipped"),
+            "--include-webhook-in-policy",
+          ]
+          result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+          ctx = json.loads(result.stdout)
+
+          threshold_status = ctx.get("threshold_status", "unknown")
+          regression_status = ctx.get("regression_status", "unknown")
+          regression_message = ctx.get("regression_message", "")
+          webhook_status = ctx.get("webhook_status", "unknown")
+          webhook_outcome = ctx.get("webhook_outcome", "skipped")
+          passed_count = int(ctx.get("gate_score", {}).get("passed", 0))
+          total_count = int(ctx.get("gate_score", {}).get("total", 0))
+          gate_severity = ctx.get("gate_severity", "warning")
+          release_decision = ctx.get("release_decision", "manual-review")
+          recommendation = ctx.get("recommendation", "No immediate action required.")
+
+          with open(summary_path, "a", encoding="utf-8") as out:
+            out.write("\n### Gates At A Glance\n\n")
+            out.write("| Gate | Status | Detail |\n")
+            out.write("|---|---|---|\n")
+            out.write(f"| Threshold gate | {threshold_status} | Based on suite_pass in latest report |\n")
+            out.write(f"| Regression gate | {regression_status} | {regression_message or 'n/a'} |\n")
+            out.write(f"| Webhook delivery | {webhook_status} | outcome={webhook_outcome} |\n")
+            out.write("\n")
+            out.write(f"- gate_score: {passed_count}/{total_count} active gates passed\n")
+            out.write(f"- gate_severity: {gate_severity}\n")
+            out.write(f"- release_decision: {release_decision}\n")
+            out.write(f"- recommended_action: {recommendation}\n")
+
+          output_path = os.environ.get("GITHUB_OUTPUT", "")
+          if output_path:
+            with open(output_path, "a", encoding="utf-8") as out:
+              out.write(f"gate_severity={gate_severity}\n")
+              out.write(f"release_decision={release_decision}\n")
+              out.write(f"recommended_action<<EOF\n{recommendation}\nEOF\n")
+          PY
+        env:
+          REGRESSION_STATUS: ${{ steps.regression_gate.outputs.gate_status }}
+          REGRESSION_MESSAGE: ${{ steps.regression_gate.outputs.gate_message }}
+          WEBHOOK_OUTCOME: ${{ steps.webhook_notify.outcome }}
+          WEBHOOK_ENABLED: ${{ env.WEBHOOK_URL != '' && 'true' || 'false' }}
+
+      - name: Enforce release policy
+        if: always()
+        run: |
+          ENFORCE="${{ vars.REELS_ENFORCE_RELEASE_POLICY }}"
+          if [ -z "$ENFORCE" ]; then ENFORCE="1"; fi
+
+          DECISION="${{ steps.gate_summary.outputs.release_decision }}"
+          SEVERITY="${{ steps.gate_summary.outputs.gate_severity }}"
+          ACTION="${{ steps.gate_summary.outputs.recommended_action }}"
+
+          echo "release_decision=$DECISION"
+          echo "gate_severity=$SEVERITY"
+
+          if [ "$ENFORCE" != "1" ]; then
+            echo "Release policy enforcement disabled via REELS_ENFORCE_RELEASE_POLICY=$ENFORCE"
+            exit 0
+          fi
+
+          if [ "$DECISION" = "block" ]; then
+            echo "::error::Release blocked by policy. severity=$SEVERITY action=$ACTION"
+            exit 1
+          fi
+
+          if [ "$DECISION" = "manual-review" ]; then
+            echo "::warning::Manual review required by policy. severity=$SEVERITY action=$ACTION"
+            exit 0
+          fi
+
+          echo "Release policy passed."
