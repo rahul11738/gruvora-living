@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header, Response
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header, Response, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -21,6 +21,7 @@ from collections import defaultdict
 import hashlib
 import socketio
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 try:
     import redis.asyncio as redis_asyncio
 except ImportError:
@@ -54,6 +55,7 @@ JWT_EXPIRATION_HOURS = 24
 app = FastAPI(title="GharSetu API", version="2.0.0", description="Full-scale real estate & services marketplace")
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -438,6 +440,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user = await db.users.find_one({"id": token_data["user_id"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+async def get_optional_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)):
+    if not credentials:
+        return None
+    token_data = decode_token(credentials.credentials)
+    user = await db.users.find_one({"id": token_data["user_id"]}, {"_id": 0})
     return user
 
 async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -1949,21 +1958,72 @@ async def create_video(video: VideoCreate, user: dict = Depends(get_owner_user))
 @api_router.get("/videos")
 async def get_videos(
     category: Optional[ListingCategory] = None,
-    page: int = 1,
-    limit: int = 20
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=50),
+    user: Optional[dict] = Depends(get_optional_current_user)
 ):
     query = {}
     if category:
         query["category"] = category
     
     skip = (page - 1) * limit
-    videos = await db.videos.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "owner_id": 1,
+        "owner_name": 1,
+        "owner_image": 1,
+        "title": 1,
+        "description": 1,
+        "category": 1,
+        "url": 1,
+        "video_url": 1,
+        "thumbnail_url": 1,
+        "listing_id": 1,
+        "likes": 1,
+        "views": 1,
+        "saves": 1,
+        "shares": 1,
+        "comments_count": 1,
+        "created_at": 1,
+        "location": 1,
+        "hashtags": 1,
+    }
+    videos = await db.videos.find(query, projection).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     total = await db.videos.count_documents(query)
+
+    if user and videos:
+        user_id = user["id"]
+        video_ids = [v["id"] for v in videos]
+        owner_ids = list({v.get("owner_id") for v in videos if v.get("owner_id")})
+
+        liked_docs = await db.likes.find(
+            {"user_id": user_id, "reel_id": {"$in": video_ids}},
+            {"_id": 0, "reel_id": 1}
+        ).to_list(len(video_ids))
+        liked_set = {d["reel_id"] for d in liked_docs}
+
+        follow_docs = await db.follows.find(
+            {"follower_id": user_id, "following_id": {"$in": owner_ids}},
+            {"_id": 0, "following_id": 1}
+        ).to_list(len(owner_ids))
+        following_set = {d["following_id"] for d in follow_docs}
+
+        saved_set = set(user.get("saved_reels", []))
+
+        for v in videos:
+            v["user_liked"] = v["id"] in liked_set
+            v["user_saved"] = v["id"] in saved_set
+            v["user_following"] = v.get("owner_id") in following_set
     
     return {"videos": videos, "total": total, "page": page, "pages": (total + limit - 1) // limit}
 
 @api_router.get("/videos/feed")
-async def get_video_feed(user: dict = Depends(get_current_user), page: int = 1, limit: int = 10):
+async def get_video_feed(
+    user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=30)
+):
     # Personalized feed based on user preferences
     preferences = user.get("preferences", {})
     
@@ -1972,22 +2032,143 @@ async def get_video_feed(user: dict = Depends(get_current_user), page: int = 1, 
         query["category"] = preferences["category"]
     
     skip = (page - 1) * limit
-    videos = await db.videos.find(query, {"_id": 0}).sort([("views", -1), ("created_at", -1)]).skip(skip).limit(limit).to_list(limit)
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "owner_id": 1,
+        "owner_name": 1,
+        "owner_image": 1,
+        "title": 1,
+        "description": 1,
+        "category": 1,
+        "url": 1,
+        "video_url": 1,
+        "thumbnail_url": 1,
+        "listing_id": 1,
+        "likes": 1,
+        "views": 1,
+        "saves": 1,
+        "shares": 1,
+        "comments_count": 1,
+        "created_at": 1,
+        "location": 1,
+        "hashtags": 1,
+    }
+    videos = await db.videos.find(query, projection).sort([("views", -1), ("created_at", -1)]).skip(skip).limit(limit).to_list(limit)
+
+    if videos:
+        user_id = user["id"]
+        video_ids = [v["id"] for v in videos]
+        owner_ids = list({v.get("owner_id") for v in videos if v.get("owner_id")})
+
+        liked_docs = await db.likes.find(
+            {"user_id": user_id, "reel_id": {"$in": video_ids}},
+            {"_id": 0, "reel_id": 1}
+        ).to_list(len(video_ids))
+        liked_set = {d["reel_id"] for d in liked_docs}
+
+        follow_docs = await db.follows.find(
+            {"follower_id": user_id, "following_id": {"$in": owner_ids}},
+            {"_id": 0, "following_id": 1}
+        ).to_list(len(owner_ids))
+        following_set = {d["following_id"] for d in follow_docs}
+
+        saved_set = set(user.get("saved_reels", []))
+
+        for v in videos:
+            v["user_liked"] = v["id"] in liked_set
+            v["user_saved"] = v["id"] in saved_set
+            v["user_following"] = v.get("owner_id") in following_set
     
     return {"videos": videos, "page": page}
+
+@api_router.get("/videos/{video_id}")
+async def get_video_by_id(
+    video_id: str,
+    user: Optional[dict] = Depends(get_optional_current_user)
+):
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "owner_id": 1,
+        "owner_name": 1,
+        "owner_image": 1,
+        "title": 1,
+        "description": 1,
+        "category": 1,
+        "url": 1,
+        "video_url": 1,
+        "thumbnail_url": 1,
+        "listing_id": 1,
+        "likes": 1,
+        "views": 1,
+        "saves": 1,
+        "shares": 1,
+        "comments_count": 1,
+        "created_at": 1,
+        "location": 1,
+        "hashtags": 1,
+    }
+    video = await db.videos.find_one({"id": video_id}, projection)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if user:
+        user_id = user["id"]
+        like_doc = await db.likes.find_one({"user_id": user_id, "reel_id": video_id}, {"_id": 0, "id": 1})
+        follow_doc = await db.follows.find_one(
+            {"follower_id": user_id, "following_id": video.get("owner_id")},
+            {"_id": 0, "id": 1}
+        )
+        video["user_liked"] = bool(like_doc)
+        video["user_saved"] = video_id in set(user.get("saved_reels", []))
+        video["user_following"] = bool(follow_doc)
+
+    return video
 
 @api_router.post("/videos/{video_id}/like")
 async def like_video(video_id: str, user: dict = Depends(get_current_user)):
     video = await db.videos.find_one({"id": video_id})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
-    
-    await db.videos.update_one({"id": video_id}, {"$inc": {"likes": 1}})
-    
-    return {"message": "Video liked"}
+
+    user_id = user["id"]
+    await enforce_upload_rate_limit(user_id, "video_like", max_requests=60, window_seconds=60)
+
+    # Toggle behavior: unlike if already liked, else like.
+    removed = await db.likes.find_one_and_delete({"user_id": user_id, "reel_id": video_id})
+    if removed:
+        await db.videos.update_one({"id": video_id, "likes": {"$gt": 0}}, {"$inc": {"likes": -1}})
+        updated = await db.videos.find_one({"id": video_id}, {"_id": 0, "likes": 1})
+        return {
+            "message": "Video unliked",
+            "liked": False,
+            "likes": updated.get("likes", 0) if updated else 0,
+        }
+
+    try:
+        await db.likes.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "reel_id": video_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+        await db.videos.update_one({"id": video_id}, {"$inc": {"likes": 1}})
+    except DuplicateKeyError:
+        # Concurrent insert race; count should already be incremented by the winner.
+        pass
+
+    updated = await db.videos.find_one({"id": video_id}, {"_id": 0, "likes": 1})
+    return {
+        "message": "Video liked",
+        "liked": True,
+        "likes": updated.get("likes", 0) if updated else 0,
+    }
 
 @api_router.post("/videos/{video_id}/save")
 async def save_video(video_id: str, user: dict = Depends(get_current_user)):
+        await enforce_upload_rate_limit(user["id"], "video_save", max_requests=80, window_seconds=60)
+
     video = await db.videos.find_one({"id": video_id})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -1999,6 +2180,7 @@ async def save_video(video_id: str, user: dict = Depends(get_current_user)):
 
 @api_router.delete("/videos/{video_id}/save")
 async def unsave_video(video_id: str, user: dict = Depends(get_current_user)):
+    await enforce_upload_rate_limit(user["id"], "video_unsave", max_requests=80, window_seconds=60)
     await db.users.update_one({"id": user["id"]}, {"$pull": {"saved_reels": video_id}})
     return {"message": "Video unsaved"}
 
@@ -2083,9 +2265,65 @@ async def delete_video_comment(
     return {"message": "Comment deleted"}
 
 @api_router.post("/videos/{video_id}/view")
-async def record_video_view(video_id: str):
-    await db.videos.update_one({"id": video_id}, {"$inc": {"views": 1}})
-    return {"message": "View recorded"}
+async def record_video_view(
+    video_id: str,
+    request: Request,
+    user: Optional[dict] = Depends(get_optional_current_user)
+):
+    video = await db.videos.find_one({"id": video_id}, {"_id": 0, "id": 1})
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    # Count one view per viewer per 30-minute window to reduce spam inflation.
+    now = datetime.now(timezone.utc)
+    window_slot = int(now.timestamp() // (30 * 60))
+    viewer_key = user["id"] if user else (request.client.host if request.client else "anon")
+    await enforce_upload_rate_limit(viewer_key, "video_view", max_requests=180, window_seconds=60)
+
+    try:
+        await db.reel_views.insert_one({
+            "id": str(uuid.uuid4()),
+            "reel_id": video_id,
+            "viewer_key": viewer_key,
+            "window_slot": window_slot,
+            "created_at": now,
+        })
+        await db.videos.update_one({"id": video_id}, {"$inc": {"views": 1}})
+        counted = True
+    except DuplicateKeyError:
+        counted = False
+
+    return {"message": "View recorded", "counted": counted}
+
+@api_router.post("/videos/{video_id}/share")
+async def share_video(video_id: str, user: dict = Depends(get_current_user)):
+    video = await db.videos.find_one({"id": video_id}, {"_id": 0, "id": 1})
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    user_id = user["id"]
+    await enforce_upload_rate_limit(user_id, "video_share", max_requests=40, window_seconds=60)
+    shared_now = False
+    try:
+        await db.shares.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "reel_id": video_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+        await db.videos.update_one({"id": video_id}, {"$inc": {"shares": 1}})
+        shared_now = True
+    except DuplicateKeyError:
+        # Already counted this user's share for this reel.
+        shared_now = False
+
+    updated = await db.videos.find_one({"id": video_id}, {"_id": 0, "shares": 1})
+    return {
+        "message": "Share tracked" if shared_now else "Share already tracked",
+        "shared": True,
+        "counted": shared_now,
+        "shares": updated.get("shares", 0) if updated else 0,
+    }
 
 # ============ USER FOLLOW ROUTES ============
 @api_router.get("/users/{user_id}")
@@ -2117,23 +2355,31 @@ async def follow_user(user_id: str, user: dict = Depends(get_current_user)):
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Check if already following
-    existing = await db.follows.find_one({
-        "follower_id": user["id"],
-        "following_id": user_id
-    })
-    
-    if existing:
-        return {"message": "Already following"}
-    
-    follow_doc = {
-        "id": str(uuid.uuid4()),
-        "follower_id": user["id"],
+    follower_id = user["id"]
+    await enforce_upload_rate_limit(follower_id, "user_follow", max_requests=30, window_seconds=60)
+
+    # Toggle follow: if relationship exists, remove it (unfollow).
+    removed = await db.follows.find_one_and_delete({
+        "follower_id": follower_id,
         "following_id": user_id,
-        "created_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.follows.insert_one(follow_doc)
+    })
+    if removed:
+        await db.users.update_one({"id": follower_id, "following_count": {"$gt": 0}}, {"$inc": {"following_count": -1}})
+        await db.users.update_one({"id": user_id, "followers_count": {"$gt": 0}}, {"$inc": {"followers_count": -1}})
+        return {"message": "Unfollowed successfully", "following": False}
+
+    try:
+        await db.follows.insert_one({
+            "id": str(uuid.uuid4()),
+            "follower_id": follower_id,
+            "following_id": user_id,
+            "created_at": datetime.now(timezone.utc),
+        })
+        await db.users.update_one({"id": follower_id}, {"$inc": {"following_count": 1}})
+        await db.users.update_one({"id": user_id}, {"$inc": {"followers_count": 1}})
+    except DuplicateKeyError:
+        # Request race, already followed by concurrent call.
+        return {"message": "Following successfully", "following": True}
     
     # Notify user
     notification = {
@@ -2142,21 +2388,25 @@ async def follow_user(user_id: str, user: dict = Depends(get_current_user)):
         "type": "new_follower",
         "title": "New Follower",
         "message": f"{user['name']} started following you",
-        "data": {"follower_id": user["id"]},
+        "data": {"follower_id": follower_id},
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.notifications.insert_one(notification)
-    
-    return {"message": "Following successfully"}
+
+    return {"message": "Following successfully", "following": True}
 
 @api_router.delete("/users/{user_id}/follow")
 async def unfollow_user(user_id: str, user: dict = Depends(get_current_user)):
-    await db.follows.delete_one({
+    await enforce_upload_rate_limit(user["id"], "user_unfollow", max_requests=30, window_seconds=60)
+    removed = await db.follows.find_one_and_delete({
         "follower_id": user["id"],
         "following_id": user_id
     })
-    return {"message": "Unfollowed successfully"}
+    if removed:
+        await db.users.update_one({"id": user["id"], "following_count": {"$gt": 0}}, {"$inc": {"following_count": -1}})
+        await db.users.update_one({"id": user_id, "followers_count": {"$gt": 0}}, {"$inc": {"followers_count": -1}})
+    return {"message": "Unfollowed successfully", "following": False}
 
 @api_router.get("/users/{user_id}/followers")
 async def get_followers(user_id: str, page: int = 1, limit: int = 20):
@@ -3658,6 +3908,20 @@ async def startup_services():
     await db.admin_audit_logs.create_index("id", unique=True)
     await db.admin_audit_logs.create_index([("action", 1), ("created_at", -1)])
     await db.admin_audit_logs.create_index([("created_at", -1)])
+
+    # Reels interaction indexes for duplicate prevention and high-write concurrency.
+    await db.videos.create_index("id", unique=True)
+    await db.videos.create_index([("created_at", -1)])
+    await db.videos.create_index([("views", -1), ("created_at", -1)])
+    await db.likes.create_index([("user_id", 1), ("reel_id", 1)], unique=True)
+    await db.likes.create_index([("reel_id", 1), ("created_at", -1)])
+    await db.follows.create_index([("follower_id", 1), ("following_id", 1)], unique=True)
+    await db.follows.create_index([("following_id", 1), ("created_at", -1)])
+    await db.shares.create_index([("user_id", 1), ("reel_id", 1)], unique=True)
+    await db.shares.create_index([("reel_id", 1), ("created_at", -1)])
+    await db.reel_views.create_index([("viewer_key", 1), ("reel_id", 1), ("window_slot", 1)], unique=True)
+    await db.reel_views.create_index([("reel_id", 1), ("created_at", -1)])
+    await db.users.create_index("id", unique=True)
 
     delete_worker_task = asyncio.create_task(media_delete_retry_worker())
 
