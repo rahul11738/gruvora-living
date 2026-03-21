@@ -1048,13 +1048,25 @@ CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
 CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
 CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
 
+# ============ CLOUDINARY PRODUCTION CONFIG ============
+import asyncio
+from functools import partial
+
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET')
+CLOUDINARY_UPLOAD_PRESET = os.environ.get('CLOUDINARY_UPLOAD_PRESET', 'gharsetu_unsigned')
+
 if CLOUDINARY_CLOUD_NAME and CLOUDINARY_API_KEY:
     cloudinary.config(
         cloud_name=CLOUDINARY_CLOUD_NAME,
         api_key=CLOUDINARY_API_KEY,
-        api_secret=CLOUDINARY_API_SECRET
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True  # ✅ Always HTTPS
     )
-    logger.info("Cloudinary configured successfully")
+    logger.info(f"✅ Cloudinary configured: {CLOUDINARY_CLOUD_NAME}")
+else:
+    logger.warning("⚠️ Cloudinary not configured - running in demo mode")
 
 # ============ IMAGE UPLOAD ROUTE ============
 @api_router.post("/upload/image")
@@ -1063,45 +1075,65 @@ async def upload_image(
     folder: str = Form("listings"),
     user: dict = Depends(get_current_user)
 ):
-    """Upload single image to Cloudinary"""
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="File must be an image")
+    # 1. File type check
+    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Only JPG/PNG/WebP allowed")
     
-    # Check file size (max 10MB)
+    # 2. Read and size check
     content = await file.read()
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image too large (max 10MB)")
     
+    # 3. Magic byte validation
+    MAGIC = [b'\xff\xd8\xff', b'\x89PNG', b'RIFF']
+    if not any(content.startswith(m) for m in MAGIC):
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
     image_id = str(uuid.uuid4())
-    
-    if CLOUDINARY_CLOUD_NAME:
-        try:
-            result = cloudinary.uploader.upload(
-                content,
-                resource_type="image",
-                folder=f"gharsetu/{folder}",
-                public_id=image_id,
-                transformation=[{"width": 1200, "crop": "limit"}]
-            )
-            return {
-                "success": True,
-                "url": result.get('secure_url', ''),
-                "public_id": result.get('public_id', ''),
-                "width": result.get('width', 0),
-                "height": result.get('height', 0)
-            }
-        except Exception as e:
-            logger.error(f"Cloudinary image upload failed: {e}")
-            raise HTTPException(status_code=500, detail="Image upload failed")
-    else:
-        # Demo mode - return placeholder
+
+    if not CLOUDINARY_CLOUD_NAME:
         return {
             "success": True,
-            "url": f"https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800",
-            "public_id": image_id,
-            "width": 800,
-            "height": 600
+            "url": f"https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&sig={image_id[:8]}",
+            "public_id": image_id
         }
+
+    try:
+        # 4. Async upload (non-blocking!)
+        upload_func = partial(
+            cloudinary.uploader.upload,
+            content,
+            resource_type="image",
+            folder=f"gharsetu/{folder}",
+            public_id=image_id,
+            overwrite=False,
+            transformation=[{
+                "width": 1200,
+                "crop": "limit",
+                "quality": "auto:good",
+                "fetch_format": "auto"
+            }],
+            eager=[
+                {"width": 400, "crop": "fill", 
+                 "gravity": "auto", "quality": "auto"}
+            ]
+        )
+        result = await asyncio.get_event_loop().run_in_executor(None, upload_func)
+
+        return {
+            "success": True,
+            "url": result.get('secure_url'),
+            "thumbnail_url": result.get('eager', [{}])[0].get('secure_url', result.get('secure_url')),
+            "public_id": result.get('public_id'),
+            "width": result.get('width'),
+            "height": result.get('height'),
+            "format": result.get('format')
+        }
+    except Exception as e:
+        logger.error(f"Cloudinary upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Image upload failed")
+
 
 @api_router.post("/upload/images")
 async def upload_multiple_images(
@@ -1109,53 +1141,56 @@ async def upload_multiple_images(
     folder: str = Form("listings"),
     user: dict = Depends(get_current_user)
 ):
-    """Upload multiple images to Cloudinary"""
     if len(files) > 10:
         raise HTTPException(status_code=400, detail="Max 10 images allowed")
-    
+
+    ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp"}
     results = []
-    
+
     for file in files:
-        if not file.content_type.startswith('image/'):
+        if file.content_type not in ALLOWED_TYPES:
+            results.append({"success": False, "filename": file.filename, "error": "Invalid type"})
             continue
-            
+
         content = await file.read()
         if len(content) > 10 * 1024 * 1024:
+            results.append({"success": False, "filename": file.filename, "error": "Too large"})
             continue
-            
+
         image_id = str(uuid.uuid4())
-        
-        if CLOUDINARY_CLOUD_NAME:
-            try:
-                result = cloudinary.uploader.upload(
-                    content,
-                    resource_type="image",
-                    folder=f"gharsetu/{folder}",
-                    public_id=image_id,
-                    transformation=[{"width": 1200, "crop": "limit"}]
-                )
-                results.append({
-                    "success": True,
-                    "url": result.get('secure_url', ''),
-                    "public_id": result.get('public_id', ''),
-                    "filename": file.filename
-                })
-            except Exception as e:
-                logger.error(f"Cloudinary upload failed for {file.filename}: {e}")
-                results.append({
-                    "success": False,
-                    "filename": file.filename,
-                    "error": str(e)
-                })
-        else:
-            # Demo mode
+
+        if not CLOUDINARY_CLOUD_NAME:
             results.append({
                 "success": True,
                 "url": f"https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&sig={image_id[:8]}",
                 "public_id": image_id,
                 "filename": file.filename
             })
-    
+            continue
+
+        try:
+            upload_func = partial(
+                cloudinary.uploader.upload,
+                content,
+                resource_type="image",
+                folder=f"gharsetu/{folder}",
+                public_id=image_id,
+                transformation=[{"width": 1200, "crop": "limit", 
+                                  "quality": "auto:good", "fetch_format": "auto"}],
+                eager=[{"width": 400, "crop": "fill", "gravity": "auto"}]
+            )
+            result = await asyncio.get_event_loop().run_in_executor(None, upload_func)
+            results.append({
+                "success": True,
+                "url": result.get('secure_url'),
+                "thumbnail_url": result.get('eager', [{}])[0].get('secure_url', result.get('secure_url')),
+                "public_id": result.get('public_id'),
+                "filename": file.filename
+            })
+        except Exception as e:
+            logger.error(f"Upload failed for {file.filename}: {e}")
+            results.append({"success": False, "filename": file.filename, "error": str(e)})
+
     return {"images": results, "total": len(results)}
 
 @api_router.post("/videos/upload")
