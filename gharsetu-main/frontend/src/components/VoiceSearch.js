@@ -62,6 +62,7 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
     recognitionRef.current.lang = 'en-IN';
     recognitionRef.current.continuous = false;
     recognitionRef.current.interimResults = true;
+    recognitionRef.current.maxAlternatives = 3;
 
     recognitionRef.current.onstart = () => {
       setIsListening(true);
@@ -71,11 +72,20 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
 
     recognitionRef.current.onresult = (event) => {
       const current = event.results[event.results.length - 1];
-      const text = current[0].transcript;
-      setTranscript(text);
+      let bestText = current[0].transcript;
+      let bestConfidence = current[0].confidence || 0;
+
+      for (let i = 1; i < current.length; i++) {
+        if ((current[i].confidence || 0) > bestConfidence) {
+          bestConfidence = current[i].confidence || 0;
+          bestText = current[i].transcript;
+        }
+      }
+
+      setTranscript(bestText);
 
       if (current.isFinal) {
-        processVoiceQuery(text);
+        processVoiceQuery(bestText);
       }
     };
 
@@ -113,12 +123,14 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
         query,
         normalizedQuery: data.normalized_query || query,
         category: data?.parsed?.category || null,
+        subCategory: data?.parsed?.sub_category || null,
+        area: data?.parsed?.area || null,
         city: data?.parsed?.location || null,
         didYouMean: data.did_you_mean || '',
+        totalResults: data.total || 0,
       });
     } catch (error) {
       console.error('Voice processing failed:', error);
-      // Fallback to basic local detection.
       const lowerQuery = query.toLowerCase();
       let detectedCategory = null;
       for (const [category, keywords] of Object.entries(categoryKeywords)) {
@@ -135,6 +147,7 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
         category: detectedCategory,
         city: detectedCity,
         didYouMean: '',
+        totalResults: 0,
       });
     } finally {
       setProcessing(false);
@@ -145,8 +158,11 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
     if (!results) return;
 
     const params = new URLSearchParams();
-    if (results.normalizedQuery || results.query) params.set('q', results.normalizedQuery || results.query);
+    if (results.normalizedQuery || results.query) {
+      params.set('q', results.normalizedQuery || results.query);
+    }
     if (results.city) params.set('city', results.city);
+    if (results.subCategory) params.set('sub_category', results.subCategory);
 
     if (results.category) {
       navigate(`/category/${results.category}?${params.toString()}`);
