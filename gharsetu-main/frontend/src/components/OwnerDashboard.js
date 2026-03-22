@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ownerAPI, listingsAPI, bookingsAPI, categoriesAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
@@ -90,11 +90,7 @@ export const OwnerDashboard = () => {
 
   const isServiceProvider = user?.role === 'service_provider';
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       const [statsRes, listingsRes, bookingsRes] = await Promise.all([
         ownerAPI.getStats(),
@@ -134,9 +130,13 @@ export const OwnerDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.role]);
 
-  const handleDeleteListing = async (listingId) => {
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const handleDeleteListing = useCallback(async (listingId) => {
     if (!window.confirm('Are you sure you want to delete this listing?')) return;
     
     try {
@@ -146,9 +146,9 @@ export const OwnerDashboard = () => {
     } catch (error) {
       toast.error('Failed to delete listing');
     }
-  };
+  }, [listings]);
 
-  const handleBookingStatus = async (bookingId, status) => {
+  const handleBookingStatus = useCallback(async (bookingId, status) => {
     try {
       await bookingsAPI.updateStatus(bookingId, status);
       setBookings(bookings.map((b) => (b.id === bookingId ? { ...b, status } : b)));
@@ -156,12 +156,12 @@ export const OwnerDashboard = () => {
     } catch (error) {
       toast.error('Failed to update booking');
     }
-  };
+  }, [bookings]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     navigate('/');
-  };
+  }, [logout, navigate]);
 
   if (loading) {
     return (
@@ -546,7 +546,7 @@ export const OwnerDashboard = () => {
   );
 };
 
-const ListingRow = ({ listing, onDelete, showActions }) => {
+const ListingRow = memo(({ listing, onDelete, showActions }) => {
   const Icon = categoryIcons[listing.category] || Home;
 
   const getStatusBadge = (status) => {
@@ -611,9 +611,9 @@ const ListingRow = ({ listing, onDelete, showActions }) => {
       )}
     </div>
   );
-};
+});
 
-const BookingRow = ({ booking, onStatusChange, showDetails }) => {
+const BookingRow = memo(({ booking, onStatusChange, showDetails }) => {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'confirmed':
@@ -674,7 +674,7 @@ const BookingRow = ({ booking, onStatusChange, showDetails }) => {
       </CardContent>
     </Card>
   );
-};
+});
 
 const CreateListingForm = ({ onSuccess }) => {
   const [loading, setLoading] = useState(false);
@@ -707,7 +707,10 @@ const CreateListingForm = ({ onSuccess }) => {
     fetchCategories();
   }, []);
 
-  const selectedCategory = categories.find((c) => c.id === formData.category);
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === formData.category),
+    [categories, formData.category],
+  );
 
   const handleSubmit = async (e) => {
     e.preventDefault();

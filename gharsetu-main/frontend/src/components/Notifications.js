@@ -41,10 +41,11 @@ export const NotificationProvider = ({ children }) => {
 
   useEffect(() => {
     if (!isAuthenticated || !token) {
-      if (socket) {
-        socket.disconnect();
-        setSocket(null);
-      }
+      setSocket((prev) => {
+        prev?.disconnect();
+        return null;
+      });
+      setIsConnected(false);
       return;
     }
 

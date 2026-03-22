@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { listingsAPI, categoriesAPI, recommendationsAPI } from '../lib/api';
@@ -468,11 +468,7 @@ export const TrendingSection = () => {
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
 
-  useEffect(() => {
-    fetchTrending();
-  }, [activeCategory]);
-
-  const fetchTrending = async () => {
+  const fetchTrending = useCallback(async () => {
     try {
       const response = await listingsAPI.getTrending(8, activeCategory);
       setListings(response.data.listings);
@@ -481,7 +477,11 @@ export const TrendingSection = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeCategory]);
+
+  useEffect(() => {
+    fetchTrending();
+  }, [fetchTrending]);
 
   const sampleListings = [
     {
@@ -665,7 +665,7 @@ export const RecommendationsSection = () => {
   );
 };
 
-export const PropertyCard = ({ listing, showActions = true }) => {
+export const PropertyCard = memo(({ listing, showActions = true }) => {
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryBgColors[listing.category] || 'bg-primary';
 
@@ -766,7 +766,7 @@ export const PropertyCard = ({ listing, showActions = true }) => {
       </div>
     </Link>
   );
-};
+});
 
 export const FeaturesSection = () => {
   const features = [

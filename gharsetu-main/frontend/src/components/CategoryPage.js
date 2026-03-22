@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { listingsAPI, categoriesAPI, wishlistAPI } from '../lib/api';
 import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
@@ -96,10 +96,6 @@ export const CategoryPage = () => {
   }, []);
 
   useEffect(() => {
-    fetchListings();
-  }, [category, filters]);
-
-  useEffect(() => {
     const query = (filters.search || '').trim();
     if (query.length < 2) {
       setSuggestions([]);
@@ -123,7 +119,7 @@ export const CategoryPage = () => {
     return () => clearTimeout(timer);
   }, [filters.search, filters.city, category]);
 
-  const fetchListings = async () => {
+  const fetchListings = useCallback(async () => {
     setLoading(true);
     try {
       const searchResult = await executeListingSearch({
@@ -178,7 +174,11 @@ export const CategoryPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [category, filters]);
+
+  useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
 
   const handleFilterChange = (key, value) => {
     const newFilters = { ...filters, [key]: value, page: 1 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -141,10 +141,6 @@ export const MapSearchPage = () => {
   const [suggestions, setSuggestions] = useState([]);
 
   useEffect(() => {
-    fetchListings();
-  }, [selectedCategory, selectedCity, searchQuery]);
-
-  useEffect(() => {
     const query = (searchQuery || '').trim();
     if (query.length < 2) {
       setSuggestions([]);
@@ -177,7 +173,7 @@ export const MapSearchPage = () => {
     }
   }, [selectedCity]);
 
-  const fetchListings = async () => {
+  const fetchListings = useCallback(async () => {
     setLoading(true);
     try {
       const searchResult = await executeListingSearch({
@@ -208,7 +204,11 @@ export const MapSearchPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, selectedCity, selectedCategory]);
+
+  useEffect(() => {
+    fetchListings();
+  }, [fetchListings]);
 
   const handleSearch = (e) => {
     e.preventDefault();

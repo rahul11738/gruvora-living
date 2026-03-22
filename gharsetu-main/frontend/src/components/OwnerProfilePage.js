@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
@@ -65,11 +65,7 @@ export const OwnerProfilePage = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('reels');
 
-  useEffect(() => {
-    fetchOwnerProfile();
-  }, [ownerId]);
-
-  const fetchOwnerProfile = async () => {
+  const fetchOwnerProfile = useCallback(async () => {
     try {
       const [profileRes, listingsRes] = await Promise.all([
         usersAPI.getProfile(ownerId),
@@ -90,7 +86,11 @@ export const OwnerProfilePage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [hydrateSnapshot, isAuthenticated, ownerId, primeFromVideos, primeOwnerFollow]);
+
+  useEffect(() => {
+    fetchOwnerProfile();
+  }, [fetchOwnerProfile]);
 
   const handleFollow = async () => {
     if (!isAuthenticated) {

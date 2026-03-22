@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { listingsAPI, bookingsAPI, wishlistAPI } from '../lib/api';
@@ -78,11 +78,7 @@ export const ListingDetailPage = () => {
   const [bookingGuests, setBookingGuests] = useState(1);
   const [bookingLoading, setBookingLoading] = useState(false);
 
-  useEffect(() => {
-    fetchListing();
-  }, [id]);
-
-  const fetchListing = async () => {
+  const fetchListing = useCallback(async () => {
     try {
       const response = await listingsAPI.getOne(id);
       setListing(response.data);
@@ -93,7 +89,11 @@ export const ListingDetailPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, navigate]);
+
+  useEffect(() => {
+    fetchListing();
+  }, [fetchListing]);
 
   const handleWishlist = async () => {
     if (!isAuthenticated) {

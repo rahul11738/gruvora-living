@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { adminAPI } from '../lib/api';
@@ -97,6 +97,8 @@ export const AdminDashboard = () => {
       return;
     }
     fetchDashboardData();
+    // Initial admin bootstrap; keeping this effect focused to auth/navigation guard only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin, navigate]);
 
   useEffect(() => {
@@ -107,6 +109,8 @@ export const AdminDashboard = () => {
     }, 15000);
 
     return () => clearInterval(intervalId);
+    // Intentionally scoped to media tab state; fetch function is stateful and would rearm loop every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, mediaJobStatus, mediaJobsPage, mediaAutoRefreshEnabled]);
 
   useEffect(() => {
@@ -125,6 +129,8 @@ export const AdminDashboard = () => {
       return;
     }
     fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate);
+    // Intentionally triggered only on tab switch; other filters are handled by dedicated effects below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   useEffect(() => {
@@ -135,6 +141,8 @@ export const AdminDashboard = () => {
     }, 300);
 
     return () => clearTimeout(handle);
+    // Search-only debounce effect; intentionally excludes non-search deps to avoid duplicate refreshes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auditSearch]);
 
   const isAuditDateRangeValid = (fromDate = auditFromDate, toDate = auditToDate) => {
@@ -507,7 +515,7 @@ export const AdminDashboard = () => {
     }
   };
 
-  const handleListingStatus = async (listingId, status) => {
+  const handleListingStatus = useCallback(async (listingId, status) => {
     try {
       await adminAPI.updateListingStatus(listingId, status);
       setListings(listings.map((l) => (l.id === listingId ? { ...l, status } : l)));
@@ -515,9 +523,9 @@ export const AdminDashboard = () => {
     } catch (error) {
       toast.error('Failed to update listing status');
     }
-  };
+  }, [listings]);
 
-  const handleAadharVerify = async (userId, verified) => {
+  const handleAadharVerify = useCallback(async (userId, verified) => {
     try {
       await adminAPI.verifyAadhar(userId, verified);
       setUsers(users.map((u) => (u.id === userId ? { ...u, aadhar_status: verified ? 'verified' : 'rejected' } : u)));
@@ -525,12 +533,12 @@ export const AdminDashboard = () => {
     } catch (error) {
       toast.error('Failed to update verification status');
     }
-  };
+  }, [users]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     navigate('/');
-  };
+  }, [logout, navigate]);
 
   const handleTabChange = (nextTab) => {
     setActiveTab(nextTab);
@@ -547,6 +555,12 @@ export const AdminDashboard = () => {
       );
     }
   };
+
+  const recentUsers = useMemo(() => users.slice(0, 5), [users]);
+  const pendingListings = useMemo(
+    () => listings.filter((l) => l.status === 'pending'),
+    [listings],
+  );
 
   if (loading) {
     return (
@@ -684,7 +698,7 @@ export const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {users.slice(0, 5).map((u) => (
+                    {recentUsers.map((u) => (
                       <div key={u.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
                         <div>
                           <p className="font-medium">{u.name}</p>
@@ -706,8 +720,7 @@ export const AdminDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
-                    {listings
-                      .filter((l) => l.status === 'pending')
+                    {pendingListings
                       .slice(0, 5)
                       .map((listing) => (
                         <div key={listing.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
@@ -734,7 +747,7 @@ export const AdminDashboard = () => {
                           </div>
                         </div>
                       ))}
-                    {listings.filter((l) => l.status === 'pending').length === 0 && (
+                    {pendingListings.length === 0 && (
                       <p className="text-center text-muted-foreground py-4">No pending approvals</p>
                     )}
                   </div>

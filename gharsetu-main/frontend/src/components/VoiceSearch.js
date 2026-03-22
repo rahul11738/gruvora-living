@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { chatAPI } from '../lib/api';
@@ -38,18 +38,48 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
   const [error, setError] = useState(null);
   const recognitionRef = useRef(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      startListening();
-    }
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    };
-  }, [isOpen]);
+  const processVoiceQuery = useCallback(async (query) => {
+    setProcessing(true);
+    try {
+      const response = await chatAPI.voiceSearch(query);
+      const data = response?.data || {};
 
-  const startListening = () => {
+      setResults({
+        query,
+        normalizedQuery: data.normalized_query || query,
+        category: data?.parsed?.category || null,
+        subCategory: data?.parsed?.sub_category || null,
+        area: data?.parsed?.area || null,
+        city: data?.parsed?.location || null,
+        didYouMean: data.did_you_mean || '',
+        totalResults: data.total || 0,
+      });
+    } catch (error) {
+      console.error('Voice processing failed:', error);
+      const lowerQuery = query.toLowerCase();
+      let detectedCategory = null;
+      for (const [category, keywords] of Object.entries(categoryKeywords)) {
+        if (keywords.some(keyword => lowerQuery.includes(keyword))) {
+          detectedCategory = category;
+          break;
+        }
+      }
+      const detectedCity = cities.find(city => lowerQuery.includes(city.toLowerCase())) || null;
+
+      setResults({
+        query,
+        normalizedQuery: query,
+        category: detectedCategory,
+        city: detectedCity,
+        didYouMean: '',
+        totalResults: 0,
+      });
+    } finally {
+      setProcessing(false);
+    }
+  }, []);
+
+  const startListening = useCallback(() => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
       setError('Voice search not supported in this browser. Try Chrome or Edge.');
       return;
@@ -104,54 +134,24 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
     };
 
     recognitionRef.current.start();
-  };
+  }, [processVoiceQuery]);
+
+  useEffect(() => {
+    if (isOpen) {
+      startListening();
+    }
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [isOpen, startListening]);
 
   const stopListening = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
     setIsListening(false);
-  };
-
-  const processVoiceQuery = async (query) => {
-    setProcessing(true);
-    try {
-      const response = await chatAPI.voiceSearch(query);
-      const data = response?.data || {};
-
-      setResults({
-        query,
-        normalizedQuery: data.normalized_query || query,
-        category: data?.parsed?.category || null,
-        subCategory: data?.parsed?.sub_category || null,
-        area: data?.parsed?.area || null,
-        city: data?.parsed?.location || null,
-        didYouMean: data.did_you_mean || '',
-        totalResults: data.total || 0,
-      });
-    } catch (error) {
-      console.error('Voice processing failed:', error);
-      const lowerQuery = query.toLowerCase();
-      let detectedCategory = null;
-      for (const [category, keywords] of Object.entries(categoryKeywords)) {
-        if (keywords.some(keyword => lowerQuery.includes(keyword))) {
-          detectedCategory = category;
-          break;
-        }
-      }
-      const detectedCity = cities.find(city => lowerQuery.includes(city.toLowerCase())) || null;
-
-      setResults({
-        query,
-        normalizedQuery: query,
-        category: detectedCategory,
-        city: detectedCity,
-        didYouMean: '',
-        totalResults: 0,
-      });
-    } finally {
-      setProcessing(false);
-    }
   };
 
   const handleSearch = () => {

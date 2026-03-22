@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { messagesAPI } from '../lib/api';
@@ -38,16 +38,10 @@ export const DirectChat = ({
   };
 
   useEffect(() => {
-    if (isOpen && receiverId) {
-      fetchMessages();
-    }
-  }, [isOpen, receiverId]);
-
-  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     setLoading(true);
     try {
       const response = await messagesAPI.getConversations();
@@ -66,7 +60,13 @@ export const DirectChat = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [receiverId]);
+
+  useEffect(() => {
+    if (isOpen && receiverId) {
+      fetchMessages();
+    }
+  }, [fetchMessages, isOpen, receiverId]);
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
