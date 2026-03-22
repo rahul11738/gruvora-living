@@ -53,6 +53,38 @@ Trigger from the Actions tab using workflow dispatch inputs:
 - `max_elapsed_seconds`
 
 The workflow uploads JSON reports as artifacts, even on failure.
+
+## Local Backend Startup (No Port Loop)
+
+If port `8000` is already in use, start backend with auto port selection:
+
+```powershell
+cd backend
+python start_backend_auto_port.py
+```
+
+Behavior:
+- Tries `8000`, then `8001..8010`.
+- Starts Uvicorn on the first free port.
+- Prints the selected backend URL.
+
+Frontend note:
+- Frontend API client now auto-discovers local backend on `127.0.0.1:8000/8001` (and `localhost` variants) when `REACT_APP_BACKEND_URL` is not set.
+
+## Smart Search Smoke Check
+
+Run end-to-end search smoke checks (health, suggest, smart search, authenticated voice):
+
+```powershell
+cd backend
+$env:BASE_URL="http://127.0.0.1:8001"  # set this to whichever port backend is running on
+.\smoke_search_endpoints.ps1
+```
+
+Expected outcome:
+- Health returns 200.
+- Suggest and smart endpoints return results using `query` parameter.
+- Voice endpoint returns 200 with bearer token from temporary registered user.
 If `REELS_STRESS_WEBHOOK_URL` is set, it also sends a run summary notification with PASS/FAIL and threshold failure details.
 Webhook first line now includes `release_decision` and `gate_severity` for immediate allow/manual-review/block visibility.
 The workflow also publishes a GitHub job summary scoreboard (status, key metrics, action table, top failures) so results are visible without downloading artifacts.
