@@ -194,7 +194,12 @@ export const OwnerProfilePage = () => {
                     <Button
                       onClick={handleFollow}
                       disabled={followLoading}
-                      className={isFollowing ? 'btn-outline' : 'btn-primary'}
+                      className={[
+                        'min-w-[122px] border transition-colors active:scale-[0.98] disabled:opacity-60',
+                        isFollowing
+                          ? 'bg-slate-100 text-slate-900 border-slate-300 hover:bg-slate-200 active:bg-slate-300'
+                          : 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-500 active:bg-emerald-700',
+                      ].join(' ')}
                       data-testid="follow-btn"
                     >
                       {followLoading ? (
@@ -202,7 +207,7 @@ export const OwnerProfilePage = () => {
                       ) : isFollowing ? (
                         <>
                           <UserMinus className="w-4 h-4 mr-2" />
-                          Unfollow
+                          Following
                         </>
                       ) : (
                         <>

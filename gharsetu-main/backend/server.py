@@ -2452,7 +2452,12 @@ async def add_video_comment(
     }
     
     await db.comments.insert_one(comment)
-    await db.videos.update_one({"id": video_id}, {"$inc": {"comments_count": 1}})
+    updated_video = await db.videos.find_one_and_update(
+        {"id": video_id},
+        {"$inc": {"comments_count": 1}},
+        projection={"_id": 0, "comments_count": 1},
+        return_document=ReturnDocument.AFTER,
+    )
     
     # Notify video owner
     if video.get("owner_id") != user["id"]:
@@ -2468,7 +2473,11 @@ async def add_video_comment(
         }
         await db.notifications.insert_one(notification)
     
-    return {"message": "Comment added", "comment": {k: v for k, v in comment.items() if k != "_id"}}
+    return {
+        "message": "Comment added",
+        "comment": {k: v for k, v in comment.items() if k != "_id"},
+        "comments_count": int((updated_video or {}).get("comments_count", 0)),
+    }
 
 @api_router.delete("/videos/{video_id}/comments/{comment_id}")
 async def delete_video_comment(
@@ -2484,9 +2493,17 @@ async def delete_video_comment(
         raise HTTPException(status_code=403, detail="Not authorized")
     
     await db.comments.delete_one({"id": comment_id})
-    await db.videos.update_one({"id": video_id}, {"$inc": {"comments_count": -1}})
-    
-    return {"message": "Comment deleted"}
+    updated_video = await db.videos.find_one_and_update(
+        {"id": video_id},
+        {"$inc": {"comments_count": -1}},
+        projection={"_id": 0, "comments_count": 1},
+        return_document=ReturnDocument.AFTER,
+    )
+
+    return {
+        "message": "Comment deleted",
+        "comments_count": max(0, int((updated_video or {}).get("comments_count", 0))),
+    }
 
 @api_router.post("/videos/{video_id}/view")
 async def record_video_view(
