@@ -438,6 +438,16 @@ def decode_token(token: str) -> dict:
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+
+def normalize_auth_token(token_value: Optional[str]) -> str:
+    """Accept raw JWT or 'Bearer <JWT>' and return only the JWT segment."""
+    if not token_value:
+        return ""
+    token = token_value.strip()
+    if token.lower().startswith("bearer "):
+        token = token.split(" ", 1)[1].strip()
+    return token
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     token_data = decode_token(credentials.credentials)
     user = await db.users.find_one({"id": token_data["user_id"]}, {"_id": 0})
@@ -3876,9 +3886,10 @@ async def disconnect(sid):
 async def authenticate(sid, data):
     """Authenticate user with JWT token"""
     try:
-        token = data.get('token')
+        token = normalize_auth_token((data or {}).get('token'))
         if not token:
             await sio.emit('auth_error', {'message': 'Token required'}, to=sid)
+            await sio.disconnect(sid)
             return
         
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
@@ -3902,11 +3913,21 @@ async def authenticate(sid, data):
                     'notifications': notifications,
                     'count': len(notifications)
                 }, to=sid)
+        else:
+            await sio.emit('auth_error', {'message': 'Invalid token payload'}, to=sid)
+            await sio.disconnect(sid)
     except jwt.ExpiredSignatureError:
         await sio.emit('auth_error', {'message': 'Token expired'}, to=sid)
+        await sio.disconnect(sid)
+    except jwt.InvalidTokenError as e:
+        # Client token issues are expected (stale login, rotated secret); avoid server error noise.
+        logger.warning(f"Socket auth invalid token on sid={sid}: {e}")
+        await sio.emit('auth_error', {'message': 'Invalid token'}, to=sid)
+        await sio.disconnect(sid)
     except Exception as e:
         logger.error(f"Socket auth error: {e}")
         await sio.emit('auth_error', {'message': 'Authentication failed'}, to=sid)
+        await sio.disconnect(sid)
 
 @sio.event
 async def mark_notification_read(sid, data):
