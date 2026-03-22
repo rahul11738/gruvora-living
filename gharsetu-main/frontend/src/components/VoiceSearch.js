@@ -58,7 +58,8 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     recognitionRef.current = new SpeechRecognition();
     
-    recognitionRef.current.lang = 'gu-IN'; // Gujarati first
+    // en-IN generally captures mixed Gujarati/Hindi-English terms better for downstream normalization.
+    recognitionRef.current.lang = 'en-IN';
     recognitionRef.current.continuous = false;
     recognitionRef.current.interimResults = true;
 
@@ -104,39 +105,47 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
 
   const processVoiceQuery = async (query) => {
     setProcessing(true);
-    const lowerQuery = query.toLowerCase();
+    try {
+      const response = await chatAPI.voiceSearch(query);
+      const data = response?.data || {};
 
-    // Detect category
-    let detectedCategory = null;
-    for (const [category, keywords] of Object.entries(categoryKeywords)) {
-      if (keywords.some(keyword => lowerQuery.includes(keyword))) {
-        detectedCategory = category;
-        break;
+      setResults({
+        query,
+        normalizedQuery: data.normalized_query || query,
+        category: data?.parsed?.category || null,
+        city: data?.parsed?.location || null,
+        didYouMean: data.did_you_mean || '',
+      });
+    } catch (error) {
+      console.error('Voice processing failed:', error);
+      // Fallback to basic local detection.
+      const lowerQuery = query.toLowerCase();
+      let detectedCategory = null;
+      for (const [category, keywords] of Object.entries(categoryKeywords)) {
+        if (keywords.some(keyword => lowerQuery.includes(keyword))) {
+          detectedCategory = category;
+          break;
+        }
       }
+      const detectedCity = cities.find(city => lowerQuery.includes(city.toLowerCase())) || null;
+
+      setResults({
+        query,
+        normalizedQuery: query,
+        category: detectedCategory,
+        city: detectedCity,
+        didYouMean: '',
+      });
+    } finally {
+      setProcessing(false);
     }
-
-    // Detect city
-    const detectedCity = cities.find(city => lowerQuery.includes(city.toLowerCase()));
-
-    // Build search params
-    const searchParams = new URLSearchParams();
-    if (query) searchParams.set('q', query);
-    if (detectedCity) searchParams.set('city', detectedCity);
-
-    setResults({
-      query,
-      category: detectedCategory,
-      city: detectedCity,
-    });
-
-    setProcessing(false);
   };
 
   const handleSearch = () => {
     if (!results) return;
 
     const params = new URLSearchParams();
-    if (results.query) params.set('q', results.query);
+    if (results.normalizedQuery || results.query) params.set('q', results.normalizedQuery || results.query);
     if (results.city) params.set('city', results.city);
 
     if (results.category) {
@@ -297,6 +306,15 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
                     <Search className="w-5 h-5 text-primary" />
                     <span className="capitalize font-medium">{results.city}</span>
                     <span className="text-sm text-muted-foreground">location detected</span>
+                  </div>
+                )}
+
+                {results.didYouMean && (
+                  <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl mb-3 border border-amber-200">
+                    <Sparkles className="w-5 h-5 text-amber-600" />
+                    <span className="text-sm text-amber-800">
+                      Did you mean: <strong>{results.didYouMean}</strong>
+                    </span>
                   </div>
                 )}
 

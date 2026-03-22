@@ -82,7 +82,7 @@ export const HeroSection = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     
-    recognition.lang = 'gu-IN';
+    recognition.lang = 'en-IN';
     recognition.continuous = false;
     
     recognition.onstart = () => setIsListening(true);

@@ -4,13 +4,13 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { motion } from 'framer-motion';
 import { listingsAPI } from '../lib/api';
+import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
+import SmartSearchInput from './SmartSearchInput';
 import { Header, Footer } from './Layout';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import {
-  Search,
   MapPin,
   Home,
   Building2,
@@ -137,10 +137,36 @@ export const MapSearchPage = () => {
   const [selectedListing, setSelectedListing] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState('map'); // 'map' or 'list'
+  const [didYouMean, setDidYouMean] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
 
   useEffect(() => {
     fetchListings();
   }, [selectedCategory, selectedCity, searchQuery]);
+
+  useEffect(() => {
+    const query = (searchQuery || '').trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const next = await fetchListingSuggestions({
+          query,
+          city: selectedCity || undefined,
+          category: selectedCategory || undefined,
+          limit: 6,
+        });
+        setSuggestions(next);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, selectedCity, selectedCategory]);
 
   useEffect(() => {
     // Update map center when city changes
@@ -154,21 +180,23 @@ export const MapSearchPage = () => {
   const fetchListings = async () => {
     setLoading(true);
     try {
-      const params = {
-        city: selectedCity,
+      const searchResult = await executeListingSearch({
+        query: searchQuery,
+        city: selectedCity || undefined,
+        category: selectedCategory || undefined,
         limit: 50,
-      };
-      if (selectedCategory) params.category = selectedCategory;
-      if (searchQuery) params.q = searchQuery;
+        fallbackParams: {
+          city: selectedCity,
+          category: selectedCategory || undefined,
+        },
+      });
 
-      const response = await listingsAPI.getAll(params);
-      
-      // Filter listings that have coordinates
-      const listingsWithCoords = (response.data.listings || []).filter(l => l.latitude && l.longitude);
-      
+      const rawListings = searchResult.listings;
+      setDidYouMean(searchResult.didYouMean || '');
+
       // If no coords, generate random coords around city center
       const cityCoords = gujaratCities.find(c => c.name.toLowerCase() === selectedCity.toLowerCase());
-      const processedListings = response.data.listings.map((listing, idx) => ({
+      const processedListings = rawListings.map((listing) => ({
         ...listing,
         latitude: listing.latitude || (cityCoords?.lat || 21.1702) + (Math.random() - 0.5) * 0.1,
         longitude: listing.longitude || (cityCoords?.lng || 72.8311) + (Math.random() - 0.5) * 0.1,
@@ -211,13 +239,13 @@ export const MapSearchPage = () => {
           <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
             {/* Search Input */}
             <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
+              <SmartSearchInput
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(value) => setSearchQuery(value)}
                 placeholder="Search properties..."
-                className="pl-10 h-12"
-                data-testid="map-search-input"
+                suggestions={suggestions}
+                onSuggestionSelect={(value) => setSearchQuery(value)}
+                inputTestId="map-search-input"
               />
             </div>
 
@@ -283,6 +311,20 @@ export const MapSearchPage = () => {
               </button>
             </div>
           </form>
+
+          {didYouMean && searchQuery && (
+            <div className="mt-3 text-sm text-stone-600">
+              Did you mean{' '}
+              <button
+                type="button"
+                onClick={() => setSearchQuery(didYouMean)}
+                className="text-primary font-semibold hover:underline"
+              >
+                {didYouMean}
+              </button>
+              ?
+            </div>
+          )}
         </div>
       </div>
 

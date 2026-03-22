@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { listingsAPI, categoriesAPI, wishlistAPI } from '../lib/api';
+import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
+import SmartSearchInput from './SmartSearchInput';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -15,7 +17,6 @@ import {
 import { Slider } from './ui/slider';
 import { toast } from 'sonner';
 import {
-  Search,
   MapPin,
   Heart,
   Eye,
@@ -68,6 +69,8 @@ export const CategoryPage = () => {
   const [categories, setCategories] = useState([]);
   const [viewMode, setViewMode] = useState('grid');
   const [showFilters, setShowFilters] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [didYouMean, setDidYouMean] = useState('');
 
   const [filters, setFilters] = useState({
     sub_category: searchParams.get('sub_category') || '',
@@ -96,26 +99,79 @@ export const CategoryPage = () => {
     fetchListings();
   }, [category, filters]);
 
+  useEffect(() => {
+    const query = (filters.search || '').trim();
+    if (query.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const next = await fetchListingSuggestions({
+          query,
+          city: filters.city || undefined,
+          category: category || undefined,
+          limit: 6,
+        });
+        setSuggestions(next);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 220);
+
+    return () => clearTimeout(timer);
+  }, [filters.search, filters.city, category]);
+
   const fetchListings = async () => {
     setLoading(true);
     try {
-      const params = {
-        category: category,
-        page: filters.page,
-        limit: 12,
-      };
+      const searchResult = await executeListingSearch({
+        query: filters.search,
+        city: filters.city || undefined,
+        category: category || undefined,
+        limit: filters.search ? 50 : 12,
+        fallbackParams: {
+          category: category,
+          page: filters.page,
+          sub_category: filters.sub_category || undefined,
+          listing_type: filters.listing_type || undefined,
+          city: filters.city || undefined,
+          min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
+          max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
+          sort_by: filters.sort_by || undefined,
+        },
+      });
 
-      if (filters.sub_category) params.sub_category = filters.sub_category;
-      if (filters.listing_type) params.listing_type = filters.listing_type;
-      if (filters.city) params.city = filters.city;
-      if (filters.min_price) params.min_price = parseFloat(filters.min_price);
-      if (filters.max_price) params.max_price = parseFloat(filters.max_price);
-      if (filters.search) params.search = filters.search;
-      if (filters.sort_by) params.sort_by = filters.sort_by;
+      if (searchResult.mode === 'smart') {
+        let smartResults = searchResult.listings;
 
-      const response = await listingsAPI.getAll(params);
-      setListings(response.data.listings);
-      setTotalPages(response.data.pages);
+        // Keep existing local filters working on top of smart search output.
+        if (filters.sub_category) {
+          const sub = filters.sub_category.toLowerCase();
+          smartResults = smartResults.filter((l) => String(l.sub_category || '').toLowerCase() === sub);
+        }
+        if (filters.listing_type) {
+          const type = filters.listing_type.toLowerCase();
+          smartResults = smartResults.filter((l) => String(l.listing_type || '').toLowerCase() === type);
+        }
+        if (filters.min_price) {
+          const min = parseFloat(filters.min_price);
+          smartResults = smartResults.filter((l) => Number(l.price || 0) >= min);
+        }
+        if (filters.max_price) {
+          const max = parseFloat(filters.max_price);
+          smartResults = smartResults.filter((l) => Number(l.price || 0) <= max);
+        }
+
+        setDidYouMean(searchResult.didYouMean || '');
+        setListings(smartResults);
+        setTotalPages(1);
+      } else {
+        setDidYouMean('');
+        setListings(searchResult.listings);
+        setTotalPages(searchResult.pages);
+      }
     } catch (error) {
       console.error('Failed to fetch listings:', error);
       toast.error('Failed to load listings');
@@ -198,13 +254,13 @@ export const CategoryPage = () => {
           <div className="flex items-center gap-4 flex-wrap">
             {/* Search */}
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
-                placeholder="Search listings..."
+              <SmartSearchInput
                 value={filters.search}
-                onChange={(e) => handleFilterChange('search', e.target.value)}
-                className="pl-10"
-                data-testid="category-search-input"
+                onChange={(value) => handleFilterChange('search', value)}
+                placeholder="Search listings..."
+                suggestions={suggestions}
+                onSuggestionSelect={(value) => handleFilterChange('search', value)}
+                inputTestId="category-search-input"
               />
             </div>
 
@@ -320,6 +376,20 @@ export const CategoryPage = () => {
               </button>
             </div>
           </div>
+
+          {didYouMean && filters.search && (
+            <div className="mt-3 text-sm text-stone-600">
+              Did you mean{' '}
+              <button
+                type="button"
+                className="text-primary font-semibold hover:underline"
+                onClick={() => handleFilterChange('search', didYouMean)}
+              >
+                {didYouMean}
+              </button>
+              ?
+            </div>
+          )}
         </div>
       </div>
 

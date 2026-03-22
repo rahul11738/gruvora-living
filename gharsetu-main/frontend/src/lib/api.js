@@ -1,13 +1,91 @@
 import axios from 'axios';
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+const FALLBACK_LOCAL_BACKEND_URLS = [
+  'http://127.0.0.1:8000',
+  'http://127.0.0.1:8001',
+  'http://localhost:8000',
+  'http://localhost:8001',
+];
+
+const resolveInitialBackendUrl = () => {
+  if (process.env.REACT_APP_BACKEND_URL) {
+    return process.env.REACT_APP_BACKEND_URL;
+  }
+
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem('gharsetu_backend_url');
+    if (stored) {
+      return stored;
+    }
+  }
+
+  return FALLBACK_LOCAL_BACKEND_URLS[0];
+};
+
+let activeBackendUrl = resolveInitialBackendUrl();
+let backendDiscoveryPromise = null;
+
+const setActiveBackendUrl = (nextUrl) => {
+  activeBackendUrl = nextUrl;
+  api.defaults.baseURL = `${activeBackendUrl}/api`;
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem('gharsetu_backend_url', nextUrl);
+  }
+};
+
+const discoverLocalBackendUrl = async () => {
+  if (process.env.REACT_APP_BACKEND_URL || typeof window === 'undefined') {
+    return activeBackendUrl;
+  }
+
+  const candidateUrls = [
+    activeBackendUrl,
+    ...FALLBACK_LOCAL_BACKEND_URLS.filter((url) => url !== activeBackendUrl),
+  ];
+
+  for (const baseUrl of candidateUrls) {
+    try {
+      const response = await fetch(`${baseUrl}/api/health`, { method: 'GET' });
+      if (response.ok) {
+        if (baseUrl !== activeBackendUrl) {
+          setActiveBackendUrl(baseUrl);
+        }
+        return activeBackendUrl;
+      }
+    } catch {
+      // Try next candidate URL.
+    }
+  }
+
+  return activeBackendUrl;
+};
+
+const ensureBackendDiscovered = async () => {
+  if (process.env.REACT_APP_BACKEND_URL || typeof window === 'undefined') {
+    return activeBackendUrl;
+  }
+
+  if (!backendDiscoveryPromise) {
+    backendDiscoveryPromise = discoverLocalBackendUrl().finally(() => {
+      backendDiscoveryPromise = null;
+    });
+  }
+
+  return backendDiscoveryPromise;
+};
 
 const api = axios.create({
-  baseURL: API,
+  baseURL: `${activeBackendUrl}/api`,
 });
 
 api.interceptors.request.use((config) => {
+  if (!process.env.REACT_APP_BACKEND_URL && typeof window !== 'undefined') {
+    const effectiveBaseUrl = config.baseURL || `${activeBackendUrl}/api`;
+    if (!config.url?.startsWith('http')) {
+      config.baseURL = effectiveBaseUrl;
+    }
+  }
+
   const token = localStorage.getItem('gharsetu_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -19,8 +97,20 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    const originalRequest = error.config;
-    
+    const originalRequest = error.config || {};
+
+    if (
+      !process.env.REACT_APP_BACKEND_URL &&
+      typeof window !== 'undefined' &&
+      !originalRequest._backendRetried &&
+      !error.response
+    ) {
+      originalRequest._backendRetried = true;
+      await ensureBackendDiscovered();
+      originalRequest.baseURL = `${activeBackendUrl}/api`;
+      return api(originalRequest);
+    }
+
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
@@ -28,13 +118,14 @@ api.interceptors.response.use(
       if (token) {
         try {
           const refreshResponse = await axios.post(
-            `${API}/auth/refresh`,
+            `${activeBackendUrl}/api/auth/refresh`,
             { token },
             { headers: { 'Content-Type': 'application/json' } }
           );
           
           const newToken = refreshResponse.data.token;
           localStorage.setItem('gharsetu_token', newToken);
+          originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return api(originalRequest);
         } catch (refreshError) {
@@ -64,6 +155,8 @@ export const authAPI = {
 // Listings APIs
 export const listingsAPI = {
   getAll: (params) => api.get('/listings', { params }),
+  smartSearch: (query, params = {}) => api.get('/search/smart', { params: { query, ...params } }),
+  suggestSearch: (query, params = {}) => api.get('/search/suggest', { params: { query, ...params } }),
   getTrending: (limit = 10, category) => api.get('/listings/trending', { params: { limit, category } }),
   getRecommended: (limit = 10) => api.get('/listings/recommended', { params: { limit } }),
   getNearby: (lat, lng, radius = 5) => api.get('/listings/nearby', { params: { lat, lng, radius } }),
