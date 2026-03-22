@@ -43,6 +43,8 @@ export const ReelsPage = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [activeVideo, setActiveVideo] = useState(null);
+  const [followingMap, setFollowingMap] = useState({});
+  const [likeMap, setLikeMap] = useState({});
   const containerRef = useRef(null);
   const touchStartY = useRef(0);
 
@@ -56,11 +58,75 @@ useEffect(() => {
   const fetchVideos = async () => {
     try {
       const response = await videosAPI.getAll({ limit: 50 });
-      setVideos(response.data.videos || []);
+      const vids = response.data.videos || [];
+      setVideos(vids);
+
+      const initFollowMap = {};
+      const initLikeMap = {};
+      vids.forEach((v) => {
+        if (v.owner_id) {
+          initFollowMap[v.owner_id] = Boolean(v.user_following);
+        }
+        initLikeMap[v.id] = {
+          liked: Boolean(v.user_liked),
+          count: typeof v.likes === 'number' ? v.likes : 0,
+        };
+      });
+
+      setFollowingMap(initFollowMap);
+      setLikeMap(initLikeMap);
     } catch (error) {
       console.error('Failed to fetch videos:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFollowToggle = async (ownerId) => {
+    if (!isAuthenticated) {
+      toast.error('Login to follow');
+      return;
+    }
+    if (!ownerId || ownerId === user?.id) return;
+
+    const prev = Boolean(followingMap[ownerId]);
+    setFollowingMap((m) => ({ ...m, [ownerId]: !prev }));
+
+    try {
+      const res = await usersAPI.follow(ownerId);
+      const next = typeof res?.data?.following === 'boolean' ? res.data.following : !prev;
+      setFollowingMap((m) => ({ ...m, [ownerId]: next }));
+      toast.success(next ? 'Following' : 'Unfollowed');
+    } catch (error) {
+      setFollowingMap((m) => ({ ...m, [ownerId]: prev }));
+      toast.error('Failed to update follow status');
+    }
+  };
+
+  const handleLikeToggle = async (videoId) => {
+    if (!isAuthenticated) {
+      toast.error('Login to like');
+      return;
+    }
+    const prev = likeMap[videoId] || { liked: false, count: 0 };
+    const optimistic = {
+      liked: !prev.liked,
+      count: Math.max(0, prev.count + (!prev.liked ? 1 : -1)),
+    };
+    setLikeMap((m) => ({ ...m, [videoId]: optimistic }));
+
+    try {
+      const res = await videosAPI.like(videoId);
+      setLikeMap((m) => ({
+        ...m,
+        [videoId]: {
+          liked: Boolean(res?.data?.liked),
+          count: typeof res?.data?.likes === 'number' ? res.data.likes : optimistic.count,
+        },
+      }));
+    } catch (error) {
+      setLikeMap((m) => ({ ...m, [videoId]: prev }));
+      toast.error('Failed to update like');
     }
   };
 
@@ -173,9 +239,13 @@ useEffect(() => {
               isAuthenticated={isAuthenticated}
               userId={user?.id}
               onOpenComments={() => openComments(video)}
-              onRefresh={fetchVideos}
               isMuted={isMuted}
               onToggleMute={() => setIsMuted(prev => !prev)}
+              liked={Boolean(likeMap[video.id]?.liked)}
+              likeCount={likeMap[video.id]?.count ?? (typeof video.likes === 'number' ? video.likes : 0)}
+              following={Boolean(followingMap[video.owner_id])}
+              onLike={() => handleLikeToggle(video.id)}
+              onFollow={() => handleFollowToggle(video.owner_id)}
             />
           ))}
         </div>
@@ -222,13 +292,23 @@ useEffect(() => {
 };
 
 // ============ SINGLE REEL ITEM - INSTAGRAM STYLE ============
-const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, onRefresh, isMuted, onToggleMute }) => {
+const ReelItem = ({
+  video,
+  isActive,
+  isAuthenticated,
+  userId,
+  onOpenComments,
+  isMuted,
+  onToggleMute,
+  liked,
+  likeCount,
+  following,
+  onLike,
+  onFollow,
+}) => {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [liked, setLiked] = useState(video.user_liked || false);
   const [saved, setSaved] = useState(video.user_saved || false);
-  const [following, setFollowing] = useState(video.user_following || false);
-  const [likes, setLikes] = useState(video.likes || 0);
   const [shares, setShares] = useState(video.shares || 0);
   const [likeLoading, setLikeLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -300,31 +380,11 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
   };
 
   const handleLike = async () => {
-    if (!isAuthenticated) {
-      toast.error('Login to like');
-      return;
-    }
     if (likeLoading) return;
-
-    const prevLiked = liked;
-    const prevLikes = likes;
-    const optimisticLiked = !prevLiked;
-    const optimisticLikes = Math.max(0, prevLikes + (optimisticLiked ? 1 : -1));
-    setLiked(optimisticLiked);
-    setLikes(optimisticLikes);
     setLikeLoading(true);
 
     try {
-      const res = await videosAPI.like(video.id);
-      setLiked(Boolean(res?.data?.liked));
-      if (typeof res?.data?.likes === 'number') {
-        setLikes(res.data.likes);
-      }
-    } catch (error) {
-      console.error('Like failed:', error);
-      setLiked(prevLiked);
-      setLikes(prevLikes);
-      toast.error('Failed to update like');
+      await onLike();
     } finally {
       setLikeLoading(false);
     }
@@ -359,26 +419,12 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
   };
 
   const handleFollow = async () => {
-    if (!isAuthenticated) {
-      toast.error('Login to follow');
-      return;
-    }
     if (video.owner_id === userId) return;
     if (followLoading) return;
-
-    const prevFollowing = following;
-    setFollowing(!prevFollowing);
     setFollowLoading(true);
-    
+
     try {
-      const res = await usersAPI.follow(video.owner_id);
-      const nextFollowing = typeof res?.data?.following === 'boolean' ? res.data.following : !prevFollowing;
-      setFollowing(nextFollowing);
-      toast.success(nextFollowing ? 'Following' : 'Unfollowed');
-    } catch (error) {
-      console.error('Follow failed:', error);
-      setFollowing(prevFollowing);
-      toast.error('Failed to update follow status');
+      await onFollow();
     } finally {
       setFollowLoading(false);
     }
@@ -506,7 +552,7 @@ const ReelItem = ({ video, isActive, isAuthenticated, userId, onOpenComments, on
           <motion.div whileTap={{ scale: 0.9 }}>
             <Heart className={`w-8 h-8 ${liked ? 'text-red-500 fill-red-500' : 'text-white'}`} />
           </motion.div>
-          <span className="text-white text-xs mt-1 font-semibold">{formatNumber(likes)}</span>
+          <span className="text-white text-xs mt-1 font-semibold">{formatNumber(likeCount)}</span>
         </button>
 
         {/* Comment */}
