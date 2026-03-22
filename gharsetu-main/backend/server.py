@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional, Dict, Any, Set
@@ -22,6 +23,7 @@ import hashlib
 import socketio
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
+from search_engine import normalize_search_query, smart_search_listings, suggest_search_terms
 try:
     import redis.asyncio as redis_asyncio
 except ImportError:
@@ -716,6 +718,9 @@ async def create_listing(listing: ListingCreate, user: dict = Depends(get_owner_
         "owner_phone": user.get("phone", ""),
         "owner_verified": user.get("aadhar_status") == VerificationStatus.VERIFIED,
         **listing.model_dump(),
+        "title_en": listing.title,
+        "title_gu": listing.title,
+        "title_hi": listing.title,
         "status": ListingStatus.PENDING,
         "is_available": True,
         "views": 0,
@@ -744,6 +749,7 @@ async def get_listings(
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
     search: Optional[str] = None,
+    q: Optional[str] = None,
     amenities: Optional[str] = None,
     lat: Optional[float] = None,
     lng: Optional[float] = None,
@@ -767,11 +773,21 @@ async def get_listings(
         query["price"] = {"$gte": min_price}
     if max_price:
         query["price"] = {**query.get("price", {}), "$lte": max_price}
-    if search:
+    effective_search = search or q
+    if effective_search:
+        normalized = normalize_search_query(effective_search)
+        terms = normalized.get("expanded_terms", [])[:20]
+        regex_pattern = "|".join(re.escape(term) for term in terms if term)
+        regex_pattern = regex_pattern or re.escape(effective_search)
         query["$or"] = [
-            {"title": {"$regex": search, "$options": "i"}},
-            {"description": {"$regex": search, "$options": "i"}},
-            {"location": {"$regex": search, "$options": "i"}}
+            {"title": {"$regex": regex_pattern, "$options": "i"}},
+            {"title_en": {"$regex": regex_pattern, "$options": "i"}},
+            {"title_gu": {"$regex": regex_pattern, "$options": "i"}},
+            {"title_hi": {"$regex": regex_pattern, "$options": "i"}},
+            {"description": {"$regex": regex_pattern, "$options": "i"}},
+            {"location": {"$regex": regex_pattern, "$options": "i"}},
+            {"city": {"$regex": regex_pattern, "$options": "i"}},
+            {"sub_category": {"$regex": regex_pattern, "$options": "i"}},
         ]
     if amenities:
         amenity_list = amenities.split(",")
@@ -2686,39 +2702,77 @@ When suggesting properties, ask about: location, budget, property type, and spec
 
 @api_router.post("/chat/voice")
 async def voice_search(query: str, user: dict = Depends(get_current_user)):
-    # Process voice query and return search results
-    search_terms = query.lower()
-    
-    # Parse location
-    cities = ["surat", "ahmedabad", "vadodara", "rajkot", "gandhinagar"]
-    location = next((city for city in cities if city in search_terms), None)
-    
-    # Parse property type
-    property_types = {
-        "1 bhk": "1bhk", "2 bhk": "2bhk", "3 bhk": "3bhk",
-        "flat": "flat", "house": "house", "villa": "villa",
-        "shop": "shop", "office": "office", "hotel": "hotel",
-        "plumber": "plumber", "electrician": "electrician"
-    }
-    prop_type = next((v for k, v in property_types.items() if k in search_terms), None)
-    
-    # Build query
-    db_query = {"status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]}}
-    if location:
-        db_query["city"] = {"$regex": location, "$options": "i"}
-    if prop_type:
-        db_query["$or"] = [
-            {"sub_category": {"$regex": prop_type, "$options": "i"}},
-            {"title": {"$regex": prop_type, "$options": "i"}}
-        ]
-    
-    listings = await db.listings.find(db_query, {"_id": 0}).limit(10).to_list(10)
-    
+    normalized = normalize_search_query(query)
+    city_candidates = {"surat", "ahmedabad", "vadodara", "rajkot", "gandhinagar"}
+    detected_city = next(
+        (t for t in normalized.get("normalized_tokens", []) if t in city_candidates),
+        None,
+    )
+
+    results = await smart_search_listings(
+        db,
+        query=query,
+        city=detected_city,
+        category=normalized.get("detected_category"),
+        limit=10,
+    )
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$push": {
+                "search_history": {
+                    "$each": [{"query": query, "date": datetime.now(timezone.utc).isoformat()}],
+                    "$slice": -50,
+                }
+            }
+        },
+    )
+
     return {
         "query": query,
-        "parsed": {"location": location, "type": prop_type},
-        "results": listings
+        "normalized_query": results.get("normalized_query", query),
+        "detected_language": results.get("detected_language", "en"),
+        "parsed": {
+            "location": detected_city,
+            "category": results.get("detected_category"),
+        },
+        "did_you_mean": results.get("did_you_mean", ""),
+        "results": results.get("listings", []),
+        "total": results.get("total", 0),
     }
+
+
+@api_router.get("/search/smart")
+async def smart_search(
+    query: str = Query(..., min_length=1),
+    city: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = Query(20, ge=1, le=50),
+):
+    return await smart_search_listings(
+        db,
+        query=query,
+        city=city,
+        category=category,
+        limit=limit,
+    )
+
+
+@api_router.get("/search/suggest")
+async def search_suggestions(
+    query: str = Query(..., min_length=1),
+    city: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = Query(8, ge=1, le=20),
+):
+    return await suggest_search_terms(
+        db,
+        query=query,
+        city=city,
+        category=category,
+        limit=limit,
+    )
 
 # ============ ADMIN ROUTES ============
 @api_router.get("/admin/users")
@@ -4037,6 +4091,29 @@ async def startup_services():
     await db.reel_views.create_index([("viewer_key", 1), ("reel_id", 1), ("window_slot", 1)], unique=True)
     await db.reel_views.create_index([("reel_id", 1), ("created_at", -1)])
     await db.users.create_index("id", unique=True)
+
+    # Search-related indexes for smart query filters and fast suggestions.
+    await db.listings.create_index([("status", 1), ("is_available", 1), ("city", 1), ("category", 1)])
+    await db.listings.create_index([("title", 1)])
+    await db.listings.create_index([("sub_category", 1)])
+    await db.listings.create_index([("location", 1)])
+    await db.listings.create_index([("title_en", 1)], sparse=True)
+    await db.listings.create_index([("title_gu", 1)], sparse=True)
+    await db.listings.create_index([("title_hi", 1)], sparse=True)
+    try:
+        await db.listings.create_index(
+            [
+                ("title", "text"),
+                ("description", "text"),
+                ("location", "text"),
+                ("city", "text"),
+                ("sub_category", "text"),
+            ],
+            default_language="none",
+            name="listings_text_idx",
+        )
+    except Exception as e:
+        logger.warning(f"Could not create listings text index: {e}")
 
     delete_worker_task = asyncio.create_task(media_delete_retry_worker())
 
