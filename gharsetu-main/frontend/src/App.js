@@ -3,6 +3,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { InteractionProvider } from "./context/InteractionContext";
 import { NotificationProvider } from "./components/Notifications";
 
 // Pages
@@ -152,12 +153,14 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <NotificationProvider>
-          <AppRoutes />
-          <MobileBottomNav />
-          <ChatBot />
-          <Toaster position="top-right" richColors />
-        </NotificationProvider>
+        <InteractionProvider>
+          <NotificationProvider>
+            <AppRoutes />
+            <MobileBottomNav />
+            <ChatBot />
+            <Toaster position="top-right" richColors />
+          </NotificationProvider>
+        </InteractionProvider>
       </AuthProvider>
     </BrowserRouter>
   );

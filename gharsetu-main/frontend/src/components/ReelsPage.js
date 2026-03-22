@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { videosAPI, usersAPI } from '../lib/api';
+import { useInteractions } from '../context/InteractionContext';
+import { debugAPI, videosAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -36,6 +37,20 @@ const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 // ============ MAIN REELS PAGE ============
 export const ReelsPage = () => {
   const { isAuthenticated, user } = useAuth();
+  const isDev = process.env.NODE_ENV !== 'production';
+  const DEBUG_CAPTURE_INTERVAL_MS = 60000;
+  const DEBUG_CAPTURE_MAX_ITEMS = 20;
+  const {
+    followingMap,
+    likeMap,
+    pendingFollowMap,
+    pendingLikeMap,
+    primeFromVideos,
+    hydrateSnapshot,
+    toggleFollow,
+    toggleLike,
+    interactionDebug,
+  } = useInteractions();
   const [videos, setVideos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -43,10 +58,27 @@ export const ReelsPage = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [activeVideo, setActiveVideo] = useState(null);
-  const [followingMap, setFollowingMap] = useState({});
-  const [likeMap, setLikeMap] = useState({});
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [debugStats, setDebugStats] = useState(null);
+  const [hitRateHistory, setHitRateHistory] = useState([]);
+  const [autoCapture, setAutoCapture] = useState(false);
+  const [debugCaptureQueue, setDebugCaptureQueue] = useState([]);
+  const [stressSessionId, setStressSessionId] = useState('session-local');
   const containerRef = useRef(null);
   const touchStartY = useRef(0);
+
+  useEffect(() => {
+    if (!isDev || typeof window === 'undefined') return;
+    const stored = window.localStorage.getItem('reels_debug_session_id');
+    if (stored) {
+      setStressSessionId(stored);
+    }
+  }, [isDev]);
+
+  useEffect(() => {
+    if (!isDev || typeof window === 'undefined') return;
+    window.localStorage.setItem('reels_debug_session_id', stressSessionId || 'session-local');
+  }, [isDev, stressSessionId]);
 
 useEffect(() => {
     fetchVideos();
@@ -60,21 +92,13 @@ useEffect(() => {
       const response = await videosAPI.getAll({ limit: 50 });
       const vids = response.data.videos || [];
       setVideos(vids);
+      primeFromVideos(vids);
 
-      const initFollowMap = {};
-      const initLikeMap = {};
-      vids.forEach((v) => {
-        if (v.owner_id) {
-          initFollowMap[v.owner_id] = Boolean(v.user_following);
-        }
-        initLikeMap[v.id] = {
-          liked: Boolean(v.user_liked),
-          count: typeof v.likes === 'number' ? v.likes : 0,
-        };
-      });
-
-      setFollowingMap(initFollowMap);
-      setLikeMap(initLikeMap);
+      if (isAuthenticated && vids.length) {
+        const reelIds = vids.map((v) => v.id).filter(Boolean);
+        const ownerIds = vids.map((v) => v.owner_id).filter(Boolean);
+        await hydrateSnapshot({ ownerIds, reelIds });
+      }
     } catch (error) {
       console.error('Failed to fetch videos:', error);
     } finally {
@@ -88,17 +112,12 @@ useEffect(() => {
       return;
     }
     if (!ownerId || ownerId === user?.id) return;
-
-    const prev = Boolean(followingMap[ownerId]);
-    setFollowingMap((m) => ({ ...m, [ownerId]: !prev }));
-
     try {
-      const res = await usersAPI.follow(ownerId);
-      const next = typeof res?.data?.following === 'boolean' ? res.data.following : !prev;
-      setFollowingMap((m) => ({ ...m, [ownerId]: next }));
-      toast.success(next ? 'Following' : 'Unfollowed');
+      const result = await toggleFollow(ownerId);
+      if (result.ok) {
+        toast.success(result.following ? 'Following' : 'Unfollowed');
+      }
     } catch (error) {
-      setFollowingMap((m) => ({ ...m, [ownerId]: prev }));
       toast.error('Failed to update follow status');
     }
   };
@@ -108,24 +127,10 @@ useEffect(() => {
       toast.error('Login to like');
       return;
     }
-    const prev = likeMap[videoId] || { liked: false, count: 0 };
-    const optimistic = {
-      liked: !prev.liked,
-      count: Math.max(0, prev.count + (!prev.liked ? 1 : -1)),
-    };
-    setLikeMap((m) => ({ ...m, [videoId]: optimistic }));
-
     try {
-      const res = await videosAPI.like(videoId);
-      setLikeMap((m) => ({
-        ...m,
-        [videoId]: {
-          liked: Boolean(res?.data?.liked),
-          count: typeof res?.data?.likes === 'number' ? res.data.likes : optimistic.count,
-        },
-      }));
+      const currentCount = likeMap[videoId]?.count ?? videos.find((v) => v.id === videoId)?.likes ?? 0;
+      await toggleLike(videoId, currentCount);
     } catch (error) {
-      setLikeMap((m) => ({ ...m, [videoId]: prev }));
       toast.error('Failed to update like');
     }
   };
@@ -188,6 +193,147 @@ useEffect(() => {
     setShowComments(true);
   };
 
+  const buildDebugPayload = useCallback(() => ({
+      exported_at: new Date().toISOString(),
+      page: 'reels',
+      stress_session_id: stressSessionId,
+      stats: debugStats || {},
+      hit_rate_history: hitRateHistory,
+    }), [debugStats, hitRateHistory, stressSessionId]);
+
+  const sanitizeFilePart = (value) => {
+    const safe = (value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+    return safe || 'session-local';
+  };
+
+  const downloadJson = (payload, filenamePrefix) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = url;
+    a.download = `${filenamePrefix}-${sanitizeFilePart(stressSessionId)}-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportDebugStats = () => {
+    const payload = buildDebugPayload();
+    downloadJson(payload, 'reels-interaction-debug');
+  };
+
+  const captureDebugSnapshot = useCallback(() => {
+    const payload = buildDebugPayload();
+    setDebugCaptureQueue((prev) => {
+      const next = [...prev, payload];
+      return next.slice(-DEBUG_CAPTURE_MAX_ITEMS);
+    });
+  }, [buildDebugPayload, DEBUG_CAPTURE_MAX_ITEMS]);
+
+  const exportDebugCaptureQueue = () => {
+    const payload = {
+      exported_at: new Date().toISOString(),
+      page: 'reels',
+      stress_session_id: stressSessionId,
+      total_captures: debugCaptureQueue.length,
+      captures: debugCaptureQueue,
+    };
+    downloadJson(payload, 'reels-interaction-debug-queue');
+  };
+
+  const persistDebugSession = async () => {
+    const payload = {
+      stress_session_id: stressSessionId,
+      stats: debugStats || {},
+      hit_rate_history: hitRateHistory,
+      total_captures: debugCaptureQueue.length,
+      captures: debugCaptureQueue,
+    };
+
+    try {
+      const response = await debugAPI.saveReelsSession(payload);
+      toast.success(`Debug session saved (${response?.data?.report_id || 'ok'})`);
+    } catch (error) {
+      toast.error('Failed to persist debug session');
+    }
+  };
+
+  const copyDebugSummary = async () => {
+    const summary = [
+      `session=${stressSessionId || 'session-local'}`,
+      `hitRate=${cacheHitRate}%`,
+      `calls=${debugStats?.snapshotCalls ?? 0}`,
+      `hits=${debugStats?.snapshotCacheHits ?? 0}`,
+      `misses=${debugStats?.snapshotCacheMisses ?? 0}`,
+      `inFlightJoins=${debugStats?.snapshotInFlightJoins ?? 0}`,
+      `staleSkips=${debugStats?.snapshotStaleSkips ?? 0}`,
+      `invalidations=${debugStats?.cacheInvalidations ?? 0}`,
+      `followToggles=${debugStats?.followToggles ?? 0}`,
+      `likeToggles=${debugStats?.likeToggles ?? 0}`,
+      `captures=${debugCaptureQueue.length}/${DEBUG_CAPTURE_MAX_ITEMS}`,
+    ].join(' | ');
+
+    try {
+      await navigator.clipboard.writeText(summary);
+      toast.success('Debug summary copied');
+    } catch (error) {
+      toast.error('Failed to copy summary');
+    }
+  };
+
+  useEffect(() => {
+    if (!isDev || !showDebugPanel || !autoCapture) return;
+    const id = window.setInterval(() => {
+      captureDebugSnapshot();
+    }, DEBUG_CAPTURE_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [autoCapture, isDev, showDebugPanel, captureDebugSnapshot]);
+
+  const cacheSamples = (debugStats?.snapshotCacheHits || 0) + (debugStats?.snapshotCacheMisses || 0);
+  const cacheHitRate = cacheSamples > 0
+    ? Math.round(((debugStats?.snapshotCacheHits || 0) / cacheSamples) * 100)
+    : 0;
+  const cacheRateTone = cacheHitRate >= 60 ? 'text-emerald-300' : cacheHitRate >= 30 ? 'text-amber-300' : 'text-rose-300';
+  const staleSkips = debugStats?.snapshotStaleSkips || 0;
+  const staleTone = staleSkips === 0 ? 'text-emerald-300' : staleSkips <= 3 ? 'text-amber-300' : 'text-rose-300';
+
+  useEffect(() => {
+    if (!isDev || !showDebugPanel || !interactionDebug?.getStats) return;
+
+    const updateStats = () => {
+      const stats = interactionDebug.getStats();
+      setDebugStats(stats);
+
+      const samples = (stats?.snapshotCacheHits || 0) + (stats?.snapshotCacheMisses || 0);
+      const rate = samples > 0 ? Math.round(((stats?.snapshotCacheHits || 0) / samples) * 100) : 0;
+      setHitRateHistory((prev) => {
+        const next = [...prev, rate];
+        return next.slice(-30);
+      });
+    };
+
+    updateStats();
+    const id = window.setInterval(updateStats, 1000);
+    return () => window.clearInterval(id);
+  }, [interactionDebug, isDev, showDebugPanel]);
+
+  useEffect(() => {
+    if (showDebugPanel) return;
+    setHitRateHistory([]);
+  }, [showDebugPanel]);
+
+  const sparklinePoints = hitRateHistory.length > 1
+    ? hitRateHistory
+        .map((v, i) => {
+          const x = (i / (hitRateHistory.length - 1)) * 100;
+          const y = 100 - v;
+          return `${x},${y}`;
+        })
+        .join(' ')
+    : '';
+
   if (loading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center z-50">
@@ -219,8 +365,122 @@ useEffect(() => {
               Create
             </button>
           )}
+          {isDev && interactionDebug && (
+            <button
+              onClick={() => setShowDebugPanel((prev) => !prev)}
+              className="px-3 py-1.5 bg-black/60 text-white rounded-full text-xs font-semibold border border-white/30"
+            >
+              {showDebugPanel ? 'Hide Debug' : 'Show Debug'}
+            </button>
+          )}
         </div>
       </div>
+
+      {isDev && showDebugPanel && interactionDebug && (
+        <div className="absolute top-16 right-3 z-50 w-72 bg-black/80 border border-white/20 rounded-xl p-3 text-white text-xs space-y-2 backdrop-blur-sm">
+          <div className="flex items-center justify-between">
+            <p className="font-semibold">Interaction Debug</p>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setAutoCapture((prev) => !prev)}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+              >
+                {autoCapture ? 'Stop Auto' : 'Auto 60s'}
+              </button>
+              <button
+                onClick={captureDebugSnapshot}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+              >
+                Capture
+              </button>
+              <button
+                onClick={exportDebugStats}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+              >
+                Export
+              </button>
+              <button
+                onClick={exportDebugCaptureQueue}
+                disabled={debugCaptureQueue.length === 0}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40"
+              >
+                Export Q
+              </button>
+              <button
+                onClick={copyDebugSummary}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+              >
+                Copy
+              </button>
+              <button
+                onClick={persistDebugSession}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+              >
+                Save API
+              </button>
+              <button
+                onClick={() => {
+                  interactionDebug.reset?.();
+                  setDebugStats(interactionDebug.getStats?.() || null);
+                  setHitRateHistory([]);
+                  setDebugCaptureQueue([]);
+                }}
+                className="px-2 py-1 rounded bg-white/10 hover:bg-white/20"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          <p className="text-[10px] text-white/70">
+            captures: {debugCaptureQueue.length}/{DEBUG_CAPTURE_MAX_ITEMS} {autoCapture ? '(auto on)' : ''}
+          </p>
+          <div className="rounded-lg bg-white/5 border border-white/10 p-2 space-y-1">
+            <p className="text-[10px] text-white/70">Stress Session ID</p>
+            <input
+              value={stressSessionId}
+              onChange={(e) => setStressSessionId(e.target.value)}
+              className="w-full h-7 px-2 rounded bg-black/30 border border-white/15 text-white text-[11px] outline-none"
+              placeholder="session id"
+            />
+          </div>
+          <div className="rounded-lg bg-white/5 border border-white/10 p-2 space-y-1">
+            <div className="flex items-center justify-between">
+              <span>Cache Hit Rate</span>
+              <span className={`font-semibold ${cacheRateTone}`}>{cacheHitRate}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Stale Snapshot Skips</span>
+              <span className={`font-semibold ${staleTone}`}>{staleSkips}</span>
+            </div>
+            <div className="pt-1">
+              <p className="text-[10px] text-white/70 mb-1">Hit-rate trend (last {hitRateHistory.length || 0}s)</p>
+              <div className="w-full h-10 rounded bg-black/30 border border-white/10 p-1">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full">
+                  <polyline
+                    points={sparklinePoints}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    className={cacheRateTone}
+                  />
+                </svg>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-y-1 gap-x-3">
+            <span>snapshotCalls</span><span className="text-right">{debugStats?.snapshotCalls ?? 0}</span>
+            <span>cacheHits</span><span className="text-right">{debugStats?.snapshotCacheHits ?? 0}</span>
+            <span>cacheMisses</span><span className="text-right">{debugStats?.snapshotCacheMisses ?? 0}</span>
+            <span>inFlightJoins</span><span className="text-right">{debugStats?.snapshotInFlightJoins ?? 0}</span>
+            <span>requests</span><span className="text-right">{debugStats?.snapshotRequests ?? 0}</span>
+            <span>cacheWrites</span><span className="text-right">{debugStats?.snapshotCacheWrites ?? 0}</span>
+            <span>staleSkips</span><span className="text-right">{debugStats?.snapshotStaleSkips ?? 0}</span>
+            <span>invalidations</span><span className="text-right">{debugStats?.cacheInvalidations ?? 0}</span>
+            <span>followToggles</span><span className="text-right">{debugStats?.followToggles ?? 0}</span>
+            <span>likeToggles</span><span className="text-right">{debugStats?.likeToggles ?? 0}</span>
+          </div>
+        </div>
+      )}
 
       {/* Videos Container */}
       {videos.length > 0 ? (
@@ -244,6 +504,8 @@ useEffect(() => {
               liked={Boolean(likeMap[video.id]?.liked)}
               likeCount={likeMap[video.id]?.count ?? (typeof video.likes === 'number' ? video.likes : 0)}
               following={Boolean(followingMap[video.owner_id])}
+              followPending={Boolean(pendingFollowMap[video.owner_id])}
+              likePending={Boolean(pendingLikeMap[video.id])}
               onLike={() => handleLikeToggle(video.id)}
               onFollow={() => handleFollowToggle(video.owner_id)}
             />
@@ -292,7 +554,7 @@ useEffect(() => {
 };
 
 // ============ SINGLE REEL ITEM - INSTAGRAM STYLE ============
-const ReelItem = ({
+const ReelItem = React.memo(({
   video,
   isActive,
   isAuthenticated,
@@ -303,6 +565,8 @@ const ReelItem = ({
   liked,
   likeCount,
   following,
+  followPending,
+  likePending,
   onLike,
   onFollow,
 }) => {
@@ -310,9 +574,7 @@ const ReelItem = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [saved, setSaved] = useState(video.user_saved || false);
   const [shares, setShares] = useState(video.shares || 0);
-  const [likeLoading, setLikeLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
   const [shareLoading, setShareLoading] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -380,14 +642,8 @@ const ReelItem = ({
   };
 
   const handleLike = async () => {
-    if (likeLoading) return;
-    setLikeLoading(true);
-
-    try {
-      await onLike();
-    } finally {
-      setLikeLoading(false);
-    }
+    if (likePending) return;
+    await onLike();
   };
 
   const handleSave = async () => {
@@ -420,14 +676,8 @@ const ReelItem = ({
 
   const handleFollow = async () => {
     if (video.owner_id === userId) return;
-    if (followLoading) return;
-    setFollowLoading(true);
-
-    try {
-      await onFollow();
-    } finally {
-      setFollowLoading(false);
-    }
+    if (followPending) return;
+    await onFollow();
   };
 
   const handleShare = async () => {
@@ -538,7 +788,7 @@ const ReelItem = ({
           {!following && video.owner_id !== userId && (
             <button
               onClick={handleFollow}
-              disabled={followLoading}
+              disabled={followPending}
               className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center border-2 border-black disabled:opacity-60"
               data-testid="follow-btn"
             >
@@ -548,7 +798,7 @@ const ReelItem = ({
         </div>
 
         {/* Like */}
-        <button onClick={handleLike} disabled={likeLoading} className="flex flex-col items-center disabled:opacity-60" data-testid="like-btn">
+        <button onClick={handleLike} disabled={likePending} className="flex flex-col items-center disabled:opacity-60" data-testid="like-btn">
           <motion.div whileTap={{ scale: 0.9 }}>
             <Heart className={`w-8 h-8 ${liked ? 'text-red-500 fill-red-500' : 'text-white'}`} />
           </motion.div>
@@ -593,7 +843,7 @@ const ReelItem = ({
           {!following && video.owner_id !== userId && (
             <button
               onClick={(e) => { e.preventDefault(); handleFollow(); }}
-              disabled={followLoading}
+              disabled={followPending}
               className="px-2 py-0.5 border border-white rounded text-white text-xs font-semibold ml-2 disabled:opacity-60"
             >
               Follow
@@ -649,7 +899,7 @@ const ReelItem = ({
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
     </div>
   );
-};
+});
 
 // ============ COMMENTS MODAL ============
 const CommentsModal = ({ video, onClose }) => {

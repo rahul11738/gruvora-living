@@ -262,10 +262,19 @@ export const uploadAPI = {
 // Users/Follow APIs
 export const usersAPI = {
   getProfile: (id) => api.get(`/users/${id}`),
+  toggleFollow: (id) => api.post(`/users/${id}/follow/toggle`),
   follow: (id) => api.post(`/users/${id}/follow`),
   unfollow: (id) => api.delete(`/users/${id}/follow`),
   getFollowers: (id) => api.get(`/users/${id}/followers`),
   getFollowing: (id) => api.get(`/users/${id}/following`),
+};
+
+export const interactionsAPI = {
+  snapshot: (params) => api.get('/interactions/snapshot', { params }),
+};
+
+export const debugAPI = {
+  saveReelsSession: (payload) => api.post('/debug/reels-session', payload),
 };
 
 // Messages APIs
@@ -335,6 +344,8 @@ export const adminAPI = {
   getAuditLogs: (params) => api.get('/admin/audit-logs', { params }),
   // params: { action?, from_date?, to_date?, limit? }
   getAuditLogsCsv: (params) => api.get('/admin/audit-logs/export', { params, responseType: 'blob' }),
+  // params: { stress_session_id?, user_id?, include_captures?, page?, limit? }
+  getReelsDebugSessions: (params) => api.get('/admin/debug/reels-sessions', { params }),
 };
 
 // Subscription APIs (Service Provider)

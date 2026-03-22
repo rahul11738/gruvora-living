@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { useInteractions } from '../context/InteractionContext';
 import { usersAPI, listingsAPI } from '../lib/api';
 import { Header, Footer } from './Layout';
 import { Button } from './ui/button';
@@ -51,11 +52,17 @@ export const OwnerProfilePage = () => {
   const { ownerId } = useParams();
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
+  const {
+    followingMap,
+    pendingFollowMap,
+    primeFromVideos,
+    primeOwnerFollow,
+    hydrateSnapshot,
+    toggleFollow,
+  } = useInteractions();
   const [owner, setOwner] = useState(null);
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('reels');
 
   useEffect(() => {
@@ -71,11 +78,11 @@ export const OwnerProfilePage = () => {
       
       setOwner(profileRes.data);
       setListings(listingsRes.data.listings || []);
-      
-      // Check if current user is following this owner
-      if (isAuthenticated && user) {
-        const followingRes = await usersAPI.getFollowing(user.id).catch(() => ({ data: { users: [] } }));
-        setIsFollowing(followingRes.data.users?.some(u => u.id === ownerId) || false);
+
+      primeFromVideos(profileRes.data?.reels || []);
+      primeOwnerFollow(ownerId, Boolean(profileRes.data?.is_following));
+      if (isAuthenticated) {
+        await hydrateSnapshot({ ownerIds: [ownerId] });
       }
     } catch (error) {
       console.error('Failed to fetch owner profile:', error);
@@ -92,23 +99,16 @@ export const OwnerProfilePage = () => {
       return;
     }
 
-    setFollowLoading(true);
     try {
-      if (isFollowing) {
-        await usersAPI.unfollow(ownerId);
-        setIsFollowing(false);
-        setOwner(prev => ({ ...prev, followers_count: (prev.followers_count || 1) - 1 }));
-        toast.success('Unfollowed');
-      } else {
-        await usersAPI.follow(ownerId);
-        setIsFollowing(true);
-        setOwner(prev => ({ ...prev, followers_count: (prev.followers_count || 0) + 1 }));
-        toast.success('Following!');
+      const result = await toggleFollow(ownerId);
+      if (result.ok) {
+        if (typeof result.followersCount === 'number') {
+          setOwner(prev => ({ ...prev, followers_count: result.followersCount }));
+        }
+        toast.success(result.following ? 'Following!' : 'Unfollowed');
       }
     } catch (error) {
       toast.error('Action failed');
-    } finally {
-      setFollowLoading(false);
     }
   };
 
@@ -152,6 +152,8 @@ export const OwnerProfilePage = () => {
   }
 
   const isOwnProfile = user?.id === ownerId;
+  const isFollowing = Boolean(followingMap[ownerId]);
+  const followLoading = Boolean(pendingFollowMap[ownerId]);
 
   return (
     <div className="min-h-screen bg-stone-50" data-testid="owner-profile-page">

@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { toast } from 'sonner';
 import {
   Users,
@@ -25,6 +26,8 @@ import {
   LogOut,
   Loader2,
   RotateCcw,
+  Download,
+  ExternalLink,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -71,6 +74,19 @@ export const AdminDashboard = () => {
   const [retryingJobId, setRetryingJobId] = useState(null);
   const [resettingJobId, setResettingJobId] = useState(null);
   const [mediaAutoRefreshEnabled, setMediaAutoRefreshEnabled] = useState(true);
+  const [reelsDebugReports, setReelsDebugReports] = useState([]);
+  const [reelsDebugStressSessionId, setReelsDebugStressSessionId] = useState('');
+  const [reelsDebugUserId, setReelsDebugUserId] = useState('');
+  const [reelsDebugFromDate, setReelsDebugFromDate] = useState('');
+  const [reelsDebugToDate, setReelsDebugToDate] = useState('');
+  const [reelsDebugDateError, setReelsDebugDateError] = useState('');
+  const [reelsDebugRangeLabel, setReelsDebugRangeLabel] = useState('All Time');
+  const [reelsDebugIncludeCaptures, setReelsDebugIncludeCaptures] = useState(false);
+  const [reelsDebugPage, setReelsDebugPage] = useState(1);
+  const [reelsDebugTotalPages, setReelsDebugTotalPages] = useState(1);
+  const [reelsDebugTotal, setReelsDebugTotal] = useState(0);
+  const [reelsDebugLoading, setReelsDebugLoading] = useState(false);
+  const [selectedReelsDebugReport, setSelectedReelsDebugReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -248,6 +264,146 @@ export const AdminDashboard = () => {
     }
   };
 
+  const fetchReelsDebugSessions = async (
+    page = reelsDebugPage,
+    stressSessionId = reelsDebugStressSessionId,
+    userId = reelsDebugUserId,
+    fromDate = reelsDebugFromDate,
+    toDate = reelsDebugToDate,
+    includeCaptures = reelsDebugIncludeCaptures,
+  ) => {
+    if (!isReelsDebugDateRangeValid(fromDate, toDate)) {
+      return;
+    }
+    setReelsDebugLoading(true);
+    try {
+      const params = {
+        page,
+        limit: 20,
+        include_captures: includeCaptures,
+      };
+      if (stressSessionId && stressSessionId.trim()) {
+        params.stress_session_id = stressSessionId.trim();
+      }
+      if (userId && userId.trim()) {
+        params.user_id = userId.trim();
+      }
+      if (fromDate) {
+        params.from_date = `${fromDate}T00:00:00`;
+      }
+      if (toDate) {
+        params.to_date = `${toDate}T23:59:59`;
+      }
+
+      const res = await adminAPI.getReelsDebugSessions(params);
+      setReelsDebugReports(res.data.reports || []);
+      setReelsDebugTotal(res.data.total || 0);
+      setReelsDebugPage(res.data.page || page);
+      setReelsDebugTotalPages(res.data.total_pages || 1);
+    } catch (error) {
+      console.error('Failed to fetch reels debug sessions:', error);
+      toast.error('Failed to load reels debug sessions');
+    } finally {
+      setReelsDebugLoading(false);
+    }
+  };
+
+  const handleReelsDebugFilterApply = async () => {
+    if (!isReelsDebugDateRangeValid(reelsDebugFromDate, reelsDebugToDate)) {
+      return;
+    }
+    setReelsDebugPage(1);
+    await fetchReelsDebugSessions(
+      1,
+      reelsDebugStressSessionId,
+      reelsDebugUserId,
+      reelsDebugFromDate,
+      reelsDebugToDate,
+      reelsDebugIncludeCaptures,
+    );
+  };
+
+  const handleReelsDebugFilterClear = async () => {
+    setReelsDebugStressSessionId('');
+    setReelsDebugUserId('');
+    setReelsDebugFromDate('');
+    setReelsDebugToDate('');
+    setReelsDebugDateError('');
+    setReelsDebugRangeLabel('All Time');
+    setReelsDebugIncludeCaptures(false);
+    setReelsDebugPage(1);
+    await fetchReelsDebugSessions(1, '', '', '', '', false);
+  };
+
+  const isReelsDebugDateRangeValid = (fromDate = reelsDebugFromDate, toDate = reelsDebugToDate) => {
+    if (!fromDate || !toDate) {
+      setReelsDebugDateError('');
+      return true;
+    }
+    if (fromDate > toDate) {
+      setReelsDebugDateError('From date cannot be later than To date');
+      return false;
+    }
+    setReelsDebugDateError('');
+    return true;
+  };
+
+  const applyReelsDebugPreset = async (preset) => {
+    const today = new Date();
+    const start = new Date(today);
+
+    if (preset === 'today') {
+      // same day range
+    } else if (preset === '7d') {
+      start.setDate(today.getDate() - 6);
+    } else if (preset === '30d') {
+      start.setDate(today.getDate() - 29);
+    }
+
+    const from = formatAsDateInput(start);
+    const to = formatAsDateInput(today);
+    const presetLabel = preset === 'today' ? 'Today' : preset === '7d' ? 'Last 7 Days' : 'Last 30 Days';
+
+    setReelsDebugFromDate(from);
+    setReelsDebugToDate(to);
+    setReelsDebugRangeLabel(presetLabel);
+    setReelsDebugPage(1);
+    await fetchReelsDebugSessions(
+      1,
+      reelsDebugStressSessionId,
+      reelsDebugUserId,
+      from,
+      to,
+      reelsDebugIncludeCaptures,
+    );
+  };
+
+  const handleExportSingleReelsReport = (report) => {
+    try {
+      const payload = {
+        ...report,
+        exported_at: new Date().toISOString(),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const safeSessionId = (report.stress_session_id || 'session').replace(/[^a-zA-Z0-9-_]/g, '_');
+      const safeReportId = (report.id || 'report').replace(/[^a-zA-Z0-9-_]/g, '_');
+      const fileName = `reels_debug_${safeSessionId}_${safeReportId}.json`;
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Debug report exported');
+    } catch (error) {
+      console.error('Failed to export debug report:', error);
+      toast.error('Failed to export debug report');
+    }
+  };
+
   const handleAuditActionFilterChange = async (action) => {
     setAuditActionFilter(action);
     setAuditLogsPage(1);
@@ -376,6 +532,22 @@ export const AdminDashboard = () => {
     navigate('/');
   };
 
+  const handleTabChange = (nextTab) => {
+    setActiveTab(nextTab);
+    if (nextTab === 'reels-debug') {
+      const resolvedFrom = reelsDebugFromDate;
+      const resolvedTo = reelsDebugToDate;
+      fetchReelsDebugSessions(
+        1,
+        reelsDebugStressSessionId,
+        reelsDebugUserId,
+        resolvedFrom,
+        resolvedTo,
+        reelsDebugIncludeCaptures,
+      );
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-100 flex items-center justify-center">
@@ -492,7 +664,7 @@ export const AdminDashboard = () => {
         </Card>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={handleTabChange}>
           <TabsList className="mb-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
@@ -500,6 +672,7 @@ export const AdminDashboard = () => {
             <TabsTrigger value="bookings">Bookings ({bookings.length})</TabsTrigger>
             <TabsTrigger value="media-jobs">Media Jobs ({mediaJobs.length})</TabsTrigger>
             <TabsTrigger value="audit-logs">Audit Logs ({auditLogsTotal})</TabsTrigger>
+            <TabsTrigger value="reels-debug">Reels Debug ({reelsDebugTotal})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
@@ -1038,6 +1211,293 @@ export const AdminDashboard = () => {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="reels-debug">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-4">
+                  <CardTitle>Reels Debug Sessions</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchReelsDebugSessions(reelsDebugPage)}
+                      disabled={reelsDebugLoading}
+                    >
+                      {reelsDebugLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => applyReelsDebugPreset('today')} disabled={reelsDebugLoading}>
+                    Today
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => applyReelsDebugPreset('7d')} disabled={reelsDebugLoading}>
+                    Last 7 Days
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => applyReelsDebugPreset('30d')} disabled={reelsDebugLoading}>
+                    Last 30 Days
+                  </Button>
+                  <input
+                    type="text"
+                    value={reelsDebugStressSessionId}
+                    onChange={(e) => setReelsDebugStressSessionId(e.target.value)}
+                    placeholder="Stress session ID"
+                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm min-w-[220px]"
+                  />
+                  <input
+                    type="text"
+                    value={reelsDebugUserId}
+                    onChange={(e) => setReelsDebugUserId(e.target.value)}
+                    placeholder="User ID"
+                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm min-w-[220px]"
+                  />
+                  <input
+                    type="date"
+                    value={reelsDebugFromDate}
+                    onChange={(e) => {
+                      setReelsDebugFromDate(e.target.value);
+                      setReelsDebugRangeLabel('Custom');
+                      if (reelsDebugDateError) {
+                        isReelsDebugDateRangeValid(e.target.value, reelsDebugToDate);
+                      }
+                    }}
+                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+                  />
+                  <input
+                    type="date"
+                    value={reelsDebugToDate}
+                    onChange={(e) => {
+                      setReelsDebugToDate(e.target.value);
+                      setReelsDebugRangeLabel('Custom');
+                      if (reelsDebugDateError) {
+                        isReelsDebugDateRangeValid(reelsDebugFromDate, e.target.value);
+                      }
+                    }}
+                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+                  />
+                  <label className="h-9 inline-flex items-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={reelsDebugIncludeCaptures}
+                      onChange={(e) => setReelsDebugIncludeCaptures(e.target.checked)}
+                    />
+                    Include captures
+                  </label>
+                  <Button variant="outline" size="sm" onClick={handleReelsDebugFilterApply} disabled={reelsDebugLoading}>
+                    Apply Filters
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={handleReelsDebugFilterClear} disabled={reelsDebugLoading}>
+                    Clear
+                  </Button>
+                  <Badge className="bg-stone-200 text-stone-700">Range: {reelsDebugRangeLabel}</Badge>
+                </div>
+                {reelsDebugDateError && (
+                  <p className="mt-2 text-sm text-red-600">{reelsDebugDateError}</p>
+                )}
+              </CardHeader>
+
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
+                  <div className="rounded-lg bg-stone-100 p-3">
+                    <p className="text-xs text-stone-600">Total Reports</p>
+                    <p className="text-xl font-bold text-stone-800">{reelsDebugTotal}</p>
+                  </div>
+                  <div className="rounded-lg bg-blue-50 p-3">
+                    <p className="text-xs text-blue-700">Visible Reports</p>
+                    <p className="text-xl font-bold text-blue-700">{reelsDebugReports.length}</p>
+                  </div>
+                  <div className="rounded-lg bg-amber-50 p-3">
+                    <p className="text-xs text-amber-700">Reports With Captures</p>
+                    <p className="text-xl font-bold text-amber-700">
+                      {reelsDebugReports.filter((r) => (r.total_captures || 0) > 0).length}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 p-3">
+                    <p className="text-xs text-emerald-700">Total Captures (Visible)</p>
+                    <p className="text-xl font-bold text-emerald-700">
+                      {reelsDebugReports.reduce((sum, r) => sum + (r.total_captures || 0), 0)}
+                    </p>
+                  </div>
+                </div>
+
+                {reelsDebugLoading ? (
+                  <div className="py-8 flex items-center justify-center text-muted-foreground gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading reports...
+                  </div>
+                ) : reelsDebugReports.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">No debug reports found</p>
+                ) : (
+                  <div className="space-y-3">
+                    {reelsDebugReports.map((report) => {
+                      const stats = report.stats || {};
+                      const snapshotHits = Number(stats.snapshotHits || 0);
+                      const snapshotMisses = Number(stats.snapshotMisses || 0);
+                      const totalSnapshotReads = snapshotHits + snapshotMisses;
+                      const snapshotHitRate = totalSnapshotReads > 0
+                        ? Math.round((snapshotHits / totalSnapshotReads) * 100)
+                        : null;
+
+                      return (
+                        <div key={report.id} className="p-4 bg-stone-50 rounded-lg">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-medium">Session: {report.stress_session_id || '-'}</p>
+                              <p className="text-sm text-muted-foreground">
+                                User: {report.user_email || report.user_id || '-'}
+                              </p>
+                            </div>
+                            <Badge className="bg-stone-200 text-stone-700">
+                              {report.created_at ? new Date(report.created_at).toLocaleString('en-IN') : '-'}
+                            </Badge>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                            <div className="rounded bg-white p-2">
+                              <p className="text-xs text-muted-foreground">Snapshot Calls</p>
+                              <p className="font-semibold">{Number(stats.snapshotHttpCalls || 0)}</p>
+                            </div>
+                            <div className="rounded bg-white p-2">
+                              <p className="text-xs text-muted-foreground">Snapshot Hit Rate</p>
+                              <p className="font-semibold">{snapshotHitRate === null ? '-' : `${snapshotHitRate}%`}</p>
+                            </div>
+                            <div className="rounded bg-white p-2">
+                              <p className="text-xs text-muted-foreground">Stale Follow Skips</p>
+                              <p className="font-semibold">{Number(stats.staleFollowSkips || 0)}</p>
+                            </div>
+                            <div className="rounded bg-white p-2">
+                              <p className="text-xs text-muted-foreground">Stale Like Skips</p>
+                              <p className="font-semibold">{Number(stats.staleLikeSkips || 0)}</p>
+                            </div>
+                          </div>
+
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Captures: {report.total_captures || 0} | History points: {(report.hit_rate_history || []).length}
+                          </p>
+
+                          <div className="mt-3 flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSelectedReelsDebugReport(report)}
+                            >
+                              <ExternalLink className="w-4 h-4 mr-1" />
+                              View Details
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleExportSingleReelsReport(report)}
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              Export JSON
+                            </Button>
+                          </div>
+
+                          {reelsDebugIncludeCaptures && Array.isArray(report.captures) && report.captures.length > 0 && (
+                            <details className="mt-2">
+                              <summary className="cursor-pointer text-sm text-primary">Show captures ({report.captures.length})</summary>
+                              <pre className="mt-2 max-h-56 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
+                                {JSON.stringify(report.captures.slice(0, 5), null, 2)}
+                              </pre>
+                            </details>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="mt-5 flex items-center justify-between border-t pt-4">
+                  <p className="text-sm text-muted-foreground">
+                    Page {reelsDebugPage} of {reelsDebugTotalPages} • Total {reelsDebugTotal}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchReelsDebugSessions(Math.max(1, reelsDebugPage - 1))}
+                      disabled={reelsDebugLoading || reelsDebugPage <= 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fetchReelsDebugSessions(Math.min(reelsDebugTotalPages, reelsDebugPage + 1))}
+                      disabled={reelsDebugLoading || reelsDebugPage >= reelsDebugTotalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Dialog
+              open={Boolean(selectedReelsDebugReport)}
+              onOpenChange={(open) => {
+                if (!open) {
+                  setSelectedReelsDebugReport(null);
+                }
+              }}
+            >
+              <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                  <DialogTitle>Reels Debug Report Details</DialogTitle>
+                </DialogHeader>
+                {selectedReelsDebugReport && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      <div className="rounded bg-stone-100 p-3">
+                        <p><span className="font-semibold">Report ID:</span> {selectedReelsDebugReport.id || '-'}</p>
+                        <p><span className="font-semibold">Session:</span> {selectedReelsDebugReport.stress_session_id || '-'}</p>
+                        <p><span className="font-semibold">User:</span> {selectedReelsDebugReport.user_email || selectedReelsDebugReport.user_id || '-'}</p>
+                      </div>
+                      <div className="rounded bg-stone-100 p-3">
+                        <p><span className="font-semibold">Created:</span> {selectedReelsDebugReport.created_at ? new Date(selectedReelsDebugReport.created_at).toLocaleString('en-IN') : '-'}</p>
+                        <p><span className="font-semibold">Captures:</span> {selectedReelsDebugReport.total_captures || 0}</p>
+                        <p><span className="font-semibold">History points:</span> {(selectedReelsDebugReport.hit_rate_history || []).length}</p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Stats</p>
+                      <pre className="max-h-48 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
+                        {JSON.stringify(selectedReelsDebugReport.stats || {}, null, 2)}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Hit Rate History</p>
+                      <pre className="max-h-40 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
+                        {JSON.stringify(selectedReelsDebugReport.hit_rate_history || [], null, 2)}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-semibold mb-1">Captures</p>
+                      <pre className="max-h-64 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
+                        {JSON.stringify(selectedReelsDebugReport.captures || [], null, 2)}
+                      </pre>
+                    </div>
+
+                    <div className="flex items-center justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleExportSingleReelsReport(selectedReelsDebugReport)}
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Export This Report
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </TabsContent>
         </Tabs>
       </div>
