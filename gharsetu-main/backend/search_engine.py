@@ -108,11 +108,18 @@ for canonical, terms in _SYNONYMS.items():
         _TERM_TO_CANONICAL[term] = canonical
 
 _CATEGORY_HINTS = {
-    "home": {"house", "apartment", "villa", "flat", "pg", "hostel"},
-    "business": {"shop", "office", "warehouse", "showroom"},
-    "stay": {"hotel", "room", "guesthouse", "resort", "homestay"},
-    "event": {"party", "marriage", "banquet", "venue", "wedding"},
-    "services": {"plumber", "electrician", "painter", "cleaner", "repair"},
+    "home": {
+        "house", "apartment", "villa", "flat", "pg", "hostel",
+        "rowhouse", "row", "duplex", "bungalow", "penthouse",
+        "farmhouse", "bhk", "residential", "plot",
+    },
+    "business": {"shop", "office", "warehouse", "showroom", "godown", "commercial"},
+    "stay": {"hotel", "room", "guesthouse", "resort", "homestay", "stay"},
+    "event": {"party", "marriage", "banquet", "venue", "wedding", "event"},
+    "services": {
+        "plumber", "electrician", "painter", "cleaner", "repair",
+        "carpenter", "pest", "cctv", "painting", "cleaning",
+    },
 }
 
 
@@ -214,8 +221,58 @@ async def smart_search_listings(
         db_query["city"] = {"$regex": re.escape(city), "$options": "i"}
 
     effective_category = category or normalized.get("detected_category")
-    if effective_category:
+
+    # Sub-category detection (more specific than category).
+    sub_category_map = {
+        "rowhouse": "rowhouse", "row house": "rowhouse", "row-house": "rowhouse",
+        "duplex": "duplex", "bungalow": "bungalow", "villa": "villa",
+        "penthouse": "penthouse", "farmhouse": "farmhouse",
+        "1bhk": "1bhk", "2bhk": "2bhk", "3bhk": "3bhk", "4bhk": "4bhk",
+        "pg": "pg", "hostel": "hostel",
+        "shop": "shop", "office": "office", "warehouse": "warehouse",
+        "showroom": "showroom", "godown": "godown",
+        "hotel": "hotel", "resort": "resort", "guesthouse": "guesthouse",
+        "partyplot": "partyplot", "party plot": "partyplot",
+        "marriagehall": "marriagehall", "marriage hall": "marriagehall",
+        "banquethall": "banquethall", "banquet hall": "banquethall",
+        "plumber": "plumber", "electrician": "electrician",
+        "painter": "painting", "ac repair": "ac_repair",
+        "pest control": "pest_control", "carpenter": "carpenter",
+        "cleaning": "home_cleaning",
+    }
+
+    detected_sub_category = None
+    query_lower = query.lower()
+    for phrase, sub_cat in sub_category_map.items():
+        if phrase in query_lower:
+            detected_sub_category = sub_cat
+            break
+
+    # Area detection for location-level filtering (more specific than city).
+    area_keywords = [
+        "vesu", "adajan", "katargam", "varachha", "piplod", "pal",
+        "althan", "bhatar", "citylight", "athwalines", "sarthana",
+        "udhna", "limbayat", "palanpur", "sachin", "hazira",
+        "satellite", "sg highway", "bopal", "thaltej", "prahlad nagar",
+        "navrangpura", "vastrapur", "ellisbridge", "maninagar",
+        "alkapuri", "fatehgunj", "manjalpur", "gotri",
+    ]
+    detected_area = None
+    for area in area_keywords:
+        if area in query_lower:
+            detected_area = area
+            break
+
+    # Apply specific filters: sub_category first, then category.
+    if detected_sub_category:
+        db_query["sub_category"] = {"$regex": detected_sub_category, "$options": "i"}
+        if effective_category:
+            db_query["category"] = effective_category
+    elif effective_category:
         db_query["category"] = effective_category
+
+    if detected_area:
+        db_query["location"] = {"$regex": detected_area, "$options": "i"}
 
     if expanded_terms:
         regex_pattern = "|".join(re.escape(t) for t in expanded_terms[:30])
