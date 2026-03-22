@@ -126,6 +126,9 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class RefreshToken(BaseModel):
+    token: str
+
 class ListingCreate(BaseModel):
     title: str
     description: str
@@ -489,6 +492,14 @@ manager = ConnectionManager()
 # ============ AUTH ROUTES ============
 @api_router.post("/auth/register")
 async def register_user(user: UserRegister):
+    # ✅ Password validation
+    if len(user.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not any(c.isupper() for c in user.password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not any(c.isdigit() for c in user.password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number")
+    
     existing = await db.users.find_one({"email": user.email})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -621,6 +632,39 @@ async def login(credentials: UserLogin):
             "is_verified": user.get("is_verified", False)
         }
     }
+
+@api_router.post("/auth/refresh")
+async def refresh_token(body: RefreshToken):
+    """Refresh expired JWT token."""
+    try:
+        payload = jwt.decode(
+            body.token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            options={"verify_exp": False},
+        )
+
+        exp = payload.get("exp", 0)
+        now = datetime.now(timezone.utc).timestamp()
+        if now - exp > 7 * 24 * 3600:
+            raise HTTPException(status_code=401, detail="Token too old to refresh")
+
+        user_id = payload.get("user_id")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid refresh token payload")
+
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "role": 1})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        # Always trust the persisted role, not the incoming token claim.
+        new_token = create_token(user_id, user.get("role", UserRole.USER))
+        return {"token": new_token, "message": "Token refreshed"}
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=401, detail="Cannot refresh token")
 
 @api_router.get("/auth/verify/{token}")
 async def verify_email(token: str):
@@ -3785,14 +3829,29 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 # Include the router in the main app
+ALLOWED_ORIGINS = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Idempotency-Key"],
 )
 app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
+
+# ============ SECURITY HEADERS MIDDLEWARE ============
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(api_router)
 
