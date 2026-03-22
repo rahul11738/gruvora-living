@@ -15,12 +15,37 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ✅ Auto token refresh on 401
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('gharsetu_token');
-      window.location.href = '/login';
+  async (error) => {
+    const originalRequest = error.config;
+    
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      
+      const token = localStorage.getItem('gharsetu_token');
+      if (token) {
+        try {
+          const refreshResponse = await axios.post(
+            `${API}/auth/refresh`,
+            { token },
+            { headers: { 'Content-Type': 'application/json' } }
+          );
+          
+          const newToken = refreshResponse.data.token;
+          localStorage.setItem('gharsetu_token', newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        } catch (refreshError) {
+          // Refresh failed - logout
+          localStorage.removeItem('gharsetu_token');
+          window.location.href = '/login';
+        }
+      } else {
+        localStorage.removeItem('gharsetu_token');
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

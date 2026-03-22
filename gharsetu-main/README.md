@@ -41,6 +41,7 @@ Set these repository secrets before running the workflow:
 - `REELS_BASE_URL`: API base URL of your deployed backend, example `https://api.example.com`.
 - `REELS_STRESS_USERS`: comma-separated credentials in `email:password` format.
 - `REELS_STRESS_WEBHOOK_URL` (optional): webhook endpoint for run notifications.
+- `JWT_SECRET`: backend JWT signing secret (required for deterministic refresh-token security tests in CI).
 
 Trigger from the Actions tab using workflow dispatch inputs:
 - `reel_id`
@@ -81,6 +82,61 @@ Optional repository variables for webhook delivery reliability:
 - `REELS_WEBHOOK_RETRY_ATTEMPTS` (default `3`): max delivery attempts.
 - `REELS_WEBHOOK_RETRY_BACKOFF_SECONDS` (default `1.5`): exponential backoff base seconds.
 - `REELS_WEBHOOK_FAIL_ON_ERROR` (`0` or `1`, default `0`): when `1`, workflow fails if webhook delivery fails after retries.
+
+### Auth/Security Workflow
+Workflow file: `.github/workflows/auth-security-tests.yml`
+
+This workflow is lightweight and runs auth/security regression tests only. It triggers on:
+- Manual run (`workflow_dispatch`)
+- Pull requests that touch backend/workflow files
+- Pushes to `main` and `develop` with the same path filters
+
+What it enforces:
+- Password policy validation behavior
+- JWT refresh behavior (invalid token, too-old token, valid refresh)
+- Role-claim integrity on refresh (DB role must win over token payload role)
+- Security headers presence (`X-Content-Type-Options`, `X-Frame-Options`, `X-XSS-Protection`, `Referrer-Policy`, `Permissions-Policy`)
+
+What it publishes:
+- GitHub step summary with passed/failed/errors/skipped counts
+- Artifact: `test_reports/pytest_auth_security.xml`
+
+Required repository secrets for this workflow:
+- `REELS_BASE_URL`
+- `JWT_SECRET`
+
+It uses least-privilege token permissions (`contents: read`) and per-branch concurrency cancellation so only the latest run remains active.
+
+### CI Signals (Job Summary)
+Both workflows publish preflight diagnostics in the job summary so reviewers can quickly distinguish configuration problems from runtime test/stress failures.
+
+Summary fields:
+- `preflight_mode`
+- `preflight_reason`
+
+`preflight_mode` values:
+- `enforced`: all required secrets/inputs were present and execution proceeded normally.
+- `enforced-missing-secrets`: run was in enforced mode but required secrets/inputs were missing, so the workflow failed fast.
+- `skipped-on-pr`: auth/security workflow skipped test execution on pull_request due to unavailable secrets.
+
+How to read outcomes:
+- `preflight_mode=enforced` + failing status: execution ran and found real test/stress issues.
+- `preflight_mode=enforced-missing-secrets`: fix repository secrets/variables or workflow-dispatch inputs first.
+- `preflight_mode=skipped-on-pr`: expected for PR contexts where secrets are not exposed; validate on push/manual run in protected branches.
+
+### Branch Protection (Recommended)
+To enforce these checks before merge:
+
+1. Go to repository Settings -> Branches -> Add branch protection rule.
+2. Target branches: `main` (and optionally `develop`).
+3. Enable "Require a pull request before merging".
+4. Enable "Require status checks to pass before merging".
+5. Add required checks:
+	- `Run Auth/Security Regression Tests`
+	- `Run Reels Stress Suite` (if you want stress validation as a merge gate)
+6. Enable "Require branches to be up to date before merging".
+
+This turns your auth/security and stress workflows into hard merge gates.
 
 ### GitHub Actions (Nightly)
 The same workflow also runs nightly on schedule (UTC) for lightweight regression detection.

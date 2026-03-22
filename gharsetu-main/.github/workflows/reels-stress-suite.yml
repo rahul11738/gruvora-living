@@ -40,6 +40,9 @@ on:
   schedule:
     - cron: "30 2 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   reels-stress:
     name: Run Reels Stress Suite
@@ -55,6 +58,7 @@ jobs:
       BASE_URL: ${{ secrets.REELS_BASE_URL }}
       USERS: ${{ secrets.REELS_STRESS_USERS }}
       WEBHOOK_URL: ${{ secrets.REELS_STRESS_WEBHOOK_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
       REEL_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.reel_id || vars.REELS_NIGHTLY_REEL_ID }}
       ROUNDS: ${{ github.event_name == 'workflow_dispatch' && inputs.rounds || vars.REELS_NIGHTLY_ROUNDS }}
       WORKERS: ${{ github.event_name == 'workflow_dispatch' && inputs.workers || vars.REELS_NIGHTLY_WORKERS }}
@@ -79,16 +83,38 @@ jobs:
           pip install -r requirements.txt
 
       - name: Validate required secrets
+        id: preflight
+        shell: bash
         run: |
-          if [ -z "$BASE_URL" ]; then echo "Missing secret REELS_BASE_URL"; exit 1; fi
-          if [ -z "$USERS" ]; then echo "Missing secret REELS_STRESS_USERS"; exit 1; fi
-          if [ -z "$REEL_ID" ]; then echo "Missing REEL_ID. For scheduled runs set repo variable REELS_NIGHTLY_REEL_ID"; exit 1; fi
-          if [ -z "$ROUNDS" ]; then echo "Missing ROUNDS. For scheduled runs set repo variable REELS_NIGHTLY_ROUNDS"; exit 1; fi
-          if [ -z "$WORKERS" ]; then echo "Missing WORKERS. For scheduled runs set repo variable REELS_NIGHTLY_WORKERS"; exit 1; fi
-          if [ -z "$MIN_TOKENS" ]; then echo "Missing MIN_TOKENS. For scheduled runs set repo variable REELS_NIGHTLY_MIN_TOKENS"; exit 1; fi
-          if [ -z "$MIN_SUCCESS_RATE" ]; then echo "Missing MIN_SUCCESS_RATE. For scheduled runs set repo variable REELS_NIGHTLY_MIN_SUCCESS_RATE"; exit 1; fi
-          if [ -z "$MAX_ERROR_RATE" ]; then echo "Missing MAX_ERROR_RATE. For scheduled runs set repo variable REELS_NIGHTLY_MAX_ERROR_RATE"; exit 1; fi
-          if [ -z "$MAX_ELAPSED_SECONDS" ]; then echo "Missing MAX_ELAPSED_SECONDS. For scheduled runs set repo variable REELS_NIGHTLY_MAX_ELAPSED_SECONDS"; exit 1; fi
+          missing=()
+
+          [ -z "$BASE_URL" ] && missing+=("REELS_BASE_URL")
+          [ -z "$USERS" ] && missing+=("REELS_STRESS_USERS")
+          [ -z "$JWT_SECRET" ] && missing+=("JWT_SECRET")
+          [ -z "$REEL_ID" ] && missing+=("REELS_NIGHTLY_REEL_ID or workflow input reel_id")
+          [ -z "$ROUNDS" ] && missing+=("REELS_NIGHTLY_ROUNDS or workflow input rounds")
+          [ -z "$WORKERS" ] && missing+=("REELS_NIGHTLY_WORKERS or workflow input workers")
+          [ -z "$MIN_TOKENS" ] && missing+=("REELS_NIGHTLY_MIN_TOKENS or workflow input min_tokens")
+          [ -z "$MIN_SUCCESS_RATE" ] && missing+=("REELS_NIGHTLY_MIN_SUCCESS_RATE or workflow input min_success_rate")
+          [ -z "$MAX_ERROR_RATE" ] && missing+=("REELS_NIGHTLY_MAX_ERROR_RATE or workflow input max_error_rate")
+          [ -z "$MAX_ELAPSED_SECONDS" ] && missing+=("REELS_NIGHTLY_MAX_ELAPSED_SECONDS or workflow input max_elapsed_seconds")
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            reason=$(IFS=', '; echo "${missing[*]}")
+            echo "preflight_mode=enforced-missing-secrets" >> "$GITHUB_OUTPUT"
+            echo "preflight_reason=$reason" >> "$GITHUB_OUTPUT"
+            echo "Missing required configuration: $reason"
+            exit 1
+          fi
+
+          echo "preflight_mode=enforced" >> "$GITHUB_OUTPUT"
+          echo "preflight_reason=configured" >> "$GITHUB_OUTPUT"
+
+      - name: Run auth and security regression tests
+        run: python -m pytest tests/test_auth_security.py -q --junitxml=../test_reports/pytest_auth_security.xml
+        env:
+          REACT_APP_BACKEND_URL: ${{ env.BASE_URL }}
+          JWT_SECRET: ${{ env.JWT_SECRET }}
 
       - name: Run stress suite
         run: python run_reels_stress_suite.py
@@ -100,12 +126,53 @@ jobs:
           import glob
           import json
           import os
+          import xml.etree.ElementTree as ET
 
           summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
           if not summary_path:
             raise RuntimeError("GITHUB_STEP_SUMMARY is not available")
 
+          preflight_mode = os.environ.get("PREFLIGHT_MODE", "unknown")
+          preflight_reason = os.environ.get("PREFLIGHT_REASON", "not provided")
+
+          auth_report_path = "../test_reports/pytest_auth_security.xml"
+          auth_tests = 0
+          auth_failures = 0
+          auth_errors = 0
+          auth_skipped = 0
+          auth_passed = 0
+          auth_status = "UNKNOWN"
+
+          if os.path.exists(auth_report_path):
+            try:
+              root = ET.parse(auth_report_path).getroot()
+              if root.tag == "testsuite":
+                suite = root
+              else:
+                suite = root.find("testsuite")
+
+              if suite is not None:
+                auth_tests = int(suite.attrib.get("tests", 0))
+                auth_failures = int(suite.attrib.get("failures", 0))
+                auth_errors = int(suite.attrib.get("errors", 0))
+                auth_skipped = int(suite.attrib.get("skipped", 0))
+                auth_passed = max(auth_tests - auth_failures - auth_errors - auth_skipped, 0)
+                auth_status = "PASS" if (auth_failures + auth_errors) == 0 else "FAIL"
+            except Exception:
+              auth_status = "PARSE_ERROR"
+
           report_paths = sorted(glob.glob("../test_reports/reels_stress_suite_*.json"))
+
+          with open(summary_path, "a", encoding="utf-8") as out:
+            out.write("## Auth and Security Tests\n\n")
+            out.write(f"**Status: {auth_status}**\n\n")
+            out.write(f"- report: `{auth_report_path}`\n")
+            out.write(f"- total: `{auth_tests}`\n")
+            out.write(f"- passed: `{auth_passed}`\n")
+            out.write(f"- failed: `{auth_failures}`\n")
+            out.write(f"- errors: `{auth_errors}`\n")
+            out.write(f"- skipped: `{auth_skipped}`\n\n")
+
           if not report_paths:
             with open(summary_path, "a", encoding="utf-8") as out:
               out.write("## Reels Stress Suite\n\n")
@@ -132,6 +199,8 @@ jobs:
             out.write("## Reels Stress Suite\n\n")
             out.write(f"**Status: {status}**\n\n")
             out.write("### Run Details\n")
+            out.write(f"- preflight_mode: `{preflight_mode}`\n")
+            out.write(f"- preflight_reason: `{preflight_reason}`\n")
             out.write(f"- report: `{latest}`\n")
             out.write(f"- reel_id: `{config.get('reel_id', '')}`\n")
             out.write(f"- rounds: `{config.get('rounds', '')}`\n")
@@ -182,6 +251,9 @@ jobs:
                   f"| {action} | {delta_success:+.2f} | {delta_error:+.2f} |\n"
                 )
           PY
+        env:
+          PREFLIGHT_MODE: ${{ steps.preflight.outputs.preflight_mode }}
+          PREFLIGHT_REASON: ${{ steps.preflight.outputs.preflight_reason }}
 
       - name: Enforce regression gate
         id: regression_gate
@@ -271,7 +343,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: reels-stress-reports-${{ github.run_id }}
-          path: test_reports/reels_stress_suite_*.json
+          path: |
+            test_reports/reels_stress_suite_*.json
+            test_reports/pytest_auth_security.xml
           if-no-files-found: warn
 
       - name: Build webhook summary
