@@ -2136,6 +2136,15 @@ async def get_video_feed(
     
     return {"videos": videos, "page": page}
 
+@api_router.get("/videos/saved")
+async def get_saved_videos(user: dict = Depends(get_current_user)):
+    saved_ids = user.get("saved_reels", [])
+    if not saved_ids:
+        return {"videos": []}
+
+    videos = await db.videos.find({"id": {"$in": saved_ids}}, {"_id": 0}).to_list(100)
+    return {"videos": videos}
+
 @api_router.get("/videos/{video_id}")
 async def get_video_by_id(
     video_id: str,
@@ -2237,15 +2246,6 @@ async def unsave_video(video_id: str, user: dict = Depends(get_current_user)):
     await enforce_upload_rate_limit(user["id"], "video_unsave", max_requests=80, window_seconds=60)
     await db.users.update_one({"id": user["id"]}, {"$pull": {"saved_reels": video_id}})
     return {"message": "Video unsaved"}
-
-@api_router.get("/videos/saved")
-async def get_saved_videos(user: dict = Depends(get_current_user)):
-    saved_ids = user.get("saved_reels", [])
-    if not saved_ids:
-        return {"videos": []}
-    
-    videos = await db.videos.find({"id": {"$in": saved_ids}}, {"_id": 0}).to_list(100)
-    return {"videos": videos}
 
 # ============ COMMENTS ROUTES ============
 class CommentCreate(BaseModel):

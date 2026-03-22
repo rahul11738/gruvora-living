@@ -34,7 +34,12 @@ export const AuthProvider = ({ children }) => {
       });
       setUser(response.data);
     } catch (error) {
-      console.error('Failed to fetch user:', error);
+      const status = error?.response?.status;
+      if (status === 401) {
+        console.info('Session expired or invalid token. Logging out.');
+      } else {
+        console.error('Failed to fetch user:', error);
+      }
       logout();
     } finally {
       setLoading(false);
