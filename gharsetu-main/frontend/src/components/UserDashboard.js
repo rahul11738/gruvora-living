@@ -257,17 +257,18 @@ export const UserDashboard = () => {
                       <p className="text-muted-foreground mb-6">
                         Save reels you like to watch them later
                       </p>
-                      <Link
-                        to="/reels"
+                      <Button 
+                        className="btn-primary"
                         onMouseEnter={prefetchReelsRoute}
                         onFocus={prefetchReelsRoute}
-                        onClick={() => markRouteNavigation('/reels', 'dashboard-saved-reels-cta')}
+                        onClick={() => {
+                          markRouteNavigation('/reels', 'dashboard-saved-reels-cta');
+                          navigate('/reels');
+                        }}
                       >
-                        <Button className="btn-primary">
-                          <Play className="w-4 h-4 mr-2" />
-                          Browse Reels
-                        </Button>
-                      </Link>
+                        <Play className="w-4 h-4 mr-2" />
+                        Browse Reels
+                      </Button>
                     </CardContent>
                   </Card>
                 ) : (

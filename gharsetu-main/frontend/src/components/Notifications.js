@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useState, useEffect, useRef, useCallback, createContext, useContext } from 'react';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -21,6 +21,15 @@ import {
 
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 
+const normalizeNotification = (notification) => {
+  const isRead = Boolean(notification?.read ?? notification?.is_read ?? false);
+  return {
+    ...notification,
+    read: isRead,
+    is_read: isRead,
+  };
+};
+
 // Notification Context
 const NotificationContext = createContext(null);
 
@@ -39,6 +48,8 @@ export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isConnected, setIsConnected] = useState(false);
+  const lastFetchAtRef = useRef(0);
+  const isFetchingRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated || !token) {
@@ -78,7 +89,7 @@ export const NotificationProvider = ({ children }) => {
 
     newSocket.on('notification', (notification) => {
       console.log('New notification:', notification);
-      setNotifications(prev => [notification, ...prev]);
+      setNotifications(prev => [normalizeNotification(notification), ...prev]);
       setUnreadCount(prev => prev + 1);
       
       // Show browser notification if permitted
@@ -91,8 +102,9 @@ export const NotificationProvider = ({ children }) => {
     });
 
     newSocket.on('unread_notifications', (data) => {
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.count || 0);
+      const normalized = (data.notifications || []).map(normalizeNotification);
+      setNotifications(normalized);
+      setUnreadCount(typeof data.count === 'number' ? data.count : normalized.filter((item) => !item.read).length);
     });
 
     setSocket(newSocket);
@@ -107,7 +119,7 @@ export const NotificationProvider = ({ children }) => {
     };
   }, [isAuthenticated, token]);
 
-  const markAsRead = async (notificationId) => {
+  const markAsRead = useCallback(async (notificationId) => {
     try {
       await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
         method: 'PUT',
@@ -117,15 +129,15 @@ export const NotificationProvider = ({ children }) => {
       });
       
       setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+        prev.map(n => n.id === notificationId ? { ...n, read: true, is_read: true } : n)
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
     }
-  };
+  }, [token]);
 
-  const markAllAsRead = async () => {
+  const markAllAsRead = useCallback(async () => {
     try {
       await fetch(`${API_URL}/api/notifications/read-all`, {
         method: 'PUT',
@@ -134,29 +146,45 @@ export const NotificationProvider = ({ children }) => {
         },
       });
       
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setNotifications(prev => prev.map(n => ({ ...n, read: true, is_read: true })));
       setUnreadCount(0);
     } catch (error) {
       console.error('Failed to mark all notifications as read:', error);
     }
-  };
+  }, [token]);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async (force = false) => {
     if (!token) return;
+    if (isFetchingRef.current) return;
+
+    const now = Date.now();
+    // Guard repeated calls from re-renders while dropdown is open.
+    if (!force && now - lastFetchAtRef.current < 10000) {
+      return;
+    }
     
     try {
+      isFetchingRef.current = true;
       const response = await fetch(`${API_URL}/api/notifications`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
+      if (response.status === 429) {
+        console.warn('Notifications temporarily rate-limited (429).');
+        return;
+      }
       const data = await response.json();
-      setNotifications(data.notifications || []);
-      setUnreadCount(data.unread_count || 0);
+      const normalized = (data.notifications || []).map(normalizeNotification);
+      setNotifications(normalized);
+      setUnreadCount(typeof data.unread_count === 'number' ? data.unread_count : normalized.filter((item) => !item.read).length);
+      lastFetchAtRef.current = Date.now();
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
+    } finally {
+      isFetchingRef.current = false;
     }
-  };
+  }, [token]);
 
   return (
     <NotificationContext.Provider value={{
@@ -180,7 +208,7 @@ export const NotificationBell = () => {
 
   useEffect(() => {
     if (!showDropdown) return;
-    fetchNotifications();
+    fetchNotifications(true);
   }, [showDropdown, fetchNotifications]);
 
   return (
@@ -219,9 +247,14 @@ const NotificationDropdown = ({ onClose }) => {
       await markAsRead(notif.id);
     }
 
-    const listingId = notif.related_listing_id || notif.listing_id;
+    const listingId = notif.related_listing_id || notif.listing_id || notif?.data?.listing_id;
+    const senderId = notif.sender_id || notif?.data?.sender_id;
     if (listingId) {
-      navigate(`/chat?listing_id=${encodeURIComponent(String(listingId))}`);
+      const params = new URLSearchParams({ listing_id: String(listingId) });
+      if (senderId) {
+        params.set('user', String(senderId));
+      }
+      navigate(`/chat?${params.toString()}`);
       onClose();
       return;
     }
@@ -236,6 +269,7 @@ const NotificationDropdown = ({ onClose }) => {
     switch (type) {
       case 'booking': return Calendar;
       case 'payment': return CreditCard;
+      case 'chat': return MessageCircle;
       case 'message': return MessageCircle;
       case 'like': return Heart;
       case 'follow': return UserPlus;
@@ -248,6 +282,7 @@ const NotificationDropdown = ({ onClose }) => {
     switch (type) {
       case 'booking': return 'text-blue-500 bg-blue-100';
       case 'payment': return 'text-green-500 bg-green-100';
+      case 'chat': return 'text-emerald-600 bg-emerald-100';
       case 'message': return 'text-purple-500 bg-purple-100';
       case 'like': return 'text-red-500 bg-red-100';
       case 'follow': return 'text-pink-500 bg-pink-100';
@@ -348,7 +383,7 @@ const NotificationDropdown = ({ onClose }) => {
       {/* Footer */}
       {notifications.length > 0 && (
         <div className="p-3 border-t text-center">
-          <button className="text-sm text-primary hover:underline">
+          <button className="text-sm text-primary hover:underline" onClick={() => { navigate('/notifications'); onClose(); }}>
             View all notifications
           </button>
         </div>

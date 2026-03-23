@@ -28,6 +28,7 @@ import {
   RotateCcw,
   Download,
   ExternalLink,
+  MessageCircle,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -87,6 +88,8 @@ export const AdminDashboard = () => {
   const [reelsDebugTotal, setReelsDebugTotal] = useState(0);
   const [reelsDebugLoading, setReelsDebugLoading] = useState(false);
   const [selectedReelsDebugReport, setSelectedReelsDebugReport] = useState(null);
+  const [adminChats, setAdminChats] = useState([]);
+  const [adminChatsLoading, setAdminChatsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -535,6 +538,19 @@ export const AdminDashboard = () => {
     }
   }, [users]);
 
+  const fetchAdminChats = async () => {
+    setAdminChatsLoading(true);
+    try {
+      const response = await adminAPI.getChats({ page: 1, limit: 100 });
+      setAdminChats(response?.data?.messages || []);
+    } catch (error) {
+      console.error('Failed to fetch admin chats:', error);
+      toast.error('Failed to load chats');
+    } finally {
+      setAdminChatsLoading(false);
+    }
+  };
+
   const handleLogout = useCallback(() => {
     logout();
     navigate('/');
@@ -553,6 +569,9 @@ export const AdminDashboard = () => {
         resolvedTo,
         reelsDebugIncludeCaptures,
       );
+    }
+    if (nextTab === 'chat-tracking') {
+      fetchAdminChats();
     }
   };
 
@@ -684,6 +703,7 @@ export const AdminDashboard = () => {
             <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
             <TabsTrigger value="listings">Listings ({listings.length})</TabsTrigger>
             <TabsTrigger value="bookings">Bookings ({bookings.length})</TabsTrigger>
+            <TabsTrigger value="chat-tracking">Chat Tracking ({adminChats.length})</TabsTrigger>
             <TabsTrigger value="media-jobs">Media Jobs ({mediaJobs.length})</TabsTrigger>
             <TabsTrigger value="audit-logs">Audit Logs ({auditLogsTotal})</TabsTrigger>
             <TabsTrigger value="reels-debug">Reels Debug ({reelsDebugTotal})</TabsTrigger>
@@ -908,6 +928,40 @@ export const AdminDashboard = () => {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="chat-tracking">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <MessageCircle className="w-5 h-5" />
+                    All Chats
+                  </CardTitle>
+                  <Button variant="outline" size="sm" onClick={fetchAdminChats}>Refresh</Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {adminChatsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                  </div>
+                ) : adminChats.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No chats available.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {adminChats.map((chat) => (
+                      <div key={chat.id} className="rounded-lg border p-3 bg-stone-50">
+                        <p className="text-xs text-muted-foreground mb-1">
+                          listing: {chat.listing_id || 'n/a'} | owner: {chat.owner_id || 'n/a'} | user: {chat.user_id || chat.sender_id}
+                        </p>
+                        <p className="text-sm text-stone-900 break-words">{chat.message || chat.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

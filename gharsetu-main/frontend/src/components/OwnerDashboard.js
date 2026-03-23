@@ -625,11 +625,9 @@ const ListingRow = memo(({ listing, onDelete, showActions }) => {
       </div>
       {showActions && (
         <div className="flex gap-2">
-          <Link to={`/listing/${listing.id}`}>
-            <Button variant="ghost" size="icon">
-              <Eye className="w-4 h-4" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/listing/${listing.id}`)}>
+            <Eye className="w-4 h-4" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={() => onDelete(listing.id)}>
             <Trash2 className="w-4 h-4 text-red-500" />
           </Button>

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { listingsAPI, bookingsAPI, wishlistAPI } from '../lib/api';
+import { listingsAPI, bookingsAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useInteractions } from '../context/InteractionContext';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -24,8 +25,6 @@ import {
   MapPin,
   Heart,
   Share2,
-  Phone,
-  Mail,
   Eye,
   Calendar as CalendarIcon,
   User,
@@ -68,10 +67,10 @@ export const ListingDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
+  const { isWishlisted, toggleWishlist, pendingWishlistMap } = useInteractions();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isWishlisted, setIsWishlisted] = useState(false);
   const [showBookingDialog, setShowBookingDialog] = useState(false);
   const [bookingDate, setBookingDate] = useState(null);
   const [bookingNotes, setBookingNotes] = useState('');
@@ -101,14 +100,12 @@ export const ListingDetailPage = () => {
       return;
     }
     try {
-      if (isWishlisted) {
-        await wishlistAPI.remove(id);
-        setIsWishlisted(false);
-        toast.success('Removed from wishlist');
-      } else {
-        await wishlistAPI.add(id);
-        setIsWishlisted(true);
-        toast.success('Added to wishlist!');
+      const result = await toggleWishlist(id);
+      if (result.ok) {
+        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist', {
+          duration: 1500,
+          id: `wishlist-${id}`,
+        });
       }
     } catch (error) {
       toast.error('Failed to update wishlist');
@@ -127,6 +124,7 @@ export const ListingDetailPage = () => {
 
     setBookingLoading(true);
     try {
+      await listingsAPI.lock(id);
       await bookingsAPI.create({
         listing_id: id,
         booking_date: format(bookingDate, 'yyyy-MM-dd'),
@@ -137,8 +135,14 @@ export const ListingDetailPage = () => {
       setShowBookingDialog(false);
       setBookingDate(null);
       setBookingNotes('');
+      fetchListing();
     } catch (error) {
-      toast.error('Failed to create booking');
+      const detail = error?.response?.data?.detail || '';
+      if (error?.response?.status === 409 || detail.toLowerCase().includes('already in process')) {
+        toast.error('Already in process');
+      } else {
+        toast.error('Failed to create booking');
+      }
     } finally {
       setBookingLoading(false);
     }
@@ -199,6 +203,8 @@ export const ListingDetailPage = () => {
 
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryColors[listing.category] || 'bg-primary';
+  const wishlisted = isWishlisted(id);
+  const wishlistPending = Boolean(pendingWishlistMap[String(id)]);
   const images = listing.images?.length > 0 
     ? listing.images 
     : ['https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=800'];
@@ -259,12 +265,13 @@ export const ListingDetailPage = () => {
           <div className="absolute top-4 right-4 flex gap-2">
             <button
               onClick={handleWishlist}
+              disabled={wishlistPending}
               className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-                isWishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
+                wishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
               }`}
               data-testid="wishlist-btn"
             >
-              <Heart className={`w-6 h-6 ${isWishlisted ? 'fill-white' : ''}`} />
+              <Heart className={`w-6 h-6 ${wishlisted ? 'fill-white' : ''}`} />
             </button>
             <button
               onClick={handleShare}
@@ -418,7 +425,7 @@ export const ListingDetailPage = () => {
                 {/* Info Box - Contact only via Chat */}
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
                   <p className="text-sm text-amber-800">
-                    Contact owner via chat only. Phone/Email not shared for security.
+                    Chat to connect securely.
                   </p>
                 </div>
               </CardContent>
@@ -435,23 +442,28 @@ export const ListingDetailPage = () => {
                     className="w-full btn-primary text-base md:text-lg py-5 md:py-6"
                     onSuccess={() => {
                       toast.success('Booking confirmed! Check your email.');
+                      fetchListing();
                     }}
                   >
                     <CreditCard className="w-5 h-5 mr-2" />
-                    {listing.category === 'stay' ? 'Book & Pay Now' :
-                     listing.category === 'event' ? 'Book Venue & Pay' :
-                     'Book Service & Pay'}
+                    Proceed to booking
                   </PaymentButton>
                 )}
 
                 {/* Chat with Owner Button */}
-                <ChatWithOwnerButton
-                  ownerId={listing.owner_id}
-                  ownerName={listing.owner_name}
-                  listingId={listing.id}
-                  listingTitle={listing.title}
-                  className="w-full btn-secondary text-base py-5"
-                />
+                {listing.is_locked ? (
+                  <Button className="w-full" disabled>
+                    Already in process
+                  </Button>
+                ) : (
+                  <ChatWithOwnerButton
+                    ownerId={listing.owner_id}
+                    ownerName={listing.owner_name}
+                    listingId={listing.id}
+                    listingTitle={listing.title}
+                    className="w-full btn-secondary text-base py-5"
+                  />
+                )}
 
                 {/* Inquiry/Schedule Visit for Home/Business */}
                 {(listing.category === 'home' || listing.category === 'business') && (

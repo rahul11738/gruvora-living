@@ -14,16 +14,28 @@ import { toast } from 'sonner';
 const API_URL = process.env.REACT_APP_BACKEND_URL;
 const MESSAGE_PAGE_LIMIT = 50;
 
-const BLOCKED_KEYWORDS = ['call me', 'number', 'whatsapp', 'phone', 'contact me', 'email me'];
+const blockedWords = [
+  'call me',
+  'whatsapp',
+  'phone',
+  'number',
+  'contact me',
+  '@gmail',
+  '@yahoo',
+  '@outlook',
+  '+91',
+];
 const PHONE_PATTERN = /(?:\+?\d[\s-]*){10,}/;
 const EMAIL_PATTERN = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+
+const isBlockedMessage = (msg) => blockedWords.some((word) => String(msg || '').toLowerCase().includes(word));
 
 const getBlockedReason = (value) => {
   const text = String(value || '').trim();
   if (!text) return null;
 
   const lowered = text.toLowerCase();
-  if (BLOCKED_KEYWORDS.some((keyword) => lowered.includes(keyword))) {
+  if (isBlockedMessage(text)) {
     return 'Direct contact sharing is blocked. Keep chat on the platform.';
   }
   if (PHONE_PATTERN.test(text)) {
@@ -39,6 +51,7 @@ export const ChatPage = () => {
   const { user, token } = useAuth();
   const [searchParams] = useSearchParams();
   const listingId = searchParams.get('listing_id') || '';
+  const receiverIdFromRoute = searchParams.get('user') || searchParams.get('receiver_id') || '';
 
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
@@ -52,14 +65,33 @@ export const ChatPage = () => {
   const [sending, setSending] = useState(false);
   const [remoteTypingVisible, setRemoteTypingVisible] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
 
   const messageEndRef = useRef(null);
+  const messageListRef = useRef(null);
   const socketRef = useRef(null);
   const joinedConversationRef = useRef('');
+  const shouldAutoScrollRef = useRef(true);
+
+  const isNearBottom = useCallback((container, threshold = 100) => {
+    if (!container) return true;
+    const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+    return distanceFromBottom <= threshold;
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, []);
+
+  const handleMessageListScroll = useCallback(() => {
+    const container = messageListRef.current;
+    if (!container) return;
+
+    const nearBottom = isNearBottom(container);
+    shouldAutoScrollRef.current = nearBottom;
+    setShowJumpToLatest(!nearBottom);
+  }, [isNearBottom]);
 
   const loadConversations = useCallback(async () => {
     setLoadingConversations(true);
@@ -69,19 +101,61 @@ export const ChatPage = () => {
       setConversations(next);
 
       if (next.length > 0) {
-        const preferred = listingId
-          ? next.find((item) => String(item.listing_id || '') === String(listingId))
-          : null;
-        setActiveConversation((prev) => prev || preferred || next[0]);
+        const preferred = next.find((item) => {
+          if (listingId && String(item.listing_id || '') !== String(listingId)) {
+            return false;
+          }
+          if (receiverIdFromRoute && String(item.other_user?.id || '') !== String(receiverIdFromRoute)) {
+            return false;
+          }
+          return true;
+        });
+
+        setActiveConversation((prev) => {
+          if (prev?.id) {
+            const refreshed = next.find((item) => item.id === prev.id);
+            if (refreshed) return refreshed;
+          }
+
+          if (preferred) {
+            return preferred;
+          }
+
+          if (listingId && receiverIdFromRoute) {
+            return {
+              id: '',
+              listing_id: listingId,
+              other_user: {
+                id: receiverIdFromRoute,
+                name: 'Chat',
+              },
+              unread_count: 0,
+            };
+          }
+
+          return next[0];
+        });
       } else {
-        setActiveConversation(null);
+        if (listingId && receiverIdFromRoute) {
+          setActiveConversation({
+            id: '',
+            listing_id: listingId,
+            other_user: {
+              id: receiverIdFromRoute,
+              name: 'Chat',
+            },
+            unread_count: 0,
+          });
+        } else {
+          setActiveConversation(null);
+        }
       }
     } catch {
       toast.error('Failed to load conversations');
     } finally {
       setLoadingConversations(false);
     }
-  }, [listingId]);
+  }, [listingId, receiverIdFromRoute]);
 
   const loadMessages = useCallback(async (conversationId, page = 1, appendOlder = false) => {
     if (!conversationId) {
@@ -123,9 +197,16 @@ export const ChatPage = () => {
   }, [loadConversations]);
 
   useEffect(() => {
-    if (!activeConversation?.id) return;
+    if (!activeConversation?.id) {
+      setMessages([]);
+      setShowJumpToLatest(false);
+      shouldAutoScrollRef.current = true;
+      return;
+    }
     setHasMoreMessages(true);
     setMessagePage(1);
+    setShowJumpToLatest(false);
+    shouldAutoScrollRef.current = true;
     loadMessages(activeConversation.id, 1, false);
   }, [activeConversation?.id, loadMessages]);
 
@@ -211,8 +292,30 @@ export const ChatPage = () => {
   }, [activeConversation?.id, loadMessages, messages, user?.id]);
 
   useEffect(() => {
-    scrollToBottom();
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom();
+    }
   }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+
+    const updateKeyboardOffset = () => {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const offset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboardOffset(offset > 20 ? offset : 0);
+    };
+
+    updateKeyboardOffset();
+    window.visualViewport.addEventListener('resize', updateKeyboardOffset);
+    window.visualViewport.addEventListener('scroll', updateKeyboardOffset);
+
+    return () => {
+      window.visualViewport.removeEventListener('resize', updateKeyboardOffset);
+      window.visualViewport.removeEventListener('scroll', updateKeyboardOffset);
+    };
+  }, []);
 
   useEffect(() => {
     const socket = socketRef.current;
@@ -245,6 +348,11 @@ export const ChatPage = () => {
     const text = messageInput.trim();
     if (!text || sending) return;
 
+    if (isBlockedMessage(text)) {
+      alert('Sharing contact details is not allowed');
+      return;
+    }
+
     const blockedReason = getBlockedReason(text);
     if (blockedReason) {
       toast.error(blockedReason);
@@ -270,7 +378,6 @@ export const ChatPage = () => {
         listing_id: activeConversation.listing_id,
         content: text,
       });
-      await loadMessages(activeConversation.id, 1, false);
       await loadConversations();
     } catch (error) {
       setMessages((prev) => prev.filter((msg) => msg.id !== optimistic.id));
@@ -279,7 +386,7 @@ export const ChatPage = () => {
     } finally {
       setSending(false);
     }
-  }, [activeConversation, loadConversations, loadMessages, messageInput, sending, user?.id]);
+  }, [activeConversation, loadConversations, messageInput, sending, user?.id]);
 
   const handleLoadOlder = useCallback(async () => {
     if (!activeConversation?.id || loadingMoreMessages || !hasMoreMessages) return;
@@ -296,9 +403,9 @@ export const ChatPage = () => {
     <div className="min-h-screen bg-stone-50" data-testid="chat-page">
       <Header />
       <div className="container-main py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ height: 'calc(100vh - 120px)' }}>
-          <Card className="lg:col-span-4 overflow-hidden">
-            <CardContent className="p-0 h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[calc(100vh-120px)] lg:h-[calc(100vh-120px)]">
+          <Card className="lg:col-span-4 overflow-hidden min-h-0">
+            <CardContent className="p-0 h-full min-h-0">
               <div className="px-4 py-3 border-b flex items-center justify-between">
                 <h2 className="font-semibold">Conversations</h2>
                 <Badge>{conversations.length}</Badge>
@@ -336,15 +443,18 @@ export const ChatPage = () => {
             </CardContent>
           </Card>
 
-          <Card className="lg:col-span-8 overflow-hidden">
-            <CardContent className="p-0 h-full">
+          <Card className="lg:col-span-8 overflow-hidden min-h-0">
+            <CardContent className="p-0 h-full min-h-0">
               {!activeConversation ? (
                 <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
                   <MessageCircle className="w-10 h-10 mb-3" />
                   Select a conversation to start chatting.
                 </div>
               ) : (
-                <div className="chat-container h-full">
+                <div className="chat-container h-full min-h-0">
+                  <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900">
+                    For your safety, all communication must stay within GharSetu. Sharing contact details is restricted.
+                  </div>
                   <div className="px-4 py-3 border-b bg-white flex items-center justify-between">
                     <div>
                       <p className="font-semibold text-stone-900">{activeConversation.other_user?.name || 'Chat'}</p>
@@ -360,7 +470,11 @@ export const ChatPage = () => {
                     </div>
                   </div>
 
-                  <div className="chat-messages bg-stone-100 px-3 py-4">
+                  <div
+                    ref={messageListRef}
+                    onScroll={handleMessageListScroll}
+                    className="chat-messages bg-stone-100 px-3 py-4 min-h-0"
+                  >
                     {hasMoreMessages && !loadingMessages ? (
                       <div className="mb-3 flex justify-center">
                         <Button variant="outline" size="sm" onClick={handleLoadOlder} disabled={loadingMoreMessages}>
@@ -390,10 +504,29 @@ export const ChatPage = () => {
                       })
                     )}
                     {remoteTypingVisible ? <p className="text-xs text-muted-foreground px-1">Typing...</p> : null}
+                    {showJumpToLatest ? (
+                      <div className="sticky bottom-2 z-10 flex justify-center">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => {
+                            shouldAutoScrollRef.current = true;
+                            setShowJumpToLatest(false);
+                            scrollToBottom();
+                          }}
+                        >
+                          Jump to latest
+                        </Button>
+                      </div>
+                    ) : null}
                     <div ref={messageEndRef} />
                   </div>
 
-                  <form className="chat-input bg-white border-t p-3" onSubmit={handleSend}>
+                  <form
+                    className="chat-input shrink-0 bg-white border-t p-3"
+                    style={{ paddingBottom: `calc(0.75rem + ${keyboardOffset}px)` }}
+                    onSubmit={handleSend}
+                  >
                     <div className="flex items-center gap-2">
                       <Input
                         value={messageInput}

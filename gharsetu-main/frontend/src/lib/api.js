@@ -171,6 +171,9 @@ export const listingsAPI = {
   like: (id) => api.post(`/listings/${id}/like`),
   share: (id) => api.post(`/listings/${id}/share`),
   boost: (data) => api.post('/listings/boost', data),
+  lock: (listing_id) => api.post('/lock-listing', { listing_id }),
+  unlock: (listing_id) => api.post('/unlock-listing', { listing_id }),
+  revealContact: (listing_id) => api.post('/listings/contact/reveal', { listing_id }),
 };
 
 // Wishlist APIs
@@ -285,6 +288,12 @@ export const messagesAPI = {
   getMessages: (conversationId, page = 1) => api.get(`/messages/conversation/${conversationId}`, { params: { page } }),
 };
 
+export const paymentsAPI = {
+  createOrder: (data) => api.post('/payments/create-order', data),
+  verify: (data) => api.post('/payments/verify', data),
+  getConfig: () => api.get('/payments/config'),
+};
+
 // Notifications APIs
 export const notificationsAPI = {
   getAll: (page = 1) => api.get('/notifications', { params: { page } }),
@@ -347,6 +356,8 @@ export const adminAPI = {
   getAuditLogsCsv: (params) => api.get('/admin/audit-logs/export', { params, responseType: 'blob' }),
   // params: { stress_session_id?, user_id?, include_captures?, page?, limit? }
   getReelsDebugSessions: (params) => api.get('/admin/debug/reels-sessions', { params }),
+  getChats: (params) => api.get('/admin/chats', { params }),
+  getChatConversation: (conversationId, params) => api.get(`/admin/chats/${conversationId}`, { params }),
 };
 
 // Subscription APIs (Service Provider)

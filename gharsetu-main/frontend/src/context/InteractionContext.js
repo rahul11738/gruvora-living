@@ -8,6 +8,11 @@ const DEBOUNCE_MS = 300;
 const SNAPSHOT_TTL_MS = 30000;
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
+const normalizeWishlistId = (listingId) => {
+  if (listingId === null || listingId === undefined) return '';
+  return String(listingId);
+};
+
 export const useInteractions = () => {
   const context = useContext(InteractionContext);
   if (!context) {
@@ -334,8 +339,9 @@ export const InteractionProvider = ({ children }) => {
     const listings = response?.data?.listings || [];
     const nextMap = {};
     for (const item of listings) {
-      if (!item?.id) continue;
-      nextMap[item.id] = true;
+      const normalizedId = normalizeWishlistId(item?.id);
+      if (!normalizedId) continue;
+      nextMap[normalizedId] = true;
     }
     setWishlistMap(nextMap);
   }, [isAuthenticated]);
@@ -352,37 +358,39 @@ export const InteractionProvider = ({ children }) => {
   }, [isAuthenticated, refreshWishlist]);
 
   const isWishlisted = useCallback((listingId) => {
-    if (!listingId) return false;
-    return Boolean(wishlistMap[listingId]);
+    const normalizedId = normalizeWishlistId(listingId);
+    if (!normalizedId) return false;
+    return Boolean(wishlistMap[normalizedId]);
   }, [wishlistMap]);
 
   const toggleWishlist = useCallback(async (listingId) => {
-    if (!isAuthenticated || !listingId) {
+    const normalizedId = normalizeWishlistId(listingId);
+    if (!isAuthenticated || !normalizedId) {
       return { ok: false, wishlisted: false };
     }
 
-    if (pendingWishlistMap[listingId]) {
-      return { ok: false, wishlisted: Boolean(wishlistMap[listingId]) };
+    if (pendingWishlistMap[normalizedId]) {
+      return { ok: false, wishlisted: Boolean(wishlistMap[normalizedId]) };
     }
 
-    const wasWishlisted = Boolean(wishlistMap[listingId]);
+    const wasWishlisted = Boolean(wishlistMap[normalizedId]);
     const optimistic = !wasWishlisted;
 
-    setPendingWishlistMap((prev) => ({ ...prev, [listingId]: true }));
-    setWishlistMap((prev) => ({ ...prev, [listingId]: optimistic }));
+    setPendingWishlistMap((prev) => ({ ...prev, [normalizedId]: true }));
+    setWishlistMap((prev) => ({ ...prev, [normalizedId]: optimistic }));
 
     try {
       if (wasWishlisted) {
-        await wishlistAPI.remove(listingId);
+        await wishlistAPI.remove(normalizedId);
       } else {
-        await wishlistAPI.add(listingId);
+        await wishlistAPI.add(normalizedId);
       }
       return { ok: true, wishlisted: optimistic };
     } catch (error) {
-      setWishlistMap((prev) => ({ ...prev, [listingId]: wasWishlisted }));
+      setWishlistMap((prev) => ({ ...prev, [normalizedId]: wasWishlisted }));
       throw error;
     } finally {
-      setPendingWishlistMap((prev) => ({ ...prev, [listingId]: false }));
+      setPendingWishlistMap((prev) => ({ ...prev, [normalizedId]: false }));
     }
   }, [isAuthenticated, pendingWishlistMap, wishlistMap]);
 

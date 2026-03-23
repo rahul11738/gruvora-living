@@ -226,7 +226,10 @@ export const CategoryPage = () => {
     try {
       const result = await toggleWishlist(listingId);
       if (result.ok) {
-        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist');
+        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist', {
+          duration: 1500,
+          id: `wishlist-${listingId}`,
+        });
       }
     } catch {
       toast.error('Failed to update wishlist');

@@ -30,6 +30,7 @@ const OwnerProfilePage = lazy(() => import("./components/OwnerProfilePage").then
 const MapSearchPage = lazy(() => import("./components/MapSearchPage").then((m) => ({ default: m.MapSearchPage })));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const ChatPage = lazy(() => import("./components/ChatPage"));
+const NotificationsPage = lazy(() => import("./components/NotificationsPage"));
 const AdminDashboard = lazy(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const ChatBot = lazy(() => import("./components/ChatBot").then((m) => ({ default: m.ChatBot })));
 
@@ -180,6 +181,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <ChatPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <NotificationsPage />
             </ProtectedRoute>
           }
         />

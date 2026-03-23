@@ -262,12 +262,10 @@ const ReelCard = React.memo(({
             )}
           </div>
 
-          <button onClick={handleLike} disabled={likePending} className="flex flex-col items-center disabled:opacity-60" data-testid="like-btn">
-            <motion.div whileTap={{ scale: 0.9 }}>
+          <motion.button onClick={handleLike} disabled={likePending} className="flex flex-col items-center disabled:opacity-60" data-testid="like-btn" whileTap={{ scale: 0.9 }}>
               <Heart className={`w-8 h-8 ${liked ? 'text-red-500 fill-red-500' : 'text-white'}`} />
-            </motion.div>
             <span className="text-white text-xs mt-1 font-semibold">{formatNumber(likeCount)}</span>
-          </button>
+          </motion.button>
 
           <button onClick={() => onOpenComments(video)} className="flex flex-col items-center" data-testid="comment-btn">
             <MessageCircle className="w-8 h-8 text-white" />
@@ -279,11 +277,9 @@ const ReelCard = React.memo(({
             <span className="text-white text-xs mt-1 font-semibold">{formatNumber(shares)}</span>
           </button>
 
-          <button onClick={handleSave} disabled={saveLoading} className="flex flex-col items-center disabled:opacity-60" data-testid="save-btn">
-            <motion.div whileTap={{ scale: 0.9 }}>
+          <motion.button onClick={handleSave} disabled={saveLoading} className="flex flex-col items-center disabled:opacity-60" data-testid="save-btn" whileTap={{ scale: 0.9 }}>
               <Bookmark className={`w-8 h-8 ${saved ? 'text-white fill-white' : 'text-white'}`} />
-            </motion.div>
-          </button>
+          </motion.button>
 
           <button onClick={toggleMute} className="relative">
             <div className="w-10 h-10 rounded-lg border border-white/50 overflow-hidden bg-gradient-to-br from-gray-800 to-gray-600 flex items-center justify-center">

@@ -130,7 +130,7 @@ export const HeroSection = () => {
   };
 
   return (
-    <section className="relative min-h-[90vh] flex items-center overflow-hidden" data-testid="hero-section">
+    <section className="hero-container relative min-h-[90vh] flex items-center overflow-hidden" data-testid="hero-section">
       {/* Animated Background */}
       <div className="absolute inset-0">
         <motion.div
@@ -711,7 +711,10 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
     try {
       const result = await toggleWishlist(listing.id);
       if (result.ok) {
-        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist');
+        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist', {
+          duration: 1500,
+          id: `wishlist-${listing.id}`,
+        });
       }
     } catch {
       toast.error('Failed to update wishlist');
@@ -947,17 +950,16 @@ export const ReelsPromoSection = () => {
                 <span>Owners can upload property walkthroughs</span>
               </li>
             </ul>
-            <button
+            <Button
               type="button"
               onMouseEnter={prefetchReelsRoute}
               onFocus={prefetchReelsRoute}
               onClick={handleWatchReels}
+              className="btn-secondary text-lg px-8 py-6"
             >
-              <Button className="btn-secondary text-lg px-8 py-6">
-                <Play className="w-5 h-5 mr-2" />
-                Watch Reels
-              </Button>
-            </button>
+              <Play className="w-5 h-5 mr-2" />
+              Watch Reels
+            </Button>
           </div>
 
           <div className="flex-1 relative">

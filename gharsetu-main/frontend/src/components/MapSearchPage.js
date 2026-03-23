@@ -83,28 +83,62 @@ const buildOsmEmbedUrl = (lat, lng, delta = 0.08) => {
 export const MapSearchPage = () => {
   const [searchParams] = useSearchParams();
   const selectedListingId = searchParams.get('listingId') || '';
+  const requestedLat = Number(searchParams.get('lat'));
+  const requestedLng = Number(searchParams.get('lng'));
+  const hasRequestedCoords = Number.isFinite(requestedLat) && Number.isFinite(requestedLng);
 
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || null);
   const [selectedCity, setSelectedCity] = useState(searchParams.get('city') || 'Surat');
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
-  const [mapCenter, setMapCenter] = useState([21.1702, 72.8311]);
-  const [mapZoom, setMapZoom] = useState(12);
+  const [mapCenter, setMapCenter] = useState(hasRequestedCoords ? [requestedLat, requestedLng] : [21.1702, 72.8311]);
+  const [mapZoom, setMapZoom] = useState(hasRequestedCoords ? 14 : 12);
   const [selectedListing, setSelectedListing] = useState(null);
   const [viewMode, setViewMode] = useState('map');
   const [didYouMean, setDidYouMean] = useState('');
   const [suggestions, setSuggestions] = useState([]);
+  const [mapboxVerified, setMapboxVerified] = useState(false);
 
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef([]);
   const pendingFlyRef = useRef(null);
 
-  const mapboxToken = process.env.REACT_APP_MAPBOX_TOKEN || '';
-  const useMapbox = Boolean(mapboxToken);
+  const mapboxToken = process.env.REACT_APP_MAPBOX_TOKEN || process.env.VITE_MAPBOX_TOKEN || '';
+  const useMapbox = Boolean(mapboxToken) && mapboxVerified;
   const mapStyle = useMemo(() => resolveMapStyle(mapboxToken), [mapboxToken]);
   const osmEmbedUrl = useMemo(() => buildOsmEmbedUrl(mapCenter[0], mapCenter[1]), [mapCenter]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!mapboxToken) {
+      setMapboxVerified(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const verifyToken = async () => {
+      try {
+        const response = await fetch(`https://api.mapbox.com/styles/v1/mapbox/streets-v12?access_token=${encodeURIComponent(mapboxToken)}`);
+        if (!cancelled) {
+          setMapboxVerified(response.ok);
+        }
+      } catch {
+        if (!cancelled) {
+          setMapboxVerified(false);
+        }
+      }
+    };
+
+    verifyToken();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mapboxToken]);
 
   useEffect(() => {
     const metric = consumeRouteNavigationMetric('/map');
@@ -138,13 +172,21 @@ export const MapSearchPage = () => {
   }, [searchQuery, selectedCity, selectedCategory]);
 
   useEffect(() => {
+    if (!hasRequestedCoords) return;
+    setMapCenter([requestedLat, requestedLng]);
+    setMapZoom(14);
+    pendingFlyRef.current = { center: [requestedLat, requestedLng], zoom: 14 };
+  }, [hasRequestedCoords, requestedLat, requestedLng]);
+
+  useEffect(() => {
+    if (hasRequestedCoords) return;
     const city = gujaratCities.find((c) => c.name.toLowerCase() === selectedCity.toLowerCase());
     if (city) {
       setMapCenter([city.lat, city.lng]);
       setMapZoom(12);
       pendingFlyRef.current = { center: [city.lat, city.lng], zoom: 12 };
     }
-  }, [selectedCity]);
+  }, [selectedCity, hasRequestedCoords]);
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -435,9 +477,9 @@ export const MapSearchPage = () => {
             </div>
           )}
 
-          {!mapboxToken && (
+          {!useMapbox && (
             <p className="mt-2 text-xs text-stone-500">
-              Mapbox token not found. Showing OpenStreetMap fallback. Set REACT_APP_MAPBOX_TOKEN for premium Mapbox rendering.
+              Mapbox token missing or invalid. Showing OpenStreetMap fallback. Set REACT_APP_MAPBOX_TOKEN (or VITE_MAPBOX_TOKEN) and restart frontend.
             </p>
           )}
         </div>

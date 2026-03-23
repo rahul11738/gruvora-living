@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { messagesAPI } from '../lib/api';
+import { messagesAPI, listingsAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { toast } from 'sonner';
@@ -17,6 +17,20 @@ import {
   Paperclip,
   Loader2,
 } from 'lucide-react';
+
+const blockedWords = [
+  'call me',
+  'whatsapp',
+  'phone',
+  'number',
+  'contact me',
+  '@gmail',
+  '@yahoo',
+  '@outlook',
+  '+91',
+];
+
+const isBlockedMessage = (msg) => blockedWords.some((word) => String(msg || '').toLowerCase().includes(word));
 
 export const DirectChat = ({ 
   isOpen, 
@@ -70,6 +84,11 @@ export const DirectChat = ({
 
   const handleSend = async () => {
     if (!input.trim() || sending) return;
+
+    if (isBlockedMessage(input)) {
+      alert('Sharing contact details is not allowed');
+      return;
+    }
 
     const messageText = input.trim();
     setInput('');
@@ -147,6 +166,10 @@ export const DirectChat = ({
               <h3 className="font-semibold text-white text-sm truncate">{receiverName || 'Owner'}</h3>
               <p className="text-emerald-100 text-xs truncate">{listingTitle || 'Property Inquiry'}</p>
             </div>
+          </div>
+
+          <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 text-[11px] text-amber-900">
+            For your safety, all communication must stay within GharSetu. Sharing contact details is restricted.
           </div>
 
           {/* Chat Background */}
@@ -275,13 +298,32 @@ export const ChatWithOwnerButton = ({
 }) => {
   const { isAuthenticated } = useAuth();
   const [chatOpen, setChatOpen] = useState(false);
+  const [locking, setLocking] = useState(false);
 
-  const handleClick = () => {
+  const handleClick = async () => {
     if (!isAuthenticated) {
       toast.error('Login karva padse chat karva mate');
       return;
     }
-    setChatOpen(true);
+    if (!listingId) {
+      setChatOpen(true);
+      return;
+    }
+
+    setLocking(true);
+    try {
+      await listingsAPI.lock(listingId);
+      setChatOpen(true);
+    } catch (error) {
+      const detail = error?.response?.data?.detail || '';
+      if (error?.response?.status === 409 || detail.toLowerCase().includes('already in process')) {
+        toast.error('Already in process');
+      } else {
+        toast.error('Unable to start secure chat right now');
+      }
+    } finally {
+      setLocking(false);
+    }
   };
 
   return (
@@ -289,11 +331,12 @@ export const ChatWithOwnerButton = ({
       <Button
         onClick={handleClick}
         variant="outline"
+        disabled={locking}
         className={`gap-2 ${className}`}
         data-testid="chat-with-owner-btn"
       >
-        <MessageCircle className="w-5 h-5" />
-        Chat with Owner
+        {locking ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageCircle className="w-5 h-5" />}
+        Chat to connect securely
       </Button>
 
       <DirectChat

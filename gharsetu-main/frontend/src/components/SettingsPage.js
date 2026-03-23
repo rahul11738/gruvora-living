@@ -448,8 +448,8 @@ export const SettingsPage = () => {
                             <p className="font-semibold text-primary">
                               ₹{Number(listing.price || 0).toLocaleString('en-IN')}
                             </p>
-                            <Link to={`/listing/${listing.id}`}>
-                              <Button variant="outline" size="sm">View</Button>
+                            <Link to={`/listing/${listing.id}`} className="inline-block">
+                              <span className="inline-flex items-center justify-center px-3 py-1 text-sm font-medium border rounded-md border-input shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors">View</span>
                             </Link>
                           </div>
                         </div>

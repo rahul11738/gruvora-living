@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
+import { paymentsAPI, listingsAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -32,6 +33,7 @@ export const PaymentModal = ({
   const [paymentStep, setPaymentStep] = useState('details'); // details, processing, success
   const [razorpayLoaded, setRazorpayLoaded] = useState(false);
   const [paymentConfig, setPaymentConfig] = useState(null);
+  const [revealedContact, setRevealedContact] = useState(null);
 
   useEffect(() => {
     // Load Razorpay script
@@ -51,9 +53,8 @@ export const PaymentModal = ({
 
   const fetchPaymentConfig = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/payments/config`);
-      const data = await response.json();
-      setPaymentConfig(data);
+      const response = await paymentsAPI.getConfig();
+      setPaymentConfig(response?.data || null);
     } catch (error) {
       console.error('Failed to fetch payment config:', error);
     }
@@ -89,28 +90,20 @@ export const PaymentModal = ({
     setPaymentStep('processing');
 
     try {
-      // Create order
-      const orderResponse = await fetch(`${API_URL}/api/payments/create-order`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          amount: amountInPaise,
-          listing_id: listing?.id || 'test',
-          booking_type: listing?.category || 'stay',
-          booking_date: bookingDetails?.date?.toISOString(),
-          guests: bookingDetails?.guests || 1,
-          notes: bookingDetails?.notes || ''
-        })
-      });
-
-      if (!orderResponse.ok) {
-        throw new Error('Failed to create order');
+      if (listing?.id) {
+        await listingsAPI.lock(listing.id);
       }
 
-      const orderData = await orderResponse.json();
+      // Create order
+      const orderResponse = await paymentsAPI.createOrder({
+        amount: amountInPaise,
+        listing_id: listing?.id || 'test',
+        booking_type: listing?.category || 'stay',
+        booking_date: bookingDetails?.date?.toISOString(),
+        guests: bookingDetails?.guests || 1,
+        notes: bookingDetails?.notes || '',
+      });
+      const orderData = orderResponse?.data || {};
 
       // Open Razorpay checkout
       const options = {
@@ -123,22 +116,22 @@ export const PaymentModal = ({
         handler: async function(response) {
           // Verify payment
           try {
-            const verifyResponse = await fetch(`${API_URL}/api/payments/verify`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature
-              })
+            const verifyResponse = await paymentsAPI.verify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
             });
-
-            const verifyData = await verifyResponse.json();
+            const verifyData = verifyResponse?.data || {};
 
             if (verifyData.success) {
+              if (listing?.id) {
+                try {
+                  const revealResponse = await listingsAPI.revealContact(listing.id);
+                  setRevealedContact(revealResponse?.data || null);
+                } catch {
+                  setRevealedContact(null);
+                }
+              }
               setPaymentStep('success');
               toast.success('Payment successful!');
               setTimeout(() => {
@@ -317,6 +310,11 @@ export const PaymentModal = ({
                 <p className="text-xs text-muted-foreground">
                   Confirmation will be sent to your email
                 </p>
+                {revealedContact?.contact_phone ? (
+                  <p className="text-xs text-emerald-700 mt-3">
+                    Owner phone unlocked: {revealedContact.contact_phone}
+                  </p>
+                ) : null}
               </motion.div>
             )}
           </div>
