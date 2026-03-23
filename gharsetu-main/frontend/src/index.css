@@ -285,7 +285,42 @@
   scrollbar-width: none;
 }
 
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ffffff;
+  padding: 10px;
+  border-radius: 12px;
+}
+
+.search-input-wrap {
+  position: relative;
+}
+
+.voice-btn {
+  position: absolute;
+  left: 10px;
+}
+
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.chat-input {
+  position: sticky;
+  bottom: 0;
+}
+
 .mapbox-marker {
+  position: relative;
   width: 26px;
   height: 26px;
   border-radius: 9999px;
@@ -299,11 +334,24 @@
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
-.mapbox-marker span {
+.mapbox-marker .mapbox-marker-dot {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
   display: block;
+}
+
+.mapbox-marker .mapbox-marker-glyph {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .mapbox-marker:hover {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -174,8 +175,13 @@ export const NotificationProvider = ({ children }) => {
 
 // Notification Bell Component
 export const NotificationBell = () => {
-  const { unreadCount } = useNotifications();
+  const { unreadCount, fetchNotifications } = useNotifications();
   const [showDropdown, setShowDropdown] = useState(false);
+
+  useEffect(() => {
+    if (!showDropdown) return;
+    fetchNotifications();
+  }, [showDropdown, fetchNotifications]);
 
   return (
     <div className="relative">
@@ -203,7 +209,28 @@ export const NotificationBell = () => {
 
 // Notification Dropdown Component
 const NotificationDropdown = ({ onClose }) => {
+  const navigate = useNavigate();
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
+
+  const handleNotificationClick = async (notif) => {
+    if (!notif?.id) return;
+
+    if (!notif.read) {
+      await markAsRead(notif.id);
+    }
+
+    const listingId = notif.related_listing_id || notif.listing_id;
+    if (listingId) {
+      navigate(`/chat?listing_id=${encodeURIComponent(String(listingId))}`);
+      onClose();
+      return;
+    }
+
+    if (notif.related_url) {
+      navigate(notif.related_url);
+      onClose();
+    }
+  };
 
   const getIcon = (type) => {
     switch (type) {
@@ -290,7 +317,7 @@ const NotificationDropdown = ({ onClose }) => {
             return (
               <div
                 key={notif.id}
-                onClick={() => !notif.read && markAsRead(notif.id)}
+                onClick={() => handleNotificationClick(notif)}
                 className={`flex items-start gap-3 p-4 border-b hover:bg-stone-50 cursor-pointer transition-colors ${
                   !notif.read ? 'bg-primary/5' : ''
                 }`}

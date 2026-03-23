@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useInteractions } from '../context/InteractionContext';
 import { wishlistAPI, bookingsAPI, chatAPI, videosAPI } from '../lib/api';
 import { prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
@@ -35,6 +36,7 @@ import { ScrollArea } from './ui/scroll-area';
 
 export const UserDashboard = () => {
   const { user, logout } = useAuth();
+  const { refreshWishlist } = useInteractions();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('bookings');
   const [bookings, setBookings] = useState([]);
@@ -43,11 +45,7 @@ export const UserDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
-
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       const [bookingsRes, wishlistRes, savedReelsRes] = await Promise.all([
         bookingsAPI.getUserBookings(),
@@ -57,17 +55,23 @@ export const UserDashboard = () => {
       setBookings(bookingsRes.data.bookings || []);
       setWishlist(wishlistRes.data.listings || []);
       setSavedReels(savedReelsRes.data.videos || []);
+      refreshWishlist().catch(() => {});
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshWishlist]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const handleRemoveFromWishlist = async (listingId) => {
     try {
       await wishlistAPI.remove(listingId);
       setWishlist(wishlist.filter((l) => l.id !== listingId));
+      refreshWishlist().catch(() => {});
       toast.success('Removed from wishlist');
     } catch (error) {
       toast.error('Failed to remove from wishlist');

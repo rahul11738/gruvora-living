@@ -5,11 +5,20 @@ import { listingsAPI, categoriesAPI, recommendationsAPI } from '../lib/api';
 import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { useAuth } from '../context/AuthContext';
+import { useInteractions } from '../context/InteractionContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from './ui/dialog';
 import { VoiceSearchButton } from './VoiceSearch';
+import { toast } from 'sonner';
 import {
   Home,
   Building2,
@@ -210,9 +219,9 @@ export const HeroSection = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7 }}
               onSubmit={handleSearch} 
-              className="bg-white rounded-2xl p-3 md:p-4 shadow-2xl max-w-5xl"
+              className="search-container bg-white rounded-2xl p-3 md:p-4 shadow-2xl max-w-5xl"
             >
-              <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+              <div className="flex flex-col md:flex-row md:items-center gap-3">
                 <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 xl:pb-0">
                 {[
                   { id: 'home', label: 'Home', labelGu: 'ઘર', icon: Home },
@@ -241,17 +250,16 @@ export const HeroSection = () => {
                 })}
                 </div>
 
-                <div className="flex-1 min-w-[240px] relative">
-                  <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 md:w-5 h-4 md:h-5 text-stone-400" />
+                <div className="search-input-wrap flex-1 min-w-[240px] relative">
                   <Input
                     type="text"
                     placeholder="Search properties, office spaces, hotels..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 md:pl-12 pr-12 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base"
+                    className="pl-11 md:pl-12 pr-4 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base"
                     data-testid="hero-search-input"
                   />
-                  <VoiceSearchButton className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2" />
+                  <VoiceSearchButton className="voice-btn absolute top-1/2 -translate-y-1/2" />
                 </div>
 
                 <div className="w-full xl:w-[210px] relative">
@@ -684,16 +692,31 @@ export const RecommendationsSection = () => {
 
 export const PropertyCard = memo(({ listing, showActions = true }) => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const { isWishlisted, toggleWishlist, pendingWishlistMap } = useInteractions();
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryBgColors[listing.category] || 'bg-primary';
+  const wishlisted = isWishlisted(listing.id);
+  const wishlistPending = Boolean(pendingWishlistMap[listing.id]);
 
-  const handleVideoClick = useCallback((e) => {
+  const handleWishlistClick = useCallback(async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    prefetchReelsRoute();
-    markRouteNavigation('/reels', 'home-property-video-btn');
-    navigate(`/reels?listingId=${encodeURIComponent(listing.id)}`);
-  }, [listing.id, navigate]);
+
+    if (!isAuthenticated) {
+      toast.error('Please login to add to wishlist');
+      return;
+    }
+
+    try {
+      const result = await toggleWishlist(listing.id);
+      if (result.ok) {
+        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist');
+      }
+    } catch {
+      toast.error('Failed to update wishlist');
+    }
+  }, [isAuthenticated, listing.id, toggleWishlist]);
 
   const handleMapClick = useCallback((e) => {
     e.preventDefault();
@@ -757,28 +780,15 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
         {showActions && (
           <button
             className="absolute bottom-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white hover:scale-110 transition-all group/btn"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-            }}
+            onClick={handleWishlistClick}
+            disabled={wishlistPending}
           >
-            <Heart className="w-5 h-5 text-stone-600 group-hover/btn:text-red-500 transition-colors" />
+            <Heart className={`w-5 h-5 transition-colors ${wishlisted ? 'text-red-500 fill-red-500' : 'text-stone-600 group-hover/btn:text-red-500'}`} />
           </button>
         )}
 
         {/* Quick Actions */}
         <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-          <button
-            type="button"
-            title="Watch Video"
-            aria-label="Watch Video"
-            onMouseEnter={prefetchReelsRoute}
-            onFocus={prefetchReelsRoute}
-            onClick={handleVideoClick}
-            className="w-9 h-9 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white hover:-translate-y-0.5 shadow-sm transition-all"
-          >
-            <Video className="w-4 h-4 text-stone-600" />
-          </button>
           <button
             type="button"
             title="View on Map"
@@ -900,6 +910,14 @@ export const FeaturesSection = () => {
 };
 
 export const ReelsPromoSection = () => {
+  const navigate = useNavigate();
+
+  const handleWatchReels = useCallback(() => {
+    prefetchReelsRoute();
+    markRouteNavigation('/reels', 'home-reels-promo-cta');
+    navigate('/reels');
+  }, [navigate]);
+
   return (
     <section className="section-padding bg-gradient-to-br from-secondary/10 via-orange-50 to-pink-50" data-testid="reels-promo">
       <div className="container-main">
@@ -929,17 +947,17 @@ export const ReelsPromoSection = () => {
                 <span>Owners can upload property walkthroughs</span>
               </li>
             </ul>
-            <Link
-              to="/reels"
+            <button
+              type="button"
               onMouseEnter={prefetchReelsRoute}
               onFocus={prefetchReelsRoute}
-              onClick={() => markRouteNavigation('/reels', 'home-reels-promo-cta')}
+              onClick={handleWatchReels}
             >
               <Button className="btn-secondary text-lg px-8 py-6">
                 <Play className="w-5 h-5 mr-2" />
                 Watch Reels
               </Button>
-            </Link>
+            </button>
           </div>
 
           <div className="flex-1 relative">
@@ -1067,6 +1085,38 @@ export const TrustSection = () => {
 };
 
 export const CTASection = () => {
+  const { isAuthenticated, login } = useAuth();
+  const navigate = useNavigate();
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
+  const handleListPropertyClick = useCallback(() => {
+    if (isAuthenticated) {
+      navigate('/owner/dashboard?openCreate=1');
+      return;
+    }
+    setIsLoginDialogOpen(true);
+  }, [isAuthenticated, navigate]);
+
+  const handleInlineLogin = useCallback(async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setLoginLoading(true);
+    try {
+      await login(loginEmail, loginPassword);
+      setIsLoginDialogOpen(false);
+      navigate('/owner/dashboard?openCreate=1');
+    } catch (error) {
+      const message = error?.response?.data?.detail || 'Unable to login. Please try again.';
+      setLoginError(message);
+    } finally {
+      setLoginLoading(false);
+    }
+  }, [login, loginEmail, loginPassword, navigate]);
+
   return (
     <section className="section-padding bg-stone-900" data-testid="cta-section">
       <div className="container-main text-center">
@@ -1077,17 +1127,50 @@ export const CTASection = () => {
           Join thousands of verified property owners and reach millions of potential buyers and renters across Gujarat.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Link to="/register">
-            <Button className="btn-primary text-lg px-10 py-6">
-              List Your Property Free
-            </Button>
-          </Link>
+          <Button 
+            onClick={handleListPropertyClick}
+            className="btn-primary text-lg px-10 py-6" 
+            data-testid="list-property-cta"
+          >
+            List Your Property Free
+          </Button>
           <Link to="/contact">
             <Button variant="outline" className="border-white text-white hover:bg-white/10 text-lg px-10 py-6 rounded-full">
               Contact Us
             </Button>
           </Link>
         </div>
+
+        <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Login To Continue</DialogTitle>
+              <DialogDescription>
+                Login first to create and manage your property listings.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleInlineLogin} className="space-y-3" data-testid="cta-login-modal-form">
+              <Input
+                type="email"
+                placeholder="Email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required
+              />
+              <Input
+                type="password"
+                placeholder="Password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                required
+              />
+              {loginError ? <p className="text-sm text-red-500">{loginError}</p> : null}
+              <Button type="submit" className="w-full" disabled={loginLoading}>
+                {loginLoading ? 'Logging in...' : 'Login'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </section>
   );

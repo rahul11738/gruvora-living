@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ownerAPI, listingsAPI, bookingsAPI, categoriesAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
 import { Button } from './ui/button';
@@ -93,6 +93,7 @@ const getAllowedCategoryIdsByRole = (role) => {
 export const OwnerDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState(null);
   const [listings, setListings] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -152,6 +153,14 @@ export const OwnerDashboard = () => {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  useEffect(() => {
+    if (searchParams.get('openCreate') !== '1') return;
+    setShowCreateDialog(true);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('openCreate');
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const handleDeleteListing = useCallback(async (listingId) => {
     if (!window.confirm('Are you sure you want to delete this listing?')) return;

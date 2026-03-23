@@ -42,6 +42,14 @@ const categoryColors = {
   services: '#f97316',
 };
 
+const markerGlyphs = {
+  home: '⌂',
+  business: '▣',
+  stay: '▦',
+  event: '✦',
+  services: '●',
+};
+
 const gujaratCities = [
   { name: 'Surat', lat: 21.1702, lng: 72.8311 },
   { name: 'Ahmedabad', lat: 23.0225, lng: 72.5714 },
@@ -271,12 +279,15 @@ export const MapSearchPage = () => {
       const markerElement = document.createElement('button');
       markerElement.type = 'button';
       markerElement.className = `mapbox-marker${selectedListing && String(selectedListing.id) === String(listing.id) ? ' selected' : ''}`;
-      markerElement.innerHTML = `<span style="background:${color}"></span>`;
+      markerElement.innerHTML = `
+        <span class="mapbox-marker-dot" style="background:${color}"></span>
+        <span class="mapbox-marker-glyph">${sanitize(markerGlyphs[listing.category] || markerGlyphs.home)}</span>
+      `;
       markerElement.setAttribute('aria-label', sanitize(listing.title || 'Property marker'));
 
       markerElement.addEventListener('click', () => {
         setSelectedListing(listing);
-        pendingFlyRef.current = { center: [lat, lng], zoom: Math.max(mapZoom, 15) };
+        pendingFlyRef.current = { center: [lat, lng], zoom: Math.max(mapZoom, 16) };
       });
 
       const popup = new mapboxgl.Popup({ offset: 20, closeButton: false }).setHTML(`
@@ -285,7 +296,12 @@ export const MapSearchPage = () => {
           <div class="map-popup-body">
             <h3>${sanitize(listing.title)}</h3>
             <p>${sanitize(listing.location || listing.city || '')}</p>
-            <a href="/listing/${sanitize(listing.id)}">View Listing</a>
+            <p style="font-weight: 700; color: #065f46; margin: 8px 0 10px 0; font-size: 13px;">${sanitize(
+              listing.price >= 10000000 ? `₹${(listing.price / 10000000).toFixed(2)} Cr` :
+              listing.price >= 100000 ? `₹${(listing.price / 100000).toFixed(2)} L` :
+              `₹${listing.price?.toLocaleString('en-IN')}${listing.listing_type === 'rent' ? '/mo' : ''}`
+            )}</p>
+            <a href="/listing/${sanitize(listing.id)}">View Listing →</a>
           </div>
         </div>
       `);
@@ -301,10 +317,16 @@ export const MapSearchPage = () => {
 
   useEffect(() => {
     if (!useMapbox) return;
-    markersRef.current.forEach(({ id, element }) => {
+    markersRef.current.forEach(({ id, element, marker }) => {
       if (selectedListing && String(id) === String(selectedListing.id)) {
         element.classList.add('selected');
+        if (!marker.getPopup()?.isOpen()) {
+          marker.togglePopup();
+        }
       } else {
+        if (marker.getPopup()?.isOpen()) {
+          marker.togglePopup();
+        }
         element.classList.remove('selected');
       }
     });

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { listingsAPI, categoriesAPI, wishlistAPI } from '../lib/api';
+import { listingsAPI, categoriesAPI } from '../lib/api';
 import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
 import SmartSearchInput from './SmartSearchInput';
 import { useAuth } from '../context/AuthContext';
+import { useInteractions } from '../context/InteractionContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
@@ -67,6 +68,7 @@ export const CategoryPage = () => {
   const { category } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
+  const { isWishlisted, toggleWishlist, pendingWishlistMap } = useInteractions();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
@@ -222,10 +224,12 @@ export const CategoryPage = () => {
       return;
     }
     try {
-      await wishlistAPI.add(listingId);
-      toast.success('Added to wishlist!');
-    } catch (error) {
-      toast.error('Failed to add to wishlist');
+      const result = await toggleWishlist(listingId);
+      if (result.ok) {
+        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist');
+      }
+    } catch {
+      toast.error('Failed to update wishlist');
     }
   };
 
@@ -446,6 +450,8 @@ export const CategoryPage = () => {
                   listing={listing}
                   viewMode={viewMode}
                   onWishlist={handleWishlist}
+                  wishlisted={isWishlisted(listing.id)}
+                  wishlistPending={Boolean(pendingWishlistMap[listing.id])}
                 />
               ))}
             </div>
@@ -481,7 +487,7 @@ export const CategoryPage = () => {
   );
 };
 
-const ListingCard = ({ listing, viewMode, onWishlist }) => {
+const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPending }) => {
   const navigate = useNavigate();
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryColors[listing.category] || 'bg-primary';
@@ -546,9 +552,10 @@ const ListingCard = ({ listing, viewMode, onWishlist }) => {
             </div>
             <button
               onClick={(e) => onWishlist(listing.id, e)}
+              disabled={wishlistPending}
               className="w-10 h-10 bg-stone-100 rounded-full flex items-center justify-center hover:bg-red-50"
             >
-              <Heart className="w-5 h-5 text-stone-600 hover:text-red-500" />
+              <Heart className={`w-5 h-5 transition-colors ${wishlisted ? 'text-red-500 fill-red-500' : 'text-stone-600 hover:text-red-500'}`} />
             </button>
           </div>
           <p className="text-muted-foreground text-sm line-clamp-2 mb-4">{listing.description}</p>
@@ -622,9 +629,10 @@ const ListingCard = ({ listing, viewMode, onWishlist }) => {
         </div>
         <button
           onClick={(e) => onWishlist(listing.id, e)}
+          disabled={wishlistPending}
           className="absolute bottom-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white transition-colors"
         >
-          <Heart className="w-5 h-5 text-stone-600 hover:text-red-500 transition-colors" />
+          <Heart className={`w-5 h-5 transition-colors ${wishlisted ? 'text-red-500 fill-red-500' : 'text-stone-600 hover:text-red-500'}`} />
         </button>
 
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">

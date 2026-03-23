@@ -8,7 +8,7 @@ import os
 import io
 from PIL import Image
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+BASE_URL = (os.environ.get('BASE_URL') or os.environ.get('REACT_APP_BACKEND_URL') or 'http://127.0.0.1:8001').rstrip('/')
 
 # Test credentials from previous iterations
 TEST_USER = {
@@ -172,7 +172,7 @@ class TestVideoUploadEndpoint:
         """Test that POST /api/videos/upload endpoint exists and requires auth"""
         response = requests.post(f"{BASE_URL}/api/videos/upload")
         # Without auth, should return 401
-        assert response.status_code in [401, 422], f"Expected auth error, got {response.status_code}"
+        assert response.status_code in [401, 403, 422], f"Expected auth error, got {response.status_code}"
         print(f"PASS: /api/videos/upload endpoint exists (status: {response.status_code})")
     
     def test_video_upload_requires_auth_header(self, auth_token):

@@ -28,6 +28,8 @@ const WishlistPage = lazy(() => import("./components/UserDashboard").then((m) =>
 const OwnerDashboard = lazy(() => import("./components/OwnerDashboard").then((m) => ({ default: m.OwnerDashboard })));
 const OwnerProfilePage = lazy(() => import("./components/OwnerProfilePage").then((m) => ({ default: m.OwnerProfilePage })));
 const MapSearchPage = lazy(() => import("./components/MapSearchPage").then((m) => ({ default: m.MapSearchPage })));
+const SettingsPage = lazy(() => import("./components/SettingsPage"));
+const ChatPage = lazy(() => import("./components/ChatPage"));
 const AdminDashboard = lazy(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const ChatBot = lazy(() => import("./components/ChatBot").then((m) => ({ default: m.ChatBot })));
 
@@ -162,6 +164,22 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <WishlistPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <ChatPage />
             </ProtectedRoute>
           }
         />

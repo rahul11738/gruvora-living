@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { interactionsAPI, usersAPI, videosAPI } from '../lib/api';
+import { interactionsAPI, usersAPI, videosAPI, wishlistAPI } from '../lib/api';
 
 const InteractionContext = createContext(null);
 
@@ -20,8 +20,10 @@ export const InteractionProvider = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
   const [followingMap, setFollowingMap] = useState({});
   const [likeMap, setLikeMap] = useState({});
+  const [wishlistMap, setWishlistMap] = useState({});
   const [pendingFollowMap, setPendingFollowMap] = useState({});
   const [pendingLikeMap, setPendingLikeMap] = useState({});
+  const [pendingWishlistMap, setPendingWishlistMap] = useState({});
 
   const actionTsRef = useRef({});
   const snapshotCacheRef = useRef({});
@@ -322,6 +324,68 @@ export const InteractionProvider = ({ children }) => {
     }
   }, [incrementDebugStat, invalidateSnapshotCache, isAuthenticated, likeMap, markReelMutation, pendingLikeMap, shouldDebounce]);
 
+  const refreshWishlist = useCallback(async () => {
+    if (!isAuthenticated) {
+      setWishlistMap({});
+      return;
+    }
+
+    const response = await wishlistAPI.get();
+    const listings = response?.data?.listings || [];
+    const nextMap = {};
+    for (const item of listings) {
+      if (!item?.id) continue;
+      nextMap[item.id] = true;
+    }
+    setWishlistMap(nextMap);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setWishlistMap({});
+      return;
+    }
+
+    refreshWishlist().catch(() => {
+      // Keep existing state if refresh fails.
+    });
+  }, [isAuthenticated, refreshWishlist]);
+
+  const isWishlisted = useCallback((listingId) => {
+    if (!listingId) return false;
+    return Boolean(wishlistMap[listingId]);
+  }, [wishlistMap]);
+
+  const toggleWishlist = useCallback(async (listingId) => {
+    if (!isAuthenticated || !listingId) {
+      return { ok: false, wishlisted: false };
+    }
+
+    if (pendingWishlistMap[listingId]) {
+      return { ok: false, wishlisted: Boolean(wishlistMap[listingId]) };
+    }
+
+    const wasWishlisted = Boolean(wishlistMap[listingId]);
+    const optimistic = !wasWishlisted;
+
+    setPendingWishlistMap((prev) => ({ ...prev, [listingId]: true }));
+    setWishlistMap((prev) => ({ ...prev, [listingId]: optimistic }));
+
+    try {
+      if (wasWishlisted) {
+        await wishlistAPI.remove(listingId);
+      } else {
+        await wishlistAPI.add(listingId);
+      }
+      return { ok: true, wishlisted: optimistic };
+    } catch (error) {
+      setWishlistMap((prev) => ({ ...prev, [listingId]: wasWishlisted }));
+      throw error;
+    } finally {
+      setPendingWishlistMap((prev) => ({ ...prev, [listingId]: false }));
+    }
+  }, [isAuthenticated, pendingWishlistMap, wishlistMap]);
+
   const debugApi = useMemo(() => {
     if (!IS_DEV || typeof window === 'undefined') return null;
     return {
@@ -343,24 +407,34 @@ export const InteractionProvider = ({ children }) => {
   const value = useMemo(() => ({
     followingMap,
     likeMap,
+    wishlistMap,
     pendingFollowMap,
     pendingLikeMap,
+    pendingWishlistMap,
     primeFromVideos,
     primeOwnerFollow,
     hydrateSnapshot,
     toggleFollow,
     toggleLike,
+    isWishlisted,
+    toggleWishlist,
+    refreshWishlist,
     interactionDebug: debugApi,
   }), [
     followingMap,
     likeMap,
+    wishlistMap,
     pendingFollowMap,
     pendingLikeMap,
+    pendingWishlistMap,
     primeFromVideos,
     primeOwnerFollow,
     hydrateSnapshot,
     toggleFollow,
     toggleLike,
+    isWishlisted,
+    toggleWishlist,
+    refreshWishlist,
     debugApi,
   ]);
 

@@ -41,12 +41,22 @@ db = client[os.environ['DB_NAME']]
 JWT_SECRET = os.environ.get('JWT_SECRET', 'gharsetu-secret-key-2024')
 JWT_ALGORITHM = "HS256"
 
+def _build_socketio_manager(redis_connection_url: str):
+    if not redis_connection_url:
+        return None
+    try:
+        return socketio.AsyncRedisManager(redis_connection_url)
+    except Exception:
+        return None
+
+
 # Socket.IO server
 sio = socketio.AsyncServer(
     async_mode='asgi',
     cors_allowed_origins='*',
     logger=False,
-    engineio_logger=False
+    engineio_logger=False,
+    client_manager=_build_socketio_manager(os.environ.get("REDIS_URL", "")),
 )
 
 # Store connected users
@@ -477,10 +487,13 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 def create_token(user_id: str, role: str) -> str:
+    now = datetime.now(timezone.utc)
     payload = {
         "user_id": user_id,
         "role": role,
-        "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRATION_HOURS)
+        "iat": now,
+        "jti": str(uuid.uuid4()),
+        "exp": now + timedelta(hours=JWT_EXPIRATION_HOURS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -757,13 +770,66 @@ async def get_me(user: dict = Depends(get_current_user)):
 
 @api_router.put("/auth/profile")
 async def update_profile(updates: Dict[str, Any], user: dict = Depends(get_current_user)):
-    allowed_fields = ["name", "phone", "address", "city", "state", "preferences", "notifications_enabled", "auto_reply_enabled", "auto_reply_message"]
+    allowed_fields = [
+        "name",
+        "email",
+        "phone",
+        "address",
+        "city",
+        "state",
+        "profile_image",
+        "preferences",
+        "notifications_enabled",
+        "auto_reply_enabled",
+        "auto_reply_message",
+    ]
     update_data = {k: v for k, v in updates.items() if k in allowed_fields}
+
+    next_email = (update_data.get("email") or "").strip().lower()
+    if next_email and next_email != str(user.get("email", "")).strip().lower():
+        existing = await db.users.find_one({"email": next_email, "id": {"$ne": user["id"]}}, {"_id": 1})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        update_data["email"] = next_email
     
     if update_data:
         await db.users.update_one({"id": user["id"]}, {"$set": update_data})
     
     return {"message": "Profile updated successfully"}
+
+
+@api_router.put("/auth/change-password")
+async def change_password(payload: Dict[str, Any], user: dict = Depends(get_current_user)):
+    old_password = str(payload.get("old_password") or "")
+    new_password = str(payload.get("new_password") or "")
+
+    if not old_password or not new_password:
+        raise HTTPException(status_code=400, detail="old_password and new_password are required")
+
+    if len(new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if not any(c.isupper() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not any(c.isdigit() for c in new_password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number")
+
+    if not verify_password(old_password, user.get("password", "")):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    if verify_password(new_password, user.get("password", "")):
+        raise HTTPException(status_code=400, detail="New password must be different from current password")
+
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {
+                "password": hash_password(new_password),
+                "password_updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+
+    return {"message": "Password updated successfully"}
 
 # ============ LISTINGS ROUTES ============
 @api_router.post("/listings")
@@ -2771,8 +2837,43 @@ async def get_following(user_id: str, page: int = 1, limit: int = 20):
     return {"following": following, "page": page}
 
 # ============ MESSAGING ROUTES ============
+CHAT_BLOCKED_KEYWORDS = [
+    "call me",
+    "number",
+    "whatsapp",
+    "phone",
+    "contact me",
+    "email me",
+]
+CHAT_PHONE_PATTERN = re.compile(r"(?:\+?\d[\s-]*){10,}")
+CHAT_EMAIL_PATTERN = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
+
+
+def detect_blocked_chat_content(content: str) -> Optional[str]:
+    text = str(content or "").strip()
+    if not text:
+        return None
+
+    lowered = text.lower()
+    for keyword in CHAT_BLOCKED_KEYWORDS:
+        if keyword in lowered:
+            return "Sharing direct contact details is not allowed in chat."
+
+    if CHAT_PHONE_PATTERN.search(text):
+        return "Phone numbers are not allowed in chat messages."
+
+    if CHAT_EMAIL_PATTERN.search(text):
+        return "Email addresses are not allowed in chat messages."
+
+    return None
+
+
 @api_router.post("/messages")
 async def send_message(message: MessageCreate, user: dict = Depends(get_current_user)):
+    blocked_reason = detect_blocked_chat_content(message.content)
+    if blocked_reason:
+        raise HTTPException(status_code=400, detail=blocked_reason)
+
     receiver = await db.users.find_one({"id": message.receiver_id})
     if not receiver:
         raise HTTPException(status_code=404, detail="Receiver not found")
@@ -2812,6 +2913,8 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
     }
     
     await db.messages.insert_one(message_doc)
+
+    await sio.emit('new_message', message_doc, room=f"conversation_{conversation_id}")
     
     # Update conversation
     await db.conversations.update_one(
@@ -2834,6 +2937,7 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.messages.insert_one(auto_reply_doc)
+        await sio.emit('new_message', auto_reply_doc, room=f"conversation_{conversation_id}")
     
     # Send real-time notification via WebSocket
     await manager.send_personal_message({
@@ -2882,10 +2986,21 @@ async def get_conversation_messages(conversation_id: str, user: dict = Depends(g
     ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     
     # Mark as read
-    await db.messages.update_many(
+    read_result = await db.messages.update_many(
         {"conversation_id": conversation_id, "receiver_id": user["id"], "read": False},
         {"$set": {"read": True}}
     )
+
+    if read_result.modified_count:
+        await sio.emit(
+            'messages_seen',
+            {
+                'conversation_id': conversation_id,
+                'seen_by': user["id"],
+                'seen_at': datetime.now(timezone.utc).isoformat(),
+            },
+            room=f"conversation_{conversation_id}",
+        )
     
     return {"messages": messages[::-1], "page": page}
 
@@ -4276,17 +4391,45 @@ async def mark_notification_read(sid, data):
 @sio.event
 async def join_chat(sid, data):
     """Join a chat room"""
-    chat_id = data.get('chat_id')
+    payload = data or {}
+    chat_id = payload.get('chat_id')
+    conversation_id = payload.get('conversation_id')
     if chat_id:
         await sio.enter_room(sid, f"chat_{chat_id}")
         await sio.emit('joined_chat', {'chat_id': chat_id}, to=sid)
+    if conversation_id:
+        await sio.enter_room(sid, f"conversation_{conversation_id}")
+        await sio.emit('joined_chat', {'conversation_id': conversation_id}, to=sid)
 
 @sio.event
 async def leave_chat(sid, data):
     """Leave a chat room"""
-    chat_id = data.get('chat_id')
+    payload = data or {}
+    chat_id = payload.get('chat_id')
+    conversation_id = payload.get('conversation_id')
     if chat_id:
         await sio.leave_room(sid, f"chat_{chat_id}")
+    if conversation_id:
+        await sio.leave_room(sid, f"conversation_{conversation_id}")
+
+
+@sio.event
+async def typing(sid, data):
+    payload = data or {}
+    conversation_id = payload.get('conversation_id')
+    user_id = payload.get('user_id')
+    if not conversation_id or not user_id:
+        return
+    await sio.emit(
+        'typing',
+        {
+            'conversation_id': conversation_id,
+            'user_id': user_id,
+            'is_typing': bool(payload.get('is_typing')),
+        },
+        room=f"conversation_{conversation_id}",
+        skip_sid=sid,
+    )
 
 @sio.event
 async def send_message(sid, data):
@@ -4375,6 +4518,13 @@ async def startup_services():
     await db.debug_session_reports.create_index([("type", 1), ("stress_session_id", 1), ("created_at", -1)])
     await db.debug_session_reports.create_index([("user_id", 1), ("created_at", -1)])
     await db.users.create_index("id", unique=True)
+    await db.conversations.create_index("id", unique=True)
+    await db.conversations.create_index([("participants", 1), ("last_message_at", -1)])
+    await db.messages.create_index("id", unique=True)
+    await db.messages.create_index([("conversation_id", 1), ("created_at", -1)])
+    await db.messages.create_index([("receiver_id", 1), ("read", 1), ("created_at", -1)])
+    await db.notifications.create_index("id", unique=True)
+    await db.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
 
     # Search-related indexes for smart query filters and fast suggestions.
     await db.listings.create_index([("status", 1), ("is_available", 1), ("city", 1), ("category", 1)])

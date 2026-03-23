@@ -8,7 +8,7 @@ import os
 import uuid
 from datetime import datetime
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://gharsetu-hub.preview.emergentagent.com')
+BASE_URL = (os.environ.get('BASE_URL') or os.environ.get('REACT_APP_BACKEND_URL') or 'http://127.0.0.1:8001').rstrip('/')
 
 
 class TestHealthAndCategories:
@@ -46,13 +46,14 @@ class TestAuth:
         """Create a test user and return credentials"""
         unique_id = str(uuid.uuid4())[:8]
         email = f"TEST_user_{unique_id}@test.com"
-        password = "testpass123"
-        
+        password = "TestPass123"
+        phone = f"9{uuid.uuid4().int % 1000000000:09d}"
+
         # Register user
         response = requests.post(f"{BASE_URL}/api/auth/register", json={
             "name": f"TEST User {unique_id}",
             "email": email,
-            "phone": "9876543210",
+            "phone": phone,
             "password": password,
             "gender": "male",
             "address": "Test Address",
@@ -72,11 +73,12 @@ class TestAuth:
     def test_user_registration(self):
         """Test user registration endpoint"""
         unique_id = str(uuid.uuid4())[:8]
+        phone = f"9{uuid.uuid4().int % 1000000000:09d}"
         response = requests.post(f"{BASE_URL}/api/auth/register", json={
             "name": f"TEST User {unique_id}",
             "email": f"TEST_reg_{unique_id}@test.com",
-            "phone": "9876543210",
-            "password": "testpass123",
+            "phone": phone,
+            "password": "TestPass123",
             "gender": "male",
             "address": "Test Address",
             "city": "Surat"
@@ -227,7 +229,7 @@ class TestAIChatbot:
             "name": f"TEST Chatbot User {unique_id}",
             "email": f"TEST_chatbot_{unique_id}@test.com",
             "phone": "9876543210",
-            "password": "testpass123",
+            "password": "TestPass123",
             "gender": "male",
             "address": "Test Address",
             "city": "Surat"
@@ -296,7 +298,7 @@ class TestMessages:
             "name": f"TEST Msg User {unique_id}",
             "email": f"TEST_msg_{unique_id}@test.com",
             "phone": "9876543210",
-            "password": "testpass123",
+            "password": "TestPass123",
             "gender": "male",
             "address": "Test Address",
             "city": "Surat"
@@ -333,7 +335,7 @@ class TestWishlist:
             "name": f"TEST Wishlist User {unique_id}",
             "email": f"TEST_wishlist_{unique_id}@test.com",
             "phone": "9876543210",
-            "password": "testpass123",
+            "password": "TestPass123",
             "gender": "male",
             "address": "Test Address",
             "city": "Surat"

@@ -150,6 +150,7 @@ export const authAPI = {
   getMe: () => api.get('/auth/me'),
   verifyEmail: (token) => api.get(`/auth/verify/${token}`),
   updateProfile: (data) => api.put('/auth/profile', data),
+  changePassword: (data) => api.put('/auth/change-password', data),
 };
 
 // Listings APIs
