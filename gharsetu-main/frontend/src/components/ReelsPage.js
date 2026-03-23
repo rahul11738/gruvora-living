@@ -9,6 +9,7 @@ import ReelUploadModal from './reels/ReelUploadModal';
 import useReelsFeed from './reels/useReelsFeed';
 import useReelsDebug from './reels/useReelsDebug';
 import ReelsDebugPanel from './reels/ReelsDebugPanel';
+import { consumeRouteNavigationMetric, publishRouteNavigationMetric } from '../lib/routeTelemetry';
 import { toast } from 'sonner';
 import {
   Plus,
@@ -16,10 +17,12 @@ import {
   Loader2,
   ChevronLeft,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 // ============ MAIN REELS PAGE ============
 export const ReelsPage = () => {
+  const [searchParams] = useSearchParams();
+  const preferredListingId = searchParams.get('listingId') || '';
   const { isAuthenticated, user } = useAuth();
   const isDev = process.env.NODE_ENV === 'development';
   const debugEnabled = isDev && process.env.REACT_APP_ENABLE_REELS_DEBUG === 'true';
@@ -38,6 +41,13 @@ export const ReelsPage = () => {
   const [showComments, setShowComments] = useState(false);
   const [activeVideo, setActiveVideo] = useState(null);
 
+  useEffect(() => {
+    const metric = consumeRouteNavigationMetric('/reels');
+    if (metric) {
+      publishRouteNavigationMetric(metric);
+    }
+  }, []);
+
   const {
     videos,
     currentIndex,
@@ -52,7 +62,7 @@ export const ReelsPage = () => {
     handleTouchEnd,
     handleScroll,
     scrollToVideo,
-  } = useReelsFeed({ isAuthenticated, primeFromVideos, hydrateSnapshot });
+  } = useReelsFeed({ isAuthenticated, primeFromVideos, hydrateSnapshot, preferredListingId });
 
   const {
     showDebugPanel,

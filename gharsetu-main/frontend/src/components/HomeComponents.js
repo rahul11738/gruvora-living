@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { listingsAPI, categoriesAPI, recommendationsAPI } from '../lib/api';
+import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
+import { markRouteNavigation } from '../lib/routeTelemetry';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -63,7 +65,21 @@ const categoryBgColors = {
   services: 'bg-orange-500',
 };
 
+const gujaratCities = [
+  'Surat',
+  'Ahmedabad',
+  'Vadodara',
+  'Rajkot',
+  'Gandhinagar',
+  'Bharuch',
+  'Anand',
+  'Nadiad',
+  'Jamnagar',
+  'Bhavnagar',
+];
+
 export const HeroSection = () => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('home');
@@ -101,8 +117,7 @@ export const HeroSection = () => {
     const params = new URLSearchParams();
     if (searchQuery) params.set('q', searchQuery);
     if (location) params.set('city', location);
-    // Navigate to category page with search params
-    window.location.href = `/category/${category}?${params.toString()}`;
+    navigate(`/category/${category}?${params.toString()}`);
   };
 
   return (
@@ -195,10 +210,10 @@ export const HeroSection = () => {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7 }}
               onSubmit={handleSearch} 
-              className="bg-white rounded-2xl p-3 md:p-4 shadow-2xl max-w-3xl"
+              className="bg-white rounded-2xl p-3 md:p-4 shadow-2xl max-w-5xl"
             >
-              {/* Category Tabs */}
-              <div className="flex gap-2 mb-3 overflow-x-auto hide-scrollbar pb-1">
+              <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+                <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 xl:pb-0">
                 {[
                   { id: 'home', label: 'Home', labelGu: 'ઘર', icon: Home },
                   { id: 'business', label: 'Business', labelGu: 'બિઝનેસ', icon: Building2 },
@@ -212,10 +227,10 @@ export const HeroSection = () => {
                       key={cat.id}
                       type="button"
                       onClick={() => setCategory(cat.id)}
-                      className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                      className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
                         category === cat.id
-                          ? 'bg-primary text-white'
-                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          ? 'bg-primary text-white shadow-md shadow-primary/30'
+                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -224,15 +239,13 @@ export const HeroSection = () => {
                     </button>
                   );
                 })}
-              </div>
-              
-              {/* Search Inputs */}
-              <div className="flex flex-col md:flex-row gap-3">
-                <div className="flex-1 relative">
+                </div>
+
+                <div className="flex-1 min-w-[240px] relative">
                   <Search className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 md:w-5 h-4 md:h-5 text-stone-400" />
                   <Input
                     type="text"
-                    placeholder="Search..."
+                    placeholder="Search properties, office spaces, hotels..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="pl-10 md:pl-12 pr-12 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base"
@@ -240,16 +253,20 @@ export const HeroSection = () => {
                   />
                   <VoiceSearchButton className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2" />
                 </div>
-                <div className="flex-1 relative">
-                  <MapPin className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-4 md:w-5 h-4 md:h-5 text-stone-400" />
-                  <Input
-                    type="text"
-                    placeholder="City (Surat, Ahmedabad...)"
+
+                <div className="w-full xl:w-[210px] relative">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
+                  <select
                     value={location}
                     onChange={(e) => setLocation(e.target.value)}
-                    className="pl-10 md:pl-12 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base"
+                    className="w-full pl-10 pr-8 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base text-stone-700"
                     data-testid="hero-location-input"
-                  />
+                  >
+                    <option value="">All Cities</option>
+                    {gujaratCities.map((city) => (
+                      <option key={city} value={city}>{city}</option>
+                    ))}
+                  </select>
                 </div>
                 <Button type="submit" className="btn-primary h-12 md:h-14 px-6 md:px-8 text-sm md:text-base" data-testid="hero-search-btn">
                   <Search className="w-4 md:w-5 h-4 md:h-5 mr-2" />
@@ -317,7 +334,7 @@ export const HeroSection = () => {
             >
               <div className="flex items-center gap-4 mb-4">
                 <div className="w-16 h-16 rounded-xl overflow-hidden">
-                  <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200" alt="" className="w-full h-full object-cover" />
+                  <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200" alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
                 </div>
                 <div>
                   <h4 className="font-semibold">3 BHK Luxury Flat</h4>
@@ -573,8 +590,8 @@ export const TrendingSection = () => {
                 onClick={() => setActiveCategory(tab.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
                   activeCategory === tab.id
-                    ? 'bg-primary text-white'
-                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    ? 'bg-primary text-white shadow-md shadow-primary/30'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:-translate-y-0.5'
                 }`}
               >
                 {tab.label}
@@ -655,7 +672,7 @@ export const RecommendationsSection = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recommendations.map((listing) => (
+            {recommendations.slice(0, 3).map((listing) => (
               <PropertyCard key={listing.id} listing={listing} />
             ))}
           </div>
@@ -666,8 +683,29 @@ export const RecommendationsSection = () => {
 };
 
 export const PropertyCard = memo(({ listing, showActions = true }) => {
+  const navigate = useNavigate();
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryBgColors[listing.category] || 'bg-primary';
+
+  const handleVideoClick = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    prefetchReelsRoute();
+    markRouteNavigation('/reels', 'home-property-video-btn');
+    navigate(`/reels?listingId=${encodeURIComponent(listing.id)}`);
+  }, [listing.id, navigate]);
+
+  const handleMapClick = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    prefetchMapRoute();
+    markRouteNavigation('/map', 'home-property-map-btn');
+    const params = new URLSearchParams();
+    params.set('listingId', listing.id);
+    if (listing.city) params.set('city', listing.city);
+    if (listing.category) params.set('category', listing.category);
+    navigate(`/map?${params.toString()}`);
+  }, [listing.id, listing.city, listing.category, navigate]);
 
   const formatPrice = (price, type) => {
     if (price >= 10000000) {
@@ -689,6 +727,8 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
         <img
           src={listing.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400'}
           alt={listing.title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
@@ -727,11 +767,27 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
         )}
 
         {/* Quick Actions */}
-        <div className="absolute bottom-4 left-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button className="w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white">
+        <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            title="Watch Video"
+            aria-label="Watch Video"
+            onMouseEnter={prefetchReelsRoute}
+            onFocus={prefetchReelsRoute}
+            onClick={handleVideoClick}
+            className="w-9 h-9 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white hover:-translate-y-0.5 shadow-sm transition-all"
+          >
             <Video className="w-4 h-4 text-stone-600" />
           </button>
-          <button className="w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white">
+          <button
+            type="button"
+            title="View on Map"
+            aria-label="View on Map"
+            onMouseEnter={prefetchMapRoute}
+            onFocus={prefetchMapRoute}
+            onClick={handleMapClick}
+            className="w-9 h-9 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white hover:-translate-y-0.5 shadow-sm transition-all"
+          >
             <Map className="w-4 h-4 text-stone-600" />
           </button>
         </div>
@@ -873,7 +929,12 @@ export const ReelsPromoSection = () => {
                 <span>Owners can upload property walkthroughs</span>
               </li>
             </ul>
-            <Link to="/reels">
+            <Link
+              to="/reels"
+              onMouseEnter={prefetchReelsRoute}
+              onFocus={prefetchReelsRoute}
+              onClick={() => markRouteNavigation('/reels', 'home-reels-promo-cta')}
+            >
               <Button className="btn-secondary text-lg px-8 py-6">
                 <Play className="w-5 h-5 mr-2" />
                 Watch Reels
@@ -889,6 +950,8 @@ export const ReelsPromoSection = () => {
                   <img
                     src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400"
                     alt="Reels Preview"
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover"
                   />
                   {/* Play Button Overlay */}

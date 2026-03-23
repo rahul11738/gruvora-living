@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { listingsAPI, categoriesAPI, wishlistAPI } from '../lib/api';
+import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
+import { markRouteNavigation } from '../lib/routeTelemetry';
 import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
 import SmartSearchInput from './SmartSearchInput';
 import { useAuth } from '../context/AuthContext';
@@ -31,6 +33,8 @@ import {
   X,
   SlidersHorizontal,
   ChevronDown,
+  Video,
+  Map,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
@@ -478,8 +482,29 @@ export const CategoryPage = () => {
 };
 
 const ListingCard = ({ listing, viewMode, onWishlist }) => {
+  const navigate = useNavigate();
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryColors[listing.category] || 'bg-primary';
+
+  const handleOpenReels = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    prefetchReelsRoute();
+    markRouteNavigation('/reels', 'category-listing-video-btn');
+    navigate(`/reels?listingId=${encodeURIComponent(listing.id)}`);
+  };
+
+  const handleOpenMap = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    prefetchMapRoute();
+    markRouteNavigation('/map', 'category-listing-map-btn');
+    const params = new URLSearchParams();
+    params.set('listingId', listing.id);
+    if (listing.city) params.set('city', listing.city);
+    if (listing.category) params.set('category', listing.category);
+    navigate(`/map?${params.toString()}`);
+  };
 
   const formatPrice = (price, type) => {
     if (price >= 10000000) {
@@ -501,6 +526,8 @@ const ListingCard = ({ listing, viewMode, onWishlist }) => {
           <img
             src={listing.images?.[0] || 'https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=400'}
             alt={listing.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover"
           />
           <div className={`absolute top-3 left-3 ${bgColor} px-2 py-1 rounded-full flex items-center gap-1`}>
@@ -529,10 +556,34 @@ const ListingCard = ({ listing, viewMode, onWishlist }) => {
             <p className="font-heading font-bold text-xl text-primary">
               {formatPrice(listing.price, listing.listing_type)}
             </p>
-            <div className="flex items-center gap-4 text-muted-foreground text-sm">
+            <div className="flex items-center gap-3 text-muted-foreground text-sm">
+              <button
+                type="button"
+                title="Watch Video"
+                aria-label="Watch Video"
+                onMouseEnter={prefetchReelsRoute}
+                onFocus={prefetchReelsRoute}
+                onClick={handleOpenReels}
+                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 hover:text-primary flex items-center justify-center transition-all"
+              >
+                <Video className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                title="View on Map"
+                aria-label="View on Map"
+                onMouseEnter={prefetchMapRoute}
+                onFocus={prefetchMapRoute}
+                onClick={handleOpenMap}
+                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 hover:text-primary flex items-center justify-center transition-all"
+              >
+                <Map className="w-4 h-4" />
+              </button>
               <span className="flex items-center gap-1">
                 <Eye className="w-4 h-4" />
                 {listing.views}
+                onMouseEnter={prefetchReelsRoute}
+                onFocus={prefetchReelsRoute}
               </span>
               <span className="flex items-center gap-1">
                 <Heart className="w-4 h-4" />
@@ -555,6 +606,8 @@ const ListingCard = ({ listing, viewMode, onWishlist }) => {
         <img
           src={listing.images?.[0] || 'https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=400'}
           alt={listing.title}
+          loading="lazy"
+          decoding="async"
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
@@ -573,6 +626,29 @@ const ListingCard = ({ listing, viewMode, onWishlist }) => {
         >
           <Heart className="w-5 h-5 text-stone-600 hover:text-red-500 transition-colors" />
         </button>
+
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+          <button
+            onMouseEnter={prefetchMapRoute}
+            onFocus={prefetchMapRoute}
+            type="button"
+            title="Watch Video"
+            aria-label="Watch Video"
+            onClick={handleOpenReels}
+            className="w-9 h-9 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white shadow-sm transition-all"
+          >
+            <Video className="w-4 h-4 text-stone-600" />
+          </button>
+          <button
+            type="button"
+            title="View on Map"
+            aria-label="View on Map"
+            onClick={handleOpenMap}
+            className="w-9 h-9 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white shadow-sm transition-all"
+          >
+            <Map className="w-4 h-4 text-stone-600" />
+          </button>
+        </div>
       </div>
       <div className="p-5">
         <h3 className="font-heading font-semibold text-lg text-stone-900 line-clamp-1 group-hover:text-primary transition-colors">

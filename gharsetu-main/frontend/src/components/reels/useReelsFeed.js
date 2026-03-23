@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { videosAPI } from '../../lib/api';
 
-export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot }) => {
+export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot, preferredListingId = '' }) => {
   const [videos, setVideos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -21,19 +21,28 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
     try {
       const response = await videosAPI.getAll({ limit: 50 });
       const vids = response.data.videos || [];
-      setVideos(vids);
+      const matchListingId = (video) => {
+        const candidate = video?.listing_id || video?.listingId || video?.listing?.id;
+        return String(candidate || '') === String(preferredListingId || '');
+      };
+
+      const orderedVideos = preferredListingId
+        ? [...vids.filter(matchListingId), ...vids.filter((video) => !matchListingId(video))]
+        : vids;
+
+      setVideos(orderedVideos);
       setCommentCountMap(() => {
         const next = {};
-        vids.forEach((v) => {
+        orderedVideos.forEach((v) => {
           next[v.id] = typeof v.comments_count === 'number' ? v.comments_count : 0;
         });
         return next;
       });
-      primeFromVideos(vids);
+      primeFromVideos(orderedVideos);
 
-      if (isAuthenticated && vids.length) {
-        const reelIds = vids.map((v) => v.id).filter(Boolean);
-        const ownerIds = vids.map((v) => v.owner_id).filter(Boolean);
+      if (isAuthenticated && orderedVideos.length) {
+        const reelIds = orderedVideos.map((v) => v.id).filter(Boolean);
+        const ownerIds = orderedVideos.map((v) => v.owner_id).filter(Boolean);
         await hydrateSnapshot({ ownerIds, reelIds });
       }
     } catch (error) {
@@ -41,7 +50,7 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
     } finally {
       setLoading(false);
     }
-  }, [hydrateSnapshot, isAuthenticated, primeFromVideos]);
+  }, [hydrateSnapshot, isAuthenticated, preferredListingId, primeFromVideos]);
 
   useEffect(() => {
     fetchVideos();

@@ -1,3 +1,75 @@
+# GharSetu Frontend Setup
+
+## Prerequisites
+
+- Node.js 18+
+- npm
+
+## Install Dependencies
+
+Run installs from the frontend directory only.
+
+```bash
+cd frontend
+npm install
+```
+
+## Environment Setup
+
+1. Copy `.env.example` to `.env.local`.
+2. Set `REACT_APP_MAPBOX_TOKEN` to your Mapbox public access token.
+
+```bash
+cp .env.example .env.local
+```
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Map behavior:
+
+- With `REACT_APP_MAPBOX_TOKEN`: full Mapbox style and features.
+- Without token: app uses fallback Carto style so map still renders.
+
+## Run
+
+```bash
+npm start
+```
+
+Open `http://localhost:3000`.
+
+## Build
+
+```bash
+npm run build
+```
+
+Note: this app uses route-level lazy loading for heavy pages (for example map and reels),
+so production builds will include additional chunk files and a smaller main bundle.
+
+## Verify Map Token Is Active
+
+- Open the map page and confirm tiles load.
+- If the token is invalid/missing, you may see fallback style or token-related warnings.
+
+## Smoke Check Routes
+
+Use one command to verify key frontend routes and backend listings API:
+
+```bash
+npm run smoke:routes
+```
+
+Optional environment overrides:
+
+- `FRONTEND_BASE_URL` (default `http://localhost:3001`)
+- `BACKEND_BASE_URL` (default `http://localhost:8000`)
+- `SMOKE_TIMEOUT_MS` (default `10000`)
+
 # Getting Started with Create React App
 
 This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).

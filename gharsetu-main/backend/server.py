@@ -76,6 +76,7 @@ logger = logging.getLogger(__name__)
 class UserRole(str, Enum):
     USER = "user"
     PROPERTY_OWNER = "property_owner"
+    STAY_OWNER = "stay_owner"
     SERVICE_PROVIDER = "service_provider"
     HOTEL_OWNER = "hotel_owner"
     EVENT_OWNER = "event_owner"
@@ -232,11 +233,45 @@ DELETE_RETRY_DELAYS_SECONDS = [30, 120, 600, 1800, 3600]
 
 OWNER_UPLOAD_ROLES = {
     UserRole.PROPERTY_OWNER,
+    UserRole.STAY_OWNER,
     UserRole.SERVICE_PROVIDER,
     UserRole.HOTEL_OWNER,
     UserRole.EVENT_OWNER,
     UserRole.ADMIN,
 }
+
+ALL_LISTING_CATEGORIES = {
+    ListingCategory.HOME.value,
+    ListingCategory.BUSINESS.value,
+    ListingCategory.STAY.value,
+    ListingCategory.EVENT.value,
+    ListingCategory.SERVICES.value,
+}
+
+ROLE_ALLOWED_LISTING_CATEGORIES = {
+    UserRole.PROPERTY_OWNER.value: {ListingCategory.HOME.value, ListingCategory.BUSINESS.value},
+    UserRole.STAY_OWNER.value: {ListingCategory.STAY.value},
+    UserRole.HOTEL_OWNER.value: {ListingCategory.STAY.value},
+    UserRole.SERVICE_PROVIDER.value: {ListingCategory.SERVICES.value},
+    UserRole.EVENT_OWNER.value: {ListingCategory.EVENT.value},
+    UserRole.ADMIN.value: ALL_LISTING_CATEGORIES,
+}
+
+
+def get_allowed_listing_categories_for_role(role: Any) -> Set[str]:
+    role_value = str(role.value if isinstance(role, Enum) else role or "").strip()
+    return set(ROLE_ALLOWED_LISTING_CATEGORIES.get(role_value, set()))
+
+
+def ensure_category_allowed_for_role(role: Any, category: Any, *, detail_prefix: str = "Category"):
+    category_value = category.value if isinstance(category, Enum) else str(category or "").strip()
+    allowed = get_allowed_listing_categories_for_role(role)
+    if not allowed or category_value not in allowed:
+        allowed_label = ", ".join(sorted(allowed)) if allowed else "none"
+        raise HTTPException(
+            status_code=403,
+            detail=f"{detail_prefix} '{category_value}' is not allowed for role '{role}'. Allowed: {allowed_label}",
+        )
 
 async def enforce_upload_rate_limit(user_id: str, action: str, max_requests: int = 30, window_seconds: int = 60) -> None:
     """Redis-backed rate limit guard with in-memory fallback."""
@@ -489,7 +524,14 @@ async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(sec
 
 async def get_owner_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     user = await get_current_user(credentials)
-    owner_roles = [UserRole.PROPERTY_OWNER, UserRole.SERVICE_PROVIDER, UserRole.HOTEL_OWNER, UserRole.EVENT_OWNER, UserRole.ADMIN]
+    owner_roles = [
+        UserRole.PROPERTY_OWNER,
+        UserRole.STAY_OWNER,
+        UserRole.SERVICE_PROVIDER,
+        UserRole.HOTEL_OWNER,
+        UserRole.EVENT_OWNER,
+        UserRole.ADMIN,
+    ]
     if user.get("role") not in owner_roles:
         raise HTTPException(status_code=403, detail="Owner access required")
     return user
@@ -726,6 +768,10 @@ async def update_profile(updates: Dict[str, Any], user: dict = Depends(get_curre
 # ============ LISTINGS ROUTES ============
 @api_router.post("/listings")
 async def create_listing(listing: ListingCreate, user: dict = Depends(get_owner_user)):
+    if not user.get("id"):
+        raise HTTPException(status_code=401, detail="Invalid authenticated user")
+    ensure_category_allowed_for_role(user.get("role"), listing.category, detail_prefix="Listing category")
+
     listing_id = str(uuid.uuid4())
     
     listing_doc = {
@@ -760,6 +806,7 @@ async def create_listing(listing: ListingCreate, user: dict = Depends(get_owner_
 @api_router.get("/listings")
 async def get_listings(
     category: Optional[ListingCategory] = None,
+    owner_id: Optional[str] = None,
     listing_type: Optional[ListingType] = None,
     sub_category: Optional[str] = None,
     city: Optional[str] = None,
@@ -780,6 +827,8 @@ async def get_listings(
     
     if category:
         query["category"] = category
+    if owner_id:
+        query["owner_id"] = owner_id
     if listing_type:
         query["listing_type"] = listing_type
     if sub_category:
@@ -1998,21 +2047,22 @@ async def upload_video(
     category: str = Form("home"),
     listing_id: str = Form(None),
     video: UploadFile = File(...),
-    authorization: str = Header(None)
+    user: dict = Depends(get_owner_user),
 ):
     """Upload video reel with Cloudinary"""
-    # Get user from token
-    user = None
-    if authorization and authorization.startswith("Bearer "):
-        token = authorization.split(" ")[1]
-        try:
-            payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-            user = await db.users.find_one({"id": payload.get("user_id")})
-        except:
-            pass
-    
-    if not user:
-        raise HTTPException(status_code=401, detail="Authentication required")
+    try:
+        parsed_category = ListingCategory(category)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid category")
+
+    ensure_category_allowed_for_role(user.get("role"), parsed_category, detail_prefix="Reel category")
+
+    if listing_id:
+        listing = await db.listings.find_one({"id": listing_id}, {"_id": 0, "owner_id": 1})
+        if not listing:
+            raise HTTPException(status_code=404, detail="Linked listing not found")
+        if listing.get("owner_id") != user.get("id") and user.get("role") != UserRole.ADMIN:
+            raise HTTPException(status_code=403, detail="Cannot attach reel to another owner's listing")
     
     # Check file type
     if not video.content_type.startswith('video/'):
@@ -2062,7 +2112,7 @@ async def upload_video(
         "owner_name": user["name"],
         "title": title,
         "description": description or "",
-        "category": category,
+        "category": parsed_category.value,
         "url": video_url,
         "video_url": video_url,
         "thumbnail_url": thumbnail_url,
@@ -2087,6 +2137,8 @@ async def upload_video(
 
 @api_router.post("/videos")
 async def create_video(video: VideoCreate, user: dict = Depends(get_owner_user)):
+    ensure_category_allowed_for_role(user.get("role"), video.category, detail_prefix="Reel category")
+
     video_id = str(uuid.uuid4())
     video_doc = {
         "id": video_id,
@@ -3156,8 +3208,21 @@ async def create_admin(admin_data: UserRegister):
 
 # ============ OWNER DASHBOARD ROUTES ============
 @api_router.get("/owner/listings")
-async def get_owner_listings(user: dict = Depends(get_owner_user)):
-    listings = await db.listings.find({"owner_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+async def get_owner_listings(user_id: Optional[str] = None, user: dict = Depends(get_owner_user)):
+    requested_owner_id = user_id.strip() if user_id else ""
+    if requested_owner_id and requested_owner_id != user["id"] and user.get("role") != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Cannot access another owner's listings")
+
+    target_owner_id = requested_owner_id or user["id"]
+    allowed_categories = list(get_allowed_listing_categories_for_role(user.get("role")))
+    if not allowed_categories:
+        raise HTTPException(status_code=403, detail="No categories allowed for this role")
+
+    query = {
+        "owner_id": target_owner_id,
+        "category": {"$in": allowed_categories},
+    }
+    listings = await db.listings.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
     return {"listings": listings}
 
 @api_router.get("/owner/stats")

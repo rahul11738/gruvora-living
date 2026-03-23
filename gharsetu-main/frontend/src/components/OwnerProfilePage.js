@@ -20,7 +20,6 @@ import {
   Users,
   UserPlus,
   UserMinus,
-  MessageCircle,
   CheckCircle,
   Shield,
   Home,
@@ -110,16 +109,6 @@ export const OwnerProfilePage = () => {
     } catch (error) {
       toast.error('Action failed');
     }
-  };
-
-  const handleMessage = () => {
-    if (!isAuthenticated) {
-      toast.error('Login કરો message કરવા માટે');
-      navigate('/login');
-      return;
-    }
-    // Navigate to chat with this owner
-    navigate(`/chat/${ownerId}`);
   };
 
   if (loading) {
@@ -215,14 +204,6 @@ export const OwnerProfilePage = () => {
                           Follow
                         </>
                       )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handleMessage}
-                      data-testid="message-btn"
-                    >
-                      <MessageCircle className="w-4 h-4 mr-2" />
-                      Message
                     </Button>
                   </div>
                 )}

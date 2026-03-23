@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { wishlistAPI, bookingsAPI, chatAPI, videosAPI } from '../lib/api';
+import { prefetchReelsRoute } from '../lib/routePrefetch';
+import { markRouteNavigation } from '../lib/routeTelemetry';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -251,7 +253,12 @@ export const UserDashboard = () => {
                       <p className="text-muted-foreground mb-6">
                         Save reels you like to watch them later
                       </p>
-                      <Link to="/reels">
+                      <Link
+                        to="/reels"
+                        onMouseEnter={prefetchReelsRoute}
+                        onFocus={prefetchReelsRoute}
+                        onClick={() => markRouteNavigation('/reels', 'dashboard-saved-reels-cta')}
+                      >
                         <Button className="btn-primary">
                           <Play className="w-4 h-4 mr-2" />
                           Browse Reels

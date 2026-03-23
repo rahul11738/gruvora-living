@@ -74,6 +74,22 @@ const categoryIcons = {
   services: Wrench,
 };
 
+const roleAllowedCategoryIds = {
+  property_owner: ['home', 'business'],
+  stay_owner: ['stay'],
+  hotel_owner: ['stay'],
+  service_provider: ['services'],
+  event_owner: ['event'],
+  admin: ['home', 'business', 'stay', 'event', 'services'],
+};
+
+const getAllowedCategoryIdsByRole = (role) => {
+  if (!role) {
+    return ['home', 'business', 'stay', 'event', 'services'];
+  }
+  return roleAllowedCategoryIds[role] || [];
+};
+
 export const OwnerDashboard = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -94,11 +110,12 @@ export const OwnerDashboard = () => {
     try {
       const [statsRes, listingsRes, bookingsRes] = await Promise.all([
         ownerAPI.getStats(),
-        ownerAPI.getListings(),
+        ownerAPI.getListings({ user_id: user?.id }),
         bookingsAPI.getOwnerBookings(),
       ]);
       setStats(statsRes.data);
-      setListings(listingsRes.data.listings);
+      const ownerListings = (listingsRes.data.listings || []).filter((item) => item.owner_id === user?.id);
+      setListings(ownerListings);
       setBookings(bookingsRes.data.bookings);
       
       // Fetch subscription status for service providers
@@ -130,7 +147,7 @@ export const OwnerDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.role]);
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -677,6 +694,7 @@ const BookingRow = memo(({ booking, onStatusChange, showDetails }) => {
 });
 
 const CreateListingForm = ({ onSuccess }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [uploadedImages, setUploadedImages] = useState([]);
@@ -707,9 +725,30 @@ const CreateListingForm = ({ onSuccess }) => {
     fetchCategories();
   }, []);
 
+  const allowedCategoryIds = useMemo(() => getAllowedCategoryIdsByRole(user?.role), [user?.role]);
+
+  const filteredCategories = useMemo(
+    () => categories.filter((c) => allowedCategoryIds.includes(c.id)),
+    [allowedCategoryIds, categories],
+  );
+
+  useEffect(() => {
+    if (!formData.category && filteredCategories.length > 0) {
+      setFormData((prev) => ({ ...prev, category: filteredCategories[0].id, sub_category: '' }));
+      return;
+    }
+    if (formData.category && !allowedCategoryIds.includes(formData.category)) {
+      setFormData((prev) => ({
+        ...prev,
+        category: filteredCategories[0]?.id || '',
+        sub_category: '',
+      }));
+    }
+  }, [allowedCategoryIds, filteredCategories, formData.category]);
+
   const selectedCategory = useMemo(
-    () => categories.find((c) => c.id === formData.category),
-    [categories, formData.category],
+    () => filteredCategories.find((c) => c.id === formData.category),
+    [filteredCategories, formData.category],
   );
 
   const handleSubmit = async (e) => {
@@ -755,18 +794,22 @@ const CreateListingForm = ({ onSuccess }) => {
           <Select
             value={formData.category}
             onValueChange={(value) => setFormData({ ...formData, category: value, sub_category: '' })}
+            disabled={filteredCategories.length === 0}
           >
             <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select category" />
+              <SelectValue placeholder={filteredCategories.length === 0 ? 'No category allowed' : 'Select category'} />
             </SelectTrigger>
             <SelectContent>
-              {categories.map((cat) => (
+              {filteredCategories.map((cat) => (
                 <SelectItem key={cat.id} value={cat.id}>
                   {cat.name}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {filteredCategories.length === 0 && (
+            <p className="mt-1 text-xs text-red-600">Your role does not have listing category access.</p>
+          )}
         </div>
 
         <div>

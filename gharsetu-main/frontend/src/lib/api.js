@@ -323,7 +323,7 @@ export const categoriesAPI = {
 
 // Owner APIs
 export const ownerAPI = {
-  getListings: () => api.get('/owner/listings'),
+  getListings: (params) => api.get('/owner/listings', { params }),
   getStats: () => api.get('/owner/stats'),
   getAnalytics: (days = 30) => api.get('/owner/analytics', { params: { days } }),
 };

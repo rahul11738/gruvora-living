@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { NotificationBell } from './Notifications';
 import { Button } from './ui/button';
+import { observeRoutePrefetch, prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
+import { markRouteNavigation } from '../lib/routeTelemetry';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,6 +99,9 @@ export const Header = () => {
             {/* Map Button - Hidden on mobile (in bottom nav) */}
             <Link
               to="/map"
+              onMouseEnter={prefetchMapRoute}
+              onFocus={prefetchMapRoute}
+              onClick={() => markRouteNavigation('/map', 'header-map-btn')}
               className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
               data-testid="map-btn"
             >
@@ -107,6 +112,9 @@ export const Header = () => {
             {/* Reels Button - Hidden on mobile (in bottom nav) */}
             <Link
               to="/reels"
+              onMouseEnter={prefetchReelsRoute}
+              onFocus={prefetchReelsRoute}
+              onClick={() => markRouteNavigation('/reels', 'header-reels-btn')}
               className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors"
               data-testid="reels-btn"
             >
@@ -222,7 +230,12 @@ export const Header = () => {
                   <div className="mt-6 pt-6 border-t">
                     <Link
                       to="/reels"
-                      onClick={() => setMobileOpen(false)}
+                      onMouseEnter={prefetchReelsRoute}
+                      onFocus={prefetchReelsRoute}
+                      onClick={() => {
+                        markRouteNavigation('/reels', 'menu-reels-link');
+                        setMobileOpen(false);
+                      }}
                       className="flex items-center gap-3 px-4 py-3 rounded-xl bg-secondary/10 text-secondary"
                     >
                       <Play className="w-5 h-5" />
@@ -310,7 +323,13 @@ export const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/reels" className="text-stone-400 hover:text-white transition-colors">
+                <Link
+                  to="/reels"
+                  onMouseEnter={prefetchReelsRoute}
+                  onFocus={prefetchReelsRoute}
+                  onClick={() => markRouteNavigation('/reels', 'footer-reels-link')}
+                  className="text-stone-400 hover:text-white transition-colors"
+                >
                   GharSetu Reels
                 </Link>
               </li>
@@ -350,7 +369,19 @@ export const Footer = () => {
 export const MobileBottomNav = () => {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  
+  const mapLinkRef = useRef(null);
+  const reelsLinkRef = useRef(null);
+
+  useEffect(() => {
+    const stopMapObserver = observeRoutePrefetch(mapLinkRef.current, prefetchMapRoute);
+    const stopReelsObserver = observeRoutePrefetch(reelsLinkRef.current, prefetchReelsRoute);
+
+    return () => {
+      stopMapObserver();
+      stopReelsObserver();
+    };
+  }, []);
+
   // Don't show on reels page (full screen) or login/register pages
   const hideOnPaths = ['/reels', '/login', '/register'];
   if (hideOnPaths.some(path => location.pathname.startsWith(path))) {
@@ -359,8 +390,8 @@ export const MobileBottomNav = () => {
 
   const navItems = [
     { icon: Home, label: 'Home', path: '/' },
-    { icon: MapIcon, label: 'Map', path: '/map' },
-    { icon: Play, label: 'Reels', path: '/reels' },
+    { icon: MapIcon, label: 'Map', path: '/map', prefetch: prefetchMapRoute, ref: mapLinkRef, markSource: 'mobile-bottom-map' },
+    { icon: Play, label: 'Reels', path: '/reels', prefetch: prefetchReelsRoute, ref: reelsLinkRef, markSource: 'mobile-bottom-reels' },
     { icon: Heart, label: 'Wishlist', path: '/wishlist', auth: true },
     { icon: User, label: 'Profile', path: isAuthenticated ? '/dashboard' : '/login' },
   ];
@@ -377,6 +408,15 @@ export const MobileBottomNav = () => {
             <Link
               key={item.path}
               to={item.path}
+              ref={item.ref}
+              onMouseEnter={item.prefetch}
+              onFocus={item.prefetch}
+              onTouchStart={item.prefetch}
+              onClick={() => {
+                if (item.markSource) {
+                  markRouteNavigation(item.path, item.markSource);
+                }
+              }}
               className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
                 isActive 
                   ? 'text-primary' 
