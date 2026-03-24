@@ -87,7 +87,7 @@ api.interceptors.request.use((config) => {
   }
 
   const token = localStorage.getItem('gharsetu_token');
-  if (token) {
+  if (token && !config.skipAuth) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -223,7 +223,8 @@ export const videosAPI = {
   save: (id) => api.post(`/videos/${id}/save`),
   unsave: (id) => api.delete(`/videos/${id}/save`),
   getSaved: () => api.get('/videos/saved'),
-  recordView: (id) => api.post(`/videos/${id}/view`),
+  // View tracking should be fire-and-forget and avoid auth-preflight overhead.
+  recordView: (id) => api.post(`/videos/${id}/view`, null, { skipAuth: true, timeout: 4000 }),
   upload: (formData) => api.post('/videos/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
@@ -340,6 +341,7 @@ export const ownerAPI = {
 
 // Admin APIs
 export const adminAPI = {
+  // Legacy methods (kept for compatibility)
   getUsers: (params) => api.get('/admin/users', { params }),
   getListings: (params) => api.get('/admin/listings', { params }),
   updateListingStatus: (id, status) => api.put(`/admin/listings/${id}/status`, null, { params: { status } }),
@@ -358,6 +360,22 @@ export const adminAPI = {
   getReelsDebugSessions: (params) => api.get('/admin/debug/reels-sessions', { params }),
   getChats: (params) => api.get('/admin/chats', { params }),
   getChatConversation: (conversationId, params) => api.get(`/admin/chats/${conversationId}`, { params }),
+
+  // SaaS admin extensions
+  getUserProfile: (userId) => api.get(`/admin/users/${userId}/profile`),
+  verifyEmail: (userId) => api.post(`/admin/users/${userId}/verify-email`),
+  blockUser: (userId, data) => api.post(`/admin/users/${userId}/block`, data),
+  unblockUser: (userId) => api.post(`/admin/users/${userId}/unblock`),
+  deleteUser: (userId, reason) => api.delete(`/admin/users/${userId}`, { params: { reason } }),
+  getPendingOwners: (params) => api.get('/admin/owners/pending', { params }),
+  verifyOwnerAadhar: (userId, data) => api.put(`/admin/owners/${userId}/verify-aadhar`, data),
+  getPendingListings: (params) => api.get('/admin/listings/pending', { params }),
+  updateListingStatusV2: (id, status, reason) =>
+    api.put(`/admin/listings/${id}/status`, null, { params: { status, reason } }),
+  removeListing: (listingId, reason) => api.delete(`/admin/listings/${listingId}`, { params: { reason } }),
+  sendNotification: (data) => api.post('/admin/notifications/send', data),
+  getSentNotifications: (params) => api.get('/admin/notifications/sent', { params }),
+  getActivityLogs: (params) => api.get('/admin/activity-logs', { params }),
 };
 
 // Subscription APIs (Service Provider)

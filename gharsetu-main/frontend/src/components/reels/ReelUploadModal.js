@@ -7,6 +7,7 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const CLOUDINARY_UPLOAD_TIMEOUT_MS = 40_000;
 
 const categoryOptions = [
   { id: 'home', label: 'Property Sale' },
@@ -40,6 +41,138 @@ const ReelUploadModal = ({ onClose, onSuccess }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef(null);
+
+  const parseHashtagTags = (raw) => {
+    if (!raw) return [];
+    return raw
+      .split(',')
+      .map((tag) => tag.trim().replace(/^#/, ''))
+      .filter(Boolean)
+      .slice(0, 20);
+  };
+
+  const buildCloudinaryThumbnail = (publicId, cloudName) => {
+    if (!publicId || !cloudName) {
+      return '';
+    }
+    return `https://res.cloudinary.com/${cloudName}/video/upload/so_1,w_640,c_fill,q_auto,f_jpg/${publicId}.jpg`;
+  };
+
+  const uploadToCloudinaryDirect = async (file) => {
+    const signatureRes = await fetch(`${API_URL}/api/upload/signature`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ folder: 'reels', resource_type: 'video' }),
+    });
+
+    if (!signatureRes.ok) {
+      const err = await signatureRes.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to initialize upload');
+    }
+
+    const signed = await signatureRes.json();
+    const cloudinaryUrl = `https://api.cloudinary.com/v1_1/${signed.cloud_name}/video/upload`;
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', cloudinaryUrl, true);
+      xhr.timeout = CLOUDINARY_UPLOAD_TIMEOUT_MS;
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        const progress = Math.min(Math.round((event.loaded / event.total) * 92), 92);
+        setUploadProgress(progress);
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch {
+            reject(new Error('Invalid upload response'));
+          }
+          return;
+        }
+
+        let message = 'Cloud upload failed';
+        try {
+          const parsed = JSON.parse(xhr.responseText);
+          message = parsed?.error?.message || parsed?.detail || message;
+        } catch {
+          // noop
+        }
+        reject(new Error(message));
+      };
+
+      xhr.ontimeout = () => reject(new Error('Upload timed out. Please retry with stable network.'));
+      xhr.onerror = () => reject(new Error('Network error during upload'));
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', signed.api_key);
+      formData.append('timestamp', String(signed.timestamp));
+      formData.append('signature', signed.signature);
+      formData.append('folder', signed.folder);
+      formData.append('resource_type', 'video');
+
+      xhr.send(formData);
+    });
+
+    setUploadProgress(95);
+
+    const metadataPayload = {
+      title,
+      description: [description, location ? `Location: ${location}` : ''].filter(Boolean).join('\n\n'),
+      video_url: uploadResult.secure_url,
+      thumbnail_url: buildCloudinaryThumbnail(uploadResult.public_id, signed.cloud_name) || uploadResult.secure_url,
+      listing_id: null,
+      category,
+      tags: parseHashtagTags(hashtags),
+      duration: uploadResult.duration ? Math.round(uploadResult.duration) : undefined,
+    };
+
+    const createRes = await fetch(`${API_URL}/api/videos`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(metadataPayload),
+    });
+
+    if (!createRes.ok) {
+      const err = await createRes.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed to publish reel metadata');
+    }
+
+    return createRes.json();
+  };
+
+  const uploadViaBackendFallback = async (file) => {
+    const formData = new FormData();
+    formData.append('title', title);
+    formData.append('description', [description, location ? `Location: ${location}` : ''].filter(Boolean).join('\n\n'));
+    formData.append('category', category);
+    formData.append('hashtags', hashtags);
+    formData.append('location', location);
+    formData.append('video', file);
+
+    const response = await fetch(`${API_URL}/api/videos/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.detail || 'Upload failed');
+    }
+
+    return response.json();
+  };
 
   const allowedCategoryIds = useMemo(() => {
     if (!user?.role) {
@@ -122,37 +255,21 @@ const ReelUploadModal = ({ onClose, onSuccess }) => {
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('description', description);
-      formData.append('category', category);
-      formData.append('hashtags', hashtags);
-      formData.append('location', location);
-      formData.append('video', videoFile);
-
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 5, 95));
-      }, 300);
-
-      const response = await fetch(`${API_URL}/api/videos/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (response.ok) {
-        toast.success('Reel uploaded successfully!');
-        setTimeout(onSuccess, 500);
-      } else {
-        const error = await response.json();
-        toast.error(error.detail || 'Upload failed');
+      try {
+        await uploadToCloudinaryDirect(videoFile);
+      } catch (directError) {
+        // Resilient fallback if direct cloud upload fails for any tenant/network policy reason.
+        console.warn('Direct upload failed. Falling back to backend proxy upload.', directError);
+        setUploadProgress(10);
+        await uploadViaBackendFallback(videoFile);
       }
+
+      setUploadProgress(100);
+      toast.success('Reel published successfully!');
+      setTimeout(onSuccess, 350);
     } catch (error) {
       console.error('Upload failed:', error);
-      toast.error('Upload failed. Please try again.');
+      toast.error(error?.message || 'Upload failed. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -316,7 +433,7 @@ const ReelUploadModal = ({ onClose, onSuccess }) => {
                     className="h-full bg-emerald-500"
                   />
                 </div>
-                <p className="mt-2 text-center text-xs font-medium text-emerald-700">Uploading... {uploadProgress}%</p>
+                <p className="mt-2 text-center text-xs font-medium text-emerald-700">Publishing... {uploadProgress}%</p>
               </div>
             )}
           </div>

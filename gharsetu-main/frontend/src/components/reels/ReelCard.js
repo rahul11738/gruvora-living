@@ -19,6 +19,8 @@ import {
 import { videosAPI } from '../../lib/api';
 import FollowButton from './FollowButton';
 
+const viewedReelsInSession = new Set();
+
 const ReelCard = React.memo(({
   video,
   videoId,
@@ -55,7 +57,10 @@ const ReelCard = React.memo(({
       if (isActive) {
         videoRef.current.play().catch(() => {});
         setIsPlaying(true);
-        videosAPI.recordView(videoId).catch(() => {});
+        if (!viewedReelsInSession.has(videoId)) {
+          viewedReelsInSession.add(videoId);
+          videosAPI.recordView(videoId).catch(() => {});
+        }
       } else {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;

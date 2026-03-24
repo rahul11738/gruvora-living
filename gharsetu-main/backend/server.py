@@ -240,6 +240,8 @@ redis_client = None
 delete_worker_task = None
 DELETE_JOB_MAX_ATTEMPTS = 5
 DELETE_RETRY_DELAYS_SECONDS = [30, 120, 600, 1800, 3600]
+ADMIN_STATS_CACHE_KEY = "admin:stats:v2"
+ADMIN_STATS_CACHE_TTL_SECONDS = int(os.environ.get("ADMIN_STATS_CACHE_TTL_SECONDS", "60"))
 
 OWNER_UPLOAD_ROLES = {
     UserRole.PROPERTY_OWNER,
@@ -512,6 +514,26 @@ class ReelsDebugReportIn(BaseModel):
     total_captures: Optional[int] = None
     captures: Optional[List[Dict[str, Any]]] = None
 
+
+class AdminSendNotification(BaseModel):
+    target: str
+    title: str
+    message: str
+    type: str = "admin_message"
+
+
+class AdminBlockUser(BaseModel):
+    user_id: str
+    block_type: str
+    reason: str
+    duration_hours: Optional[int] = None
+
+
+class AdminVerifyOwner(BaseModel):
+    user_id: str
+    status: str
+    rejection_reason: Optional[str] = None
+
 # ============ HELPER FUNCTIONS ============
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -553,6 +575,47 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user = await db.users.find_one({"id": token_data["user_id"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if user.get("deleted"):
+        raise HTTPException(status_code=403, detail="Account no longer exists.")
+
+    block_status = user.get("block_status")
+    if block_status == "permanent":
+        raise HTTPException(status_code=403, detail="Account permanently blocked. Contact support.")
+
+    if block_status == "temporary":
+        unblock_at = user.get("unblock_at")
+        if unblock_at:
+            unblock_at_dt = None
+            if isinstance(unblock_at, datetime):
+                unblock_at_dt = unblock_at
+            elif isinstance(unblock_at, str):
+                try:
+                    unblock_at_dt = datetime.fromisoformat(unblock_at.replace("Z", "+00:00"))
+                except ValueError:
+                    unblock_at_dt = None
+
+            if unblock_at_dt and unblock_at_dt <= datetime.now(timezone.utc):
+                await db.users.update_one(
+                    {"id": user["id"]},
+                    {"$unset": {
+                        "block_status": "",
+                        "block_reason": "",
+                        "blocked_at": "",
+                        "blocked_by": "",
+                        "unblock_at": "",
+                        "block_duration_hours": "",
+                    }},
+                )
+                user.pop("block_status", None)
+                user.pop("block_reason", None)
+                user.pop("blocked_at", None)
+                user.pop("blocked_by", None)
+                user.pop("unblock_at", None)
+                user.pop("block_duration_hours", None)
+            else:
+                raise HTTPException(status_code=403, detail=f"Account temporarily blocked until {unblock_at}.")
+
     return user
 
 async def get_optional_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security)):
@@ -2266,14 +2329,17 @@ async def upload_video(
     
     if CLOUDINARY_CLOUD_NAME:
         try:
-            result = cloudinary.uploader.upload(
+            upload_func = partial(
+                cloudinary.uploader.upload,
                 content,
                 resource_type="video",
                 folder="gharsetu/reels",
                 public_id=video_id,
-                eager=[{"width": 720, "crop": "scale"}],
-                eager_async=True
+                chunk_size=6 * 1024 * 1024,
+                eager=[{"width": 720, "crop": "scale", "quality": "auto:eco", "fetch_format": "auto"}],
+                eager_async=True,
             )
+            result = await asyncio.get_event_loop().run_in_executor(None, upload_func)
             video_url = result.get('secure_url', '')
             
             # Generate thumbnail
@@ -2757,23 +2823,31 @@ async def record_video_view(
     viewer_ip = request.client.host if request.client else "anon"
     viewer_user_id = user["id"] if user else None
     viewer_key = viewer_user_id or f"ip:{viewer_ip}"
-    await enforce_upload_rate_limit(viewer_key, "video_view", max_requests=180, window_seconds=60)
 
     try:
-        await db.views.insert_one({
-            "id": str(uuid.uuid4()),
-            "reel_id": video_id,
-            "user_id": viewer_user_id,
-            "ip": viewer_ip,
-            "viewer_key": viewer_key,
-            "created_at": now,
-        })
-        await db.videos.update_one({"id": video_id}, {"$inc": {"views": 1}})
-        counted = True
-    except DuplicateKeyError:
-        counted = False
-
-    return {"message": "View recorded", "counted": counted}
+        # High-concurrency idempotent view write without exception-heavy duplicate inserts.
+        view_write = await db.views.update_one(
+            {"viewer_key": viewer_key, "reel_id": video_id},
+            {
+                "$setOnInsert": {
+                    "id": str(uuid.uuid4()),
+                    "reel_id": video_id,
+                    "user_id": viewer_user_id,
+                    "ip": viewer_ip,
+                    "viewer_key": viewer_key,
+                    "created_at": now,
+                }
+            },
+            upsert=True,
+        )
+        counted = bool(view_write.upserted_id)
+        if counted:
+            await db.videos.update_one({"id": video_id}, {"$inc": {"views": 1}})
+        return {"message": "View recorded", "counted": counted}
+    except Exception as e:
+        logger.warning(f"View tracking degraded for reel {video_id}: {e}")
+        # Fail-open so playback UX never breaks under load.
+        return {"message": "View accepted", "counted": False}
 
 @api_router.post("/videos/{video_id}/share")
 async def share_video(video_id: str, user: dict = Depends(get_current_user)):
@@ -3411,63 +3485,208 @@ async def search_suggestions(
     )
 
 # ============ ADMIN ROUTES ============
+OWNER_ROLES = [
+    UserRole.PROPERTY_OWNER.value,
+    UserRole.STAY_OWNER.value,
+    UserRole.SERVICE_PROVIDER.value,
+    UserRole.HOTEL_OWNER.value,
+    UserRole.EVENT_OWNER.value,
+]
+
+
+async def log_admin_action(
+    admin: Dict[str, Any],
+    action: str,
+    target_type: str,
+    target_id: str,
+    meta: Optional[Dict[str, Any]] = None,
+):
+    await db.admin_audit_logs.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "action": action,
+            "actor_id": admin.get("id"),
+            "actor_email": admin.get("email"),
+            "target_type": target_type,
+            "target_id": target_id,
+            "meta": meta or {},
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
+
+
+async def get_cached_admin_stats() -> Optional[Dict[str, Any]]:
+    if not redis_client:
+        return None
+    try:
+        cached_payload = await redis_client.get(ADMIN_STATS_CACHE_KEY)
+        if not cached_payload:
+            return None
+        return json.loads(cached_payload)
+    except Exception:
+        return None
+
+
+async def set_cached_admin_stats(payload: Dict[str, Any]) -> None:
+    if not redis_client:
+        return
+    try:
+        await redis_client.set(ADMIN_STATS_CACHE_KEY, json.dumps(payload), ex=ADMIN_STATS_CACHE_TTL_SECONDS)
+    except Exception:
+        return
+
+
+async def invalidate_admin_stats_cache() -> None:
+    if not redis_client:
+        return
+    try:
+        await redis_client.delete(ADMIN_STATS_CACHE_KEY)
+    except Exception:
+        return
+
+
 @api_router.get("/admin/users")
-async def get_all_users(user: dict = Depends(get_admin_user), role: Optional[UserRole] = None, page: int = 1, limit: int = 50):
-    query = {}
+async def get_all_users(
+    user: dict = Depends(get_admin_user),
+    role: Optional[str] = None,
+    email_verified: Optional[bool] = None,
+    block_status: Optional[str] = None,
+    aadhar_status: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+    sort_by: str = "created_at",
+    sort_order: str = "desc",
+):
+    query: Dict[str, Any] = {"deleted": {"$ne": True}}
+
     if role:
         query["role"] = role
-    
+    if email_verified is not None:
+        query["is_email_verified"] = email_verified
+    if block_status and block_status != "none":
+        query["block_status"] = block_status
+    elif block_status == "none":
+        query["block_status"] = {"$exists": False}
+    if aadhar_status:
+        query["aadhar_status"] = aadhar_status
+    if search:
+        query["$or"] = [
+            {"name": {"$regex": search, "$options": "i"}},
+            {"email": {"$regex": search, "$options": "i"}},
+            {"phone": {"$regex": search, "$options": "i"}},
+        ]
+
+    sort_dir = -1 if str(sort_order).lower() == "desc" else 1
     skip = (page - 1) * limit
-    users = await db.users.find(query, {"_id": 0, "password": 0}).skip(skip).limit(limit).to_list(limit)
+    users = await db.users.find(
+        query,
+        {"_id": 0, "password": 0, "verification_token": 0},
+    ).sort(sort_by, sort_dir).skip(skip).limit(limit).to_list(limit)
+
     total = await db.users.count_documents(query)
-    
-    return {"users": users, "total": total, "page": page}
+
+    user_ids = [u.get("id") for u in users if u.get("id")]
+    listing_counts = []
+    if user_ids:
+        listing_counts = await db.listings.aggregate(
+            [
+                {"$match": {"owner_id": {"$in": user_ids}}},
+                {"$group": {"_id": "$owner_id", "count": {"$sum": 1}}},
+            ]
+        ).to_list(len(user_ids))
+    count_map = {row.get("_id"): row.get("count", 0) for row in listing_counts}
+
+    for user_row in users:
+        user_row["listing_count"] = count_map.get(user_row.get("id"), 0)
+
+    return {
+        "users": users,
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
 
 @api_router.get("/admin/listings")
 async def get_all_listings_admin(
     user: dict = Depends(get_admin_user),
-    status: Optional[ListingStatus] = None,
-    category: Optional[ListingCategory] = None,
-    page: int = 1,
-    limit: int = 50
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
 ):
-    query = {}
+    query: Dict[str, Any] = {}
     if status:
         query["status"] = status
     if category:
         query["category"] = category
-    
+
     skip = (page - 1) * limit
-    listings = await db.listings.find(query, {"_id": 0}).skip(skip).limit(limit).to_list(limit)
+    listings = await db.listings.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
     total = await db.listings.count_documents(query)
-    
-    return {"listings": listings, "total": total, "page": page}
+
+    owner_ids = list({listing.get("owner_id") for listing in listings if listing.get("owner_id")})
+    owners = []
+    if owner_ids:
+        owners = await db.users.find(
+            {"id": {"$in": owner_ids}},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "aadhar_status": 1, "role": 1},
+        ).to_list(len(owner_ids))
+    owner_map = {owner_doc.get("id"): owner_doc for owner_doc in owners}
+    for listing in listings:
+        listing["owner_info"] = owner_map.get(listing.get("owner_id"), {})
+
+    return {"listings": listings, "total": total, "page": page, "pages": (total + limit - 1) // limit}
 
 @api_router.put("/admin/listings/{listing_id}/status")
-async def update_listing_status(listing_id: str, status: ListingStatus, user: dict = Depends(get_admin_user)):
-    result = await db.listings.update_one(
-        {"id": listing_id},
-        {"$set": {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Listing not found")
-    
-    # Notify owner
+async def update_listing_status(
+    listing_id: str,
+    status: str = Query(...),
+    reason: Optional[str] = Query(None),
+    user: dict = Depends(get_admin_user),
+):
     listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    await db.listings.update_one(
+        {"id": listing_id},
+        {
+            "$set": {
+                "status": status,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "status_reason": reason,
+                "status_updated_by": user.get("id"),
+            }
+        },
+    )
+    await invalidate_admin_stats_cache()
+
+    await log_admin_action(
+        user,
+        f"listing_{status}",
+        "listing",
+        listing_id,
+        {"reason": reason, "owner_id": listing.get("owner_id")},
+    )
+
+    status_text = str(status).capitalize()
+    message = f"Your listing '{listing.get('title')}' has been {status}."
+    if reason:
+        message += f" Reason: {reason}"
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": listing["owner_id"],
         "type": "listing_status",
-        "title": f"Listing {status}",
-        "message": f"Your listing '{listing['title']}' has been {status}",
+        "title": f"Listing {status_text}",
+        "message": message,
         "data": {"listing_id": listing_id},
         "read": False,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.notifications.insert_one(notification)
-    
-    return {"message": f"Listing status updated to {status}"}
+
+    return {"message": f"Listing {status}", "listing_id": listing_id}
 
 @api_router.put("/admin/users/{user_id}/verify-aadhar")
 async def verify_user_aadhar(
@@ -3475,20 +3694,581 @@ async def verify_user_aadhar(
     status: str = Query(...),
     user: dict = Depends(get_admin_user)
 ):
-    # Convert boolean-like strings
-    if status == "true" or status == True:
-        status = VerificationStatus.VERIFIED
-    elif status == "false" or status == False:
-        status = VerificationStatus.REJECTED
-    result = await db.users.update_one(
-        {"id": user_id},
-        {"$set": {"aadhar_status": status, "is_verified": status == VerificationStatus.VERIFIED}}
-    )
-    
-    if result.modified_count == 0:
+    # Backward-compatible route: normalize legacy boolean-like values.
+    normalized_status = str(status).lower()
+    if normalized_status in {"true", "1", "verified"}:
+        normalized_status = VerificationStatus.VERIFIED.value
+    elif normalized_status in {"false", "0", "rejected"}:
+        normalized_status = VerificationStatus.REJECTED.value
+    elif normalized_status == "pending":
+        normalized_status = VerificationStatus.PENDING.value
+    else:
+        raise HTTPException(status_code=400, detail="Invalid verification status")
+
+    owner = await db.users.find_one({"id": user_id})
+    if not owner:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    return {"message": f"Aadhar verification status updated to {status}"}
+
+    update: Dict[str, Any] = {
+        "aadhar_status": normalized_status,
+        "is_verified": normalized_status == VerificationStatus.VERIFIED.value,
+        "aadhar_reviewed_by": user.get("id"),
+        "aadhar_reviewed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.update_one({"id": user_id}, {"$set": update})
+    await invalidate_admin_stats_cache()
+
+    await log_admin_action(
+        user,
+        f"aadhar_{normalized_status}",
+        "owner",
+        user_id,
+        {"aadhar_number_last4": str(owner.get("aadhar_number", ""))[-4:]},
+    )
+
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "admin_message",
+            "title": "Aadhar Verification Updated",
+            "message": f"Your Aadhar verification status is now '{normalized_status}'.",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    return {"message": f"Aadhar verification status updated to {normalized_status}"}
+
+
+@api_router.post("/admin/users/{user_id}/verify-email")
+async def admin_verify_email(user_id: str, admin: dict = Depends(get_admin_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "is_email_verified": True,
+                "is_verified": True,
+                "email_verified_by": "admin",
+                "email_verified_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "$unset": {"verification_token": ""},
+        },
+    )
+    await invalidate_admin_stats_cache()
+
+    await log_admin_action(
+        admin,
+        "email_verified",
+        "user",
+        user_id,
+        {"user_email": user.get("email")},
+    )
+
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "admin_message",
+            "title": "Email Verified",
+            "message": "Your email has been verified by GharSetu admin.",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    return {"message": "Email verified successfully", "user_id": user_id}
+
+
+@api_router.get("/admin/owners/pending")
+async def get_pending_owner_registrations(
+    admin: dict = Depends(get_admin_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+):
+    skip = (page - 1) * limit
+    query = {
+        "role": {"$in": OWNER_ROLES},
+        "aadhar_status": VerificationStatus.PENDING.value,
+        "aadhar_number": {"$exists": True},
+        "deleted": {"$ne": True},
+    }
+    owners = await db.users.find(
+        query,
+        {"_id": 0, "password": 0, "verification_token": 0},
+    ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.users.count_documents(query)
+
+    owner_ids = [o.get("id") for o in owners if o.get("id")]
+    listing_counts = []
+    if owner_ids:
+        listing_counts = await db.listings.aggregate(
+            [
+                {"$match": {"owner_id": {"$in": owner_ids}}},
+                {"$group": {"_id": "$owner_id", "count": {"$sum": 1}}},
+            ]
+        ).to_list(len(owner_ids))
+    count_map = {row.get("_id"): row.get("count", 0) for row in listing_counts}
+    for owner in owners:
+        owner["listing_count"] = count_map.get(owner.get("id"), 0)
+
+    return {"owners": owners, "total": total, "page": page, "pages": (total + limit - 1) // limit}
+
+
+@api_router.put("/admin/owners/{user_id}/verify-aadhar")
+async def admin_verify_owner_aadhar(
+    user_id: str,
+    payload: AdminVerifyOwner,
+    admin: dict = Depends(get_admin_user),
+):
+    owner = await db.users.find_one({"id": user_id})
+    if not owner:
+        raise HTTPException(status_code=404, detail="Owner not found")
+    if not owner.get("aadhar_number"):
+        raise HTTPException(status_code=400, detail="No Aadhar submitted")
+
+    status_value = str(payload.status).lower()
+    if status_value not in {VerificationStatus.VERIFIED.value, VerificationStatus.REJECTED.value}:
+        raise HTTPException(status_code=400, detail="Status must be 'verified' or 'rejected'")
+
+    update = {
+        "aadhar_status": status_value,
+        "is_verified": status_value == VerificationStatus.VERIFIED.value,
+        "aadhar_reviewed_by": admin.get("id"),
+        "aadhar_reviewed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if payload.rejection_reason:
+        update["aadhar_rejection_reason"] = payload.rejection_reason
+
+    await db.users.update_one({"id": user_id}, {"$set": update})
+    await invalidate_admin_stats_cache()
+    await log_admin_action(
+        admin,
+        f"aadhar_{status_value}",
+        "owner",
+        user_id,
+        {"aadhar_number_last4": str(owner.get("aadhar_number", ""))[-4:]},
+    )
+
+    title = "Aadhar Verified!" if status_value == VerificationStatus.VERIFIED.value else "Aadhar Verification Failed"
+    message = (
+        "Your Aadhar has been verified. You can now create listings."
+        if status_value == VerificationStatus.VERIFIED.value
+        else f"Aadhar verification rejected. Reason: {payload.rejection_reason or 'Documents unclear'}"
+    )
+
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "admin_message",
+            "title": title,
+            "message": message,
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    return {"message": f"Owner {status_value}", "user_id": user_id}
+
+
+@api_router.get("/admin/users/{user_id}/profile")
+async def get_user_full_profile(user_id: str, admin: dict = Depends(get_admin_user)):
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "password": 0, "verification_token": 0},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    listings = await db.listings.find({"owner_id": user_id}, {"_id": 0}).sort("created_at", -1).limit(50).to_list(50)
+    bookings = await db.bookings.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).limit(20).to_list(20)
+    logs = await db.admin_audit_logs.find({"target_id": user_id}, {"_id": 0}).sort("created_at", -1).limit(20).to_list(20)
+
+    total_views = sum(int(l.get("views", 0) or 0) for l in listings)
+    total_likes = sum(int(l.get("likes", 0) or 0) for l in listings)
+
+    return {
+        "user": user,
+        "listings": listings,
+        "bookings": bookings,
+        "admin_logs": logs,
+        "stats": {
+            "total_listings": len(listings),
+            "total_bookings": len(bookings),
+            "total_views": total_views,
+            "total_likes": total_likes,
+        },
+    }
+
+
+@api_router.post("/admin/users/{user_id}/block")
+async def admin_block_user(
+    user_id: str,
+    payload: AdminBlockUser,
+    admin: dict = Depends(get_admin_user),
+):
+    if payload.user_id and payload.user_id != user_id:
+        raise HTTPException(status_code=400, detail="Payload user_id does not match path user_id")
+
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Cannot block another admin")
+
+    block_type = str(payload.block_type).lower()
+    if block_type not in {"temporary", "permanent"}:
+        raise HTTPException(status_code=400, detail="block_type must be 'temporary' or 'permanent'")
+
+    update = {
+        "block_status": block_type,
+        "block_reason": payload.reason,
+        "blocked_by": admin.get("id"),
+        "blocked_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if block_type == "temporary":
+        duration_hours = int(payload.duration_hours or 24)
+        unblock_at = datetime.now(timezone.utc) + timedelta(hours=duration_hours)
+        update["unblock_at"] = unblock_at.isoformat()
+        update["block_duration_hours"] = duration_hours
+
+    await db.users.update_one({"id": user_id}, {"$set": update})
+    await invalidate_admin_stats_cache()
+    await log_admin_action(
+        admin,
+        f"user_{block_type}_blocked",
+        "user",
+        user_id,
+        {"reason": payload.reason, "duration_hours": payload.duration_hours},
+    )
+
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "admin_message",
+            "title": "Account Restricted",
+            "message": f"Your account has been restricted. Reason: {payload.reason}",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+
+    return {"message": f"User {block_type} blocked", "user_id": user_id}
+
+
+@api_router.post("/admin/users/{user_id}/unblock")
+async def admin_unblock_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$unset": {
+                "block_status": "",
+                "block_reason": "",
+                "blocked_by": "",
+                "blocked_at": "",
+                "unblock_at": "",
+                "block_duration_hours": "",
+            }
+        },
+    )
+    await invalidate_admin_stats_cache()
+    await log_admin_action(admin, "user_unblocked", "user", user_id)
+
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "type": "admin_message",
+            "title": "Account Restored",
+            "message": "Your account restriction has been lifted.",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return {"message": "User unblocked", "user_id": user_id}
+
+
+@api_router.delete("/admin/users/{user_id}")
+async def admin_delete_user(
+    user_id: str,
+    reason: str = Query(..., min_length=1),
+    admin: dict = Depends(get_admin_user),
+):
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("role") == UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Cannot delete another admin")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "deleted": True,
+                "deleted_at": datetime.now(timezone.utc).isoformat(),
+                "deleted_by": admin.get("id"),
+                "delete_reason": reason,
+                "email": f"deleted_{user_id[:8]}@deleted.gharsetu.com",
+                "phone": "",
+                "name": "[Deleted User]",
+            }
+        },
+    )
+
+    await db.listings.update_many(
+        {"owner_id": user_id},
+        {"$set": {"status": ListingStatus.REJECTED.value, "is_available": False}},
+    )
+    await invalidate_admin_stats_cache()
+    await log_admin_action(
+        admin,
+        "user_deleted",
+        "user",
+        user_id,
+        {"reason": reason, "original_email": user.get("email")},
+    )
+
+    return {"message": "User deleted (soft)", "user_id": user_id}
+
+
+@api_router.delete("/admin/listings/{listing_id}")
+async def admin_remove_listing(
+    listing_id: str,
+    reason: str = Query(..., min_length=1),
+    admin: dict = Depends(get_admin_user),
+):
+    listing = await db.listings.find_one({"id": listing_id})
+    if not listing:
+        raise HTTPException(status_code=404, detail="Listing not found")
+
+    await db.listings.update_one(
+        {"id": listing_id},
+        {
+            "$set": {
+                "status": ListingStatus.REJECTED.value,
+                "is_available": False,
+                "removed_by_admin": True,
+                "removed_reason": reason,
+                "removed_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+    await invalidate_admin_stats_cache()
+    await log_admin_action(
+        admin,
+        "listing_removed",
+        "listing",
+        listing_id,
+        {"reason": reason, "owner_id": listing.get("owner_id")},
+    )
+
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": listing.get("owner_id"),
+            "type": "admin_message",
+            "title": "Listing Removed",
+            "message": f"Your listing '{listing.get('title')}' was removed. Reason: {reason}",
+            "read": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    return {"message": "Listing removed", "listing_id": listing_id}
+
+
+@api_router.get("/admin/listings/pending")
+async def get_pending_listings(
+    admin: dict = Depends(get_admin_user),
+    category: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+):
+    query: Dict[str, Any] = {"status": ListingStatus.PENDING.value}
+    if category:
+        query["category"] = category
+
+    skip = (page - 1) * limit
+    listings = await db.listings.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.listings.count_documents(query)
+
+    owner_ids = list({listing.get("owner_id") for listing in listings if listing.get("owner_id")})
+    owners = []
+    if owner_ids:
+        owners = await db.users.find(
+            {"id": {"$in": owner_ids}},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "phone": 1, "aadhar_status": 1, "role": 1},
+        ).to_list(len(owner_ids))
+    owner_map = {owner_doc.get("id"): owner_doc for owner_doc in owners}
+
+    for listing in listings:
+        listing["owner_info"] = owner_map.get(listing.get("owner_id"), {})
+
+    return {"listings": listings, "total": total, "page": page, "pages": (total + limit - 1) // limit}
+
+
+@api_router.post("/admin/notifications/send")
+async def admin_send_notification(
+    payload: AdminSendNotification,
+    admin: dict = Depends(get_admin_user),
+):
+    now = datetime.now(timezone.utc).isoformat()
+    notification_batch_id = str(uuid.uuid4())
+
+    if payload.target in ("all", "users", "owners"):
+        if payload.target == "all":
+            query: Dict[str, Any] = {"deleted": {"$ne": True}}
+        elif payload.target == "users":
+            query = {"role": UserRole.USER.value, "deleted": {"$ne": True}}
+        else:
+            query = {"role": {"$in": OWNER_ROLES}, "deleted": {"$ne": True}}
+
+        recipients_count = 0
+        bulk_docs: List[Dict[str, Any]] = []
+        cursor = db.users.find(query, {"_id": 0, "id": 1})
+        async for user_doc in cursor:
+            recipients_count += 1
+            bulk_docs.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "batch_id": notification_batch_id,
+                    "user_id": user_doc.get("id"),
+                    "type": payload.type,
+                    "title": payload.title,
+                    "message": payload.message,
+                    "sent_by_admin": admin.get("id"),
+                    "read": False,
+                    "created_at": now,
+                }
+            )
+            if len(bulk_docs) >= 500:
+                await db.notifications.insert_many(bulk_docs)
+                bulk_docs = []
+
+        if bulk_docs:
+            await db.notifications.insert_many(bulk_docs)
+    else:
+        specific_user = await db.users.find_one({"id": payload.target, "deleted": {"$ne": True}})
+        if not specific_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        await db.notifications.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "batch_id": notification_batch_id,
+                "user_id": payload.target,
+                "type": payload.type,
+                "title": payload.title,
+                "message": payload.message,
+                "sent_by_admin": admin.get("id"),
+                "read": False,
+                "created_at": now,
+            }
+        )
+        recipients_count = 1
+
+    await log_admin_action(
+        admin,
+        "notification_sent",
+        "notification",
+        notification_batch_id,
+        {
+            "target": payload.target,
+            "recipients": recipients_count,
+            "title": payload.title,
+        },
+    )
+
+    return {"message": "Notification sent", "recipients": recipients_count}
+
+
+@api_router.get("/admin/notifications/sent")
+async def get_admin_sent_notifications(
+    admin: dict = Depends(get_admin_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+):
+    skip = (page - 1) * limit
+    pipeline = [
+        {"$match": {"sent_by_admin": {"$exists": True}}},
+        {
+            "$group": {
+                "_id": "$batch_id",
+                "title": {"$first": "$title"},
+                "message": {"$first": "$message"},
+                "type": {"$first": "$type"},
+                "sent_by_admin": {"$first": "$sent_by_admin"},
+                "sent_at": {"$max": "$created_at"},
+                "recipient_count": {"$sum": 1},
+            }
+        },
+        {"$sort": {"sent_at": -1}},
+        {"$skip": skip},
+        {"$limit": limit},
+    ]
+    notifications = await db.notifications.aggregate(pipeline).to_list(limit)
+    total = len(
+        await db.notifications.aggregate(
+            [{"$match": {"sent_by_admin": {"$exists": True}}}, {"$group": {"_id": "$batch_id"}}]
+        ).to_list(100000)
+    )
+
+    return {
+        "notifications": notifications,
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
+
+
+@api_router.get("/admin/activity-logs")
+async def get_activity_logs(
+    admin: dict = Depends(get_admin_user),
+    actor_id: Optional[str] = None,
+    action: Optional[str] = None,
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(50, ge=1, le=200),
+):
+    query: Dict[str, Any] = {}
+    if actor_id:
+        query["actor_id"] = actor_id
+    if action:
+        query["action"] = {"$regex": action, "$options": "i"}
+
+    date_filter: Dict[str, Any] = {}
+    if from_date:
+        try:
+            date_filter["$gte"] = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid from_date format")
+    if to_date:
+        try:
+            date_filter["$lte"] = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid to_date format")
+    if date_filter:
+        query["created_at"] = date_filter
+
+    skip = (page - 1) * limit
+    logs = await db.admin_audit_logs.find(query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    total = await db.admin_audit_logs.count_documents(query)
+    return {
+        "logs": logs,
+        "total": total,
+        "page": page,
+        "total_pages": (total + limit - 1) // limit,
+    }
 
 @api_router.get("/admin/bookings")
 async def get_all_bookings_admin(user: dict = Depends(get_admin_user), status: Optional[BookingStatus] = None, page: int = 1, limit: int = 50):
@@ -3573,50 +4353,127 @@ async def get_admin_chat_conversation(
 
 @api_router.get("/admin/stats")
 async def get_admin_stats(user: dict = Depends(get_admin_user)):
-    total_users = await db.users.count_documents({})
-    users_by_role = {}
+    cached_stats = await get_cached_admin_stats()
+    if cached_stats:
+        return cached_stats
+
+    now = datetime.now(timezone.utc)
+    seven_days_ago = (now - timedelta(days=7)).isoformat()
+
+    total_users = await db.users.count_documents({"role": UserRole.USER.value, "deleted": {"$ne": True}})
+    total_owners = await db.users.count_documents({"role": {"$in": OWNER_ROLES}, "deleted": {"$ne": True}})
+
+    users_by_role: Dict[str, int] = {}
     for role in UserRole:
-        users_by_role[role.value] = await db.users.count_documents({"role": role})
-    
+        users_by_role[role.value] = await db.users.count_documents({"role": role.value, "deleted": {"$ne": True}})
+
+    owner_type_breakdown: Dict[str, int] = {}
+    for role in OWNER_ROLES:
+        owner_type_breakdown[role] = await db.users.count_documents({"role": role, "deleted": {"$ne": True}})
+
+    pending_aadhar = await db.users.count_documents(
+        {
+            "role": {"$in": OWNER_ROLES},
+            "aadhar_number": {"$exists": True},
+            "aadhar_status": VerificationStatus.PENDING.value,
+            "deleted": {"$ne": True},
+        }
+    )
+    verified_owners = await db.users.count_documents(
+        {"role": {"$in": OWNER_ROLES}, "aadhar_status": VerificationStatus.VERIFIED.value, "deleted": {"$ne": True}}
+    )
+    rejected_owners = await db.users.count_documents(
+        {"role": {"$in": OWNER_ROLES}, "aadhar_status": VerificationStatus.REJECTED.value, "deleted": {"$ne": True}}
+    )
+
     total_listings = await db.listings.count_documents({})
-    pending_listings = await db.listings.count_documents({"status": ListingStatus.PENDING})
-    approved_listings = await db.listings.count_documents({"status": ListingStatus.APPROVED})
-    
+    pending_listings = await db.listings.count_documents({"status": ListingStatus.PENDING.value})
+    approved_listings = await db.listings.count_documents({"status": ListingStatus.APPROVED.value})
+    rejected_listings = await db.listings.count_documents({"status": ListingStatus.REJECTED.value})
+
     total_bookings = await db.bookings.count_documents({})
-    bookings_by_status = {}
+    bookings_by_status: Dict[str, int] = {}
     for status in BookingStatus:
-        bookings_by_status[status.value] = await db.bookings.count_documents({"status": status})
-    
+        bookings_by_status[status.value] = await db.bookings.count_documents({"status": status.value})
+
     total_videos = await db.videos.count_documents({})
     total_reviews = await db.reviews.count_documents({})
     total_messages = await db.messages.count_documents({})
-    
-    category_stats = {}
+
+    category_stats: Dict[str, int] = {}
     for cat in ListingCategory:
         category_stats[cat.value] = await db.listings.count_documents({"category": cat.value})
-    
-    # Top cities
-    pipeline = [
-        {"$group": {"_id": "$city", "count": {"$sum": 1}}},
-        {"$sort": {"count": -1}},
-        {"$limit": 10}
+
+    new_users_7d = await db.users.count_documents(
+        {"role": UserRole.USER.value, "created_at": {"$gte": seven_days_ago}, "deleted": {"$ne": True}}
+    )
+    new_owners_7d = await db.users.count_documents(
+        {"role": {"$in": OWNER_ROLES}, "created_at": {"$gte": seven_days_ago}, "deleted": {"$ne": True}}
+    )
+    new_listings_7d = await db.listings.count_documents({"created_at": {"$gte": seven_days_ago}})
+
+    daily_pipeline = [
+        {"$match": {"created_at": {"$gte": seven_days_ago}, "deleted": {"$ne": True}}},
+        {
+            "$group": {
+                "_id": {"$substr": ["$created_at", 0, 10]},
+                "users": {"$sum": {"$cond": [{"$eq": ["$role", UserRole.USER.value]}, 1, 0]}},
+                "owners": {"$sum": {"$cond": [{"$in": ["$role", OWNER_ROLES]}, 1, 0]}},
+            }
+        },
+        {"$sort": {"_id": 1}},
     ]
-    top_cities = await db.listings.aggregate(pipeline).to_list(10)
-    
-    return {
+    daily_growth_docs = await db.users.aggregate(daily_pipeline).to_list(30)
+
+    email_verified = await db.users.count_documents(
+        {"is_email_verified": True, "role": UserRole.USER.value, "deleted": {"$ne": True}}
+    )
+    email_unverified = await db.users.count_documents(
+        {"is_email_verified": {"$ne": True}, "role": UserRole.USER.value, "deleted": {"$ne": True}}
+    )
+
+    blocked_temp = await db.users.count_documents({"block_status": "temporary", "deleted": {"$ne": True}})
+    blocked_perm = await db.users.count_documents({"block_status": "permanent", "deleted": {"$ne": True}})
+
+    top_cities = await db.listings.aggregate(
+        [{"$group": {"_id": "$city", "count": {"$sum": 1}}}, {"$sort": {"count": -1}}, {"$limit": 10}]
+    ).to_list(10)
+
+    total_revenue_pipeline = [{"$group": {"_id": None, "total": {"$sum": "$amount"}}}]
+    rev_result = await db.payments.aggregate(total_revenue_pipeline).to_list(1)
+    total_revenue = (rev_result[0].get("total", 0) / 100) if rev_result else 0
+
+    response_payload = {
         "total_users": total_users,
+        "total_owners": total_owners,
         "users_by_role": users_by_role,
+        "owner_type_breakdown": owner_type_breakdown,
         "total_listings": total_listings,
         "pending_listings": pending_listings,
         "approved_listings": approved_listings,
+        "rejected_listings": rejected_listings,
+        "pending_aadhar": pending_aadhar,
+        "verified_owners": verified_owners,
+        "rejected_owners": rejected_owners,
+        "email_verified": email_verified,
+        "email_unverified": email_unverified,
+        "blocked_temp": blocked_temp,
+        "blocked_perm": blocked_perm,
         "total_bookings": total_bookings,
         "bookings_by_status": bookings_by_status,
         "total_videos": total_videos,
         "total_reviews": total_reviews,
         "total_messages": total_messages,
+        "total_revenue": total_revenue,
+        "new_users_7d": new_users_7d,
+        "new_owners_7d": new_owners_7d,
+        "new_listings_7d": new_listings_7d,
+        "daily_growth": [{"date": d.get("_id"), "users": d.get("users", 0), "owners": d.get("owners", 0)} for d in daily_growth_docs],
         "category_stats": category_stats,
-        "top_cities": [{"city": c["_id"], "count": c["count"]} for c in top_cities]
+        "top_cities": [{"city": c["_id"], "count": c["count"]} for c in top_cities],
     }
+    await set_cached_admin_stats(response_payload)
+    return response_payload
 
 @api_router.post("/admin/create")
 async def create_admin(admin_data: UserRegister):
@@ -4671,6 +5528,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\\d+)?$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -4912,6 +5770,11 @@ async def startup_services():
     await db.debug_session_reports.create_index([("type", 1), ("stress_session_id", 1), ("created_at", -1)])
     await db.debug_session_reports.create_index([("user_id", 1), ("created_at", -1)])
     await db.users.create_index("id", unique=True)
+    await db.users.create_index([("role", 1), ("created_at", -1)])
+    await db.users.create_index([("aadhar_status", 1), ("role", 1)])
+    await db.users.create_index([("block_status", 1)])
+    await db.users.create_index([("is_email_verified", 1), ("role", 1)])
+    await db.users.create_index([("deleted", 1)])
     await db.conversations.create_index("id", unique=True)
     await db.conversations.create_index([("participants", 1), ("last_message_at", -1)])
     await db.messages.create_index("id", unique=True)
@@ -4920,9 +5783,14 @@ async def startup_services():
     await db.messages.create_index([("listing_id", 1), ("owner_id", 1), ("created_at", -1)])
     await db.notifications.create_index("id", unique=True)
     await db.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
+    await db.notifications.create_index([("sent_by_admin", 1), ("created_at", -1)])
 
     # Search-related indexes for smart query filters and fast suggestions.
     await db.listings.create_index([("status", 1), ("is_available", 1), ("city", 1), ("category", 1)])
+    await db.listings.create_index([("status", 1), ("created_at", -1)])
+    await db.listings.create_index([("owner_id", 1), ("status", 1)])
+    await db.listings.create_index([("category", 1), ("status", 1)])
+    await db.listings.create_index([("removed_by_admin", 1)])
     await db.listings.create_index([("title", 1)])
     await db.listings.create_index([("sub_category", 1)])
     await db.listings.create_index([("location", 1)])
@@ -4930,6 +5798,8 @@ async def startup_services():
     await db.listings.create_index([("title_gu", 1)], sparse=True)
     await db.listings.create_index([("title_hi", 1)], sparse=True)
     await db.listings.create_index([("is_locked", 1), ("locked_by", 1), ("updated_at", -1)])
+    await db.admin_audit_logs.create_index([("actor_id", 1), ("created_at", -1)])
+    await db.admin_audit_logs.create_index([("target_id", 1), ("created_at", -1)])
     try:
         await db.listings.create_index(
             [

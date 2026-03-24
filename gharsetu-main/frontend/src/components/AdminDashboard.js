@@ -1,97 +1,78 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { adminAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from './ui/dialog';
 import { toast } from 'sonner';
 import {
-  Users,
-  FileText,
-  Calendar,
-  TrendingUp,
-  Home,
-  Building2,
-  Hotel,
-  PartyPopper,
-  Wrench,
-  Eye,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Shield,
-  LogOut,
-  Loader2,
-  RotateCcw,
-  Download,
-  ExternalLink,
-  MessageCircle,
+  Users, FileText, Home, Building2, Hotel,
+  PartyPopper, Wrench, Eye, CheckCircle, XCircle, Clock, Shield,
+  LogOut, Loader2, Bell, Ban, Trash2,
+  RotateCcw, Search, ChevronLeft, ChevronRight,
+  AlertTriangle, Activity, BarChart3, Mail, Phone, MapPin,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
-const categoryIcons = {
-  home: Home,
-  business: Building2,
-  stay: Hotel,
-  event: PartyPopper,
-  services: Wrench,
+const CATEGORY_ICONS = {
+  home: Home, business: Building2, stay: Hotel,
+  event: PartyPopper, services: Wrench,
+};
+const OWNER_ROLE_LABELS = {
+  property_owner: 'Property Owner', stay_owner: 'Stay Owner',
+  service_provider: 'Service Provider', hotel_owner: 'Hotel Owner',
+  event_owner: 'Event Owner',
+};
+const OWNER_ROLE_COLORS = {
+  property_owner: 'bg-blue-100 text-blue-700',
+  stay_owner: 'bg-purple-100 text-purple-700',
+  service_provider: 'bg-orange-100 text-orange-700',
+  hotel_owner: 'bg-pink-100 text-pink-700',
+  event_owner: 'bg-green-100 text-green-700',
 };
 
 export const AdminDashboard = () => {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [listings, setListings] = useState([]);
-  const [bookings, setBookings] = useState([]);
-  const [auditLogs, setAuditLogs] = useState([]);
-  const [auditActionFilter, setAuditActionFilter] = useState('all');
-  const [auditSearch, setAuditSearch] = useState('');
-  const [auditFromDate, setAuditFromDate] = useState('');
-  const [auditToDate, setAuditToDate] = useState('');
-  const [auditDateError, setAuditDateError] = useState('');
-  const [auditRangeLabel, setAuditRangeLabel] = useState('Custom');
-  const [auditLogsPage, setAuditLogsPage] = useState(1);
-  const [auditLogsTotalPages, setAuditLogsTotalPages] = useState(1);
-  const [auditLogsTotal, setAuditLogsTotal] = useState(0);
-  const [auditActionCounts, setAuditActionCounts] = useState({});
-  const [exportingAudit, setExportingAudit] = useState(false);
-  const [mediaJobs, setMediaJobs] = useState([]);
-  const [mediaJobStatus, setMediaJobStatus] = useState('failed');
-  const [mediaJobsPage, setMediaJobsPage] = useState(1);
-  const [mediaJobsTotalPages, setMediaJobsTotalPages] = useState(1);
-  const [mediaJobsTotal, setMediaJobsTotal] = useState(0);
-  const [mediaJobMaxAttempts, setMediaJobMaxAttempts] = useState(5);
-  const [mediaJobCounts, setMediaJobCounts] = useState({
-    pending: 0,
-    processing: 0,
-    retry: 0,
-    completed: 0,
-    failed: 0,
-  });
-  const [retryingJobId, setRetryingJobId] = useState(null);
-  const [resettingJobId, setResettingJobId] = useState(null);
-  const [mediaAutoRefreshEnabled, setMediaAutoRefreshEnabled] = useState(true);
-  const [reelsDebugReports, setReelsDebugReports] = useState([]);
-  const [reelsDebugStressSessionId, setReelsDebugStressSessionId] = useState('');
-  const [reelsDebugUserId, setReelsDebugUserId] = useState('');
-  const [reelsDebugFromDate, setReelsDebugFromDate] = useState('');
-  const [reelsDebugToDate, setReelsDebugToDate] = useState('');
-  const [reelsDebugDateError, setReelsDebugDateError] = useState('');
-  const [reelsDebugRangeLabel, setReelsDebugRangeLabel] = useState('All Time');
-  const [reelsDebugIncludeCaptures, setReelsDebugIncludeCaptures] = useState(false);
-  const [reelsDebugPage, setReelsDebugPage] = useState(1);
-  const [reelsDebugTotalPages, setReelsDebugTotalPages] = useState(1);
-  const [reelsDebugTotal, setReelsDebugTotal] = useState(0);
-  const [reelsDebugLoading, setReelsDebugLoading] = useState(false);
-  const [selectedReelsDebugReport, setSelectedReelsDebugReport] = useState(null);
-  const [adminChats, setAdminChats] = useState([]);
-  const [adminChatsLoading, setAdminChatsLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
+
   const [activeTab, setActiveTab] = useState('overview');
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState(null);
+
+  const [users, setUsers] = useState([]);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [usersPage, setUsersPage] = useState(1);
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState('');
+
+  const [pendingOwners, setPendingOwners] = useState([]);
+  const [pendingOwnersTotal, setPendingOwnersTotal] = useState(0);
+
+  const [listings, setListings] = useState([]);
+  const [listingsTotal, setListingsTotal] = useState(0);
+  const [listingsPage, setListingsPage] = useState(1);
+  const [listingStatusFilter, setListingStatusFilter] = useState('');
+  const [pendingListings, setPendingListings] = useState([]);
+
+  const [notifTarget, setNotifTarget] = useState('all');
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifMessage, setNotifMessage] = useState('');
+  const [notifType, setNotifType] = useState('admin_message');
+  const [sendingNotif, setSendingNotif] = useState(false);
+
+  const [activityLogs, setActivityLogs] = useState([]);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logsPage, setLogsPage] = useState(1);
+
+  const [profileModal, setProfileModal] = useState(null);
+  const [profileData, setProfileData] = useState(null);
+  const [blockModal, setBlockModal] = useState(null);
+  const [rejectModal, setRejectModal] = useState(null);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -99,455 +80,193 @@ export const AdminDashboard = () => {
       navigate('/');
       return;
     }
-    fetchDashboardData();
-    // Initial admin bootstrap; keeping this effect focused to auth/navigation guard only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchStats();
   }, [isAdmin, navigate]);
 
-  useEffect(() => {
-    if (activeTab !== 'media-jobs' || !mediaAutoRefreshEnabled) return undefined;
-
-    const intervalId = setInterval(() => {
-      fetchMediaJobs(mediaJobStatus, mediaJobsPage);
-    }, 15000);
-
-    return () => clearInterval(intervalId);
-    // Intentionally scoped to media tab state; fetch function is stateful and would rearm loop every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, mediaJobStatus, mediaJobsPage, mediaAutoRefreshEnabled]);
-
-  useEffect(() => {
-    if (activeTab !== 'audit-logs') return;
-    if (!auditFromDate && !auditToDate) {
-      const today = new Date();
-      const start = new Date();
-      start.setDate(today.getDate() - 6);
-      const toISODate = (d) => d.toISOString().slice(0, 10);
-      const defaultFrom = toISODate(start);
-      const defaultTo = toISODate(today);
-      setAuditFromDate(defaultFrom);
-      setAuditToDate(defaultTo);
-      setAuditRangeLabel('Last 7 Days');
-      fetchAuditLogs(auditActionFilter, 1, defaultFrom, defaultTo);
-      return;
-    }
-    fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate);
-    // Intentionally triggered only on tab switch; other filters are handled by dedicated effects below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== 'audit-logs') return undefined;
-
-    const handle = setTimeout(() => {
-      fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, auditSearch);
-    }, 300);
-
-    return () => clearTimeout(handle);
-    // Search-only debounce effect; intentionally excludes non-search deps to avoid duplicate refreshes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auditSearch]);
-
-  const isAuditDateRangeValid = (fromDate = auditFromDate, toDate = auditToDate) => {
-    if (!fromDate || !toDate) {
-      setAuditDateError('');
-      return true;
-    }
-    if (fromDate > toDate) {
-      setAuditDateError('From date cannot be later than To date');
-      return false;
-    }
-    setAuditDateError('');
-    return true;
-  };
-
-  const formatAsDateInput = (date) => date.toISOString().slice(0, 10);
-
-  const applyAuditPreset = async (preset) => {
-    const today = new Date();
-    const start = new Date(today);
-
-    if (preset === 'today') {
-      // same day range
-    } else if (preset === '7d') {
-      start.setDate(today.getDate() - 6);
-    } else if (preset === '30d') {
-      start.setDate(today.getDate() - 29);
-    }
-
-    const from = formatAsDateInput(start);
-    const to = formatAsDateInput(today);
-    setAuditFromDate(from);
-    setAuditToDate(to);
-    const presetLabel = preset === 'today' ? 'Today' : preset === '7d' ? 'Last 7 Days' : 'Last 30 Days';
-    setAuditRangeLabel(presetLabel);
-    setAuditLogsPage(1);
-    await fetchAuditLogs(auditActionFilter, 1, from, to);
-  };
-
-  const fetchDashboardData = async () => {
+  const fetchStats = async () => {
     try {
-      const [statsRes, usersRes, listingsRes, bookingsRes, mediaJobsRes] = await Promise.all([
-        adminAPI.getStats(),
-        adminAPI.getUsers({ limit: 50 }),
-        adminAPI.getListings({ limit: 50 }),
-        adminAPI.getBookings({ limit: 50 }),
-        adminAPI.getMediaDeleteJobs({ status: mediaJobStatus, page: 1, limit: 20 }),
-      ]);
-      setStats(statsRes.data);
-      setUsers(usersRes.data.users);
-      setListings(listingsRes.data.listings);
-      setBookings(bookingsRes.data.bookings);
-      setMediaJobs(mediaJobsRes.data.jobs || []);
-      setMediaJobsTotal(mediaJobsRes.data.total || 0);
-      setMediaJobsPage(mediaJobsRes.data.page || 1);
-      setMediaJobsTotalPages(mediaJobsRes.data.total_pages || 1);
-      setMediaJobMaxAttempts(mediaJobsRes.data.max_attempts || 5);
-      setMediaJobCounts(mediaJobsRes.data.status_counts || {
-        pending: 0,
-        processing: 0,
-        retry: 0,
-        completed: 0,
-        failed: 0,
-      });
-    } catch (error) {
-      console.error('Failed to fetch admin data:', error);
-      toast.error('Failed to load admin dashboard');
+      const res = await adminAPI.getStats();
+      setStats(res.data);
+    } catch {
+      toast.error('Failed to load stats');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMediaJobs = async (status = mediaJobStatus, page = mediaJobsPage) => {
+  const fetchUsers = useCallback(async (page = 1, search = userSearch, role = userRoleFilter) => {
     try {
-      const res = await adminAPI.getMediaDeleteJobs({ status, page, limit: 20 });
-      setMediaJobs(res.data.jobs || []);
-      setMediaJobsTotal(res.data.total || 0);
-      setMediaJobsPage(res.data.page || page);
-      setMediaJobsTotalPages(res.data.total_pages || 1);
-      setMediaJobMaxAttempts(res.data.max_attempts || 5);
-      setMediaJobCounts(res.data.status_counts || {
-        pending: 0,
-        processing: 0,
-        retry: 0,
-        completed: 0,
-        failed: 0,
+      const res = await adminAPI.getUsers({
+        page, limit: 50, search: search || undefined, role: role || undefined,
       });
-    } catch (error) {
-      console.error('Failed to fetch media jobs:', error);
-      toast.error('Failed to load media jobs');
+      setUsers(res.data.users || []);
+      setUsersTotal(res.data.total || 0);
+      setUsersPage(page);
+    } catch {
+      toast.error('Failed to load users');
+    }
+  }, [userSearch, userRoleFilter]);
+
+  const fetchPendingOwners = useCallback(async () => {
+    try {
+      const res = await adminAPI.getPendingOwners({ limit: 100 });
+      setPendingOwners(res.data.owners || []);
+      setPendingOwnersTotal(res.data.total || 0);
+    } catch {
+      toast.error('Failed to load pending owners');
+    }
+  }, []);
+
+  const fetchListings = useCallback(async (page = 1, status = listingStatusFilter) => {
+    try {
+      const res = await adminAPI.getListings({
+        page, limit: 50, status: status || undefined,
+      });
+      setListings(res.data.listings || []);
+      setListingsTotal(res.data.total || 0);
+      setListingsPage(page);
+    } catch {
+      toast.error('Failed to load listings');
+    }
+  }, [listingStatusFilter]);
+
+  const fetchPendingListings = useCallback(async () => {
+    try {
+      const res = await adminAPI.getPendingListings({ limit: 100 });
+      setPendingListings(res.data.listings || []);
+    } catch {
+      // intentionally silent
+    }
+  }, []);
+
+  const fetchActivityLogs = useCallback(async (page = 1) => {
+    try {
+      const res = await adminAPI.getActivityLogs({ page, limit: 50 });
+      setActivityLogs(res.data.logs || []);
+      setLogsTotal(res.data.total || 0);
+      setLogsPage(page);
+    } catch {
+      toast.error('Failed to load logs');
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'users') fetchUsers();
+    if (activeTab === 'owners') fetchPendingOwners();
+    if (activeTab === 'listings') {
+      fetchListings();
+      fetchPendingListings();
+    }
+    if (activeTab === 'logs') fetchActivityLogs();
+  }, [activeTab, fetchUsers, fetchPendingOwners, fetchListings, fetchPendingListings, fetchActivityLogs]);
+
+  const openProfile = async (userId) => {
+    setProfileModal({ userId });
+    setProfileData(null);
+    try {
+      const res = await adminAPI.getUserProfile(userId);
+      setProfileData(res.data);
+    } catch {
+      toast.error('Failed to load profile');
     }
   };
 
-  const fetchAuditLogs = async (
-    action = auditActionFilter,
-    page = auditLogsPage,
-    fromDate = auditFromDate,
-    toDate = auditToDate,
-    search = auditSearch,
-  ) => {
-    if (!isAuditDateRangeValid(fromDate, toDate)) {
+  const handleVerifyEmail = async (userId) => {
+    try {
+      await adminAPI.verifyEmail(userId);
+      toast.success('Email verified');
+      setUsers((prev) => prev.map((u) => (u.id === userId
+        ? { ...u, is_email_verified: true, is_verified: true } : u)));
+    } catch {
+      toast.error('Failed to verify email');
+    }
+  };
+
+  const handleAadharVerify = async (ownerId, status, reason = '') => {
+    try {
+      await adminAPI.verifyOwnerAadhar(ownerId, { user_id: ownerId, status, rejection_reason: reason });
+      toast.success(status === 'verified' ? 'Owner verified!' : 'Verification rejected');
+      setPendingOwners((prev) => prev.filter((o) => o.id !== ownerId));
+      setRejectModal(null);
+      fetchStats();
+    } catch {
+      toast.error('Failed to update verification');
+    }
+  };
+
+  const handleBlock = async ({ userId, blockType, reason, durationHours }) => {
+    try {
+      await adminAPI.blockUser(userId, {
+        user_id: userId,
+        block_type: blockType,
+        reason,
+        duration_hours: blockType === 'temporary' ? durationHours : undefined,
+      });
+      toast.success(`User ${blockType === 'temporary' ? 'temporarily' : 'permanently'} blocked`);
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, block_status: blockType } : u)));
+      setBlockModal(null);
+    } catch {
+      toast.error('Failed to block user');
+    }
+  };
+
+  const handleUnblock = async (userId) => {
+    try {
+      await adminAPI.unblockUser(userId);
+      toast.success('User unblocked');
+      setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, block_status: undefined } : u)));
+    } catch {
+      toast.error('Failed to unblock');
+    }
+  };
+
+  const handleDeleteUser = async (userId, reason) => {
+    if (!window.confirm(`Delete user? This is irreversible.\nReason: ${reason}`)) return;
+    try {
+      await adminAPI.deleteUser(userId, reason);
+      toast.success('User deleted');
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
+    } catch {
+      toast.error('Failed to delete user');
+    }
+  };
+
+  const handleListingAction = async (listingId, action, reason = '') => {
+    try {
+      if (action === 'remove') {
+        await adminAPI.removeListing(listingId, reason || 'Removed by admin');
+      } else {
+        await adminAPI.updateListingStatusV2(listingId, action, reason || undefined);
+      }
+      toast.success(`Listing ${action}d`);
+      setListings((prev) => prev.map((l) => (l.id === listingId ? { ...l, status: action === 'remove' ? 'rejected' : action } : l)));
+      setPendingListings((prev) => prev.filter((l) => l.id !== listingId));
+      fetchStats();
+    } catch {
+      toast.error('Failed to update listing');
+    }
+  };
+
+  const handleSendNotification = async () => {
+    if (!notifTitle.trim() || !notifMessage.trim()) {
+      toast.error('Title and message required');
       return;
     }
+    setSendingNotif(true);
     try {
-      const params = { page, limit: 20 };
-      if (action && action !== 'all') {
-        params.action = action;
-      }
-      if (fromDate) {
-        params.from_date = `${fromDate}T00:00:00`;
-      }
-      if (toDate) {
-        params.to_date = `${toDate}T23:59:59`;
-      }
-      if (search && search.trim()) {
-        params.q = search.trim();
-      }
-      const res = await adminAPI.getAuditLogs(params);
-      setAuditLogs(res.data.logs || []);
-      setAuditLogsTotal(res.data.total || 0);
-      setAuditLogsPage(res.data.page || page);
-      setAuditLogsTotalPages(res.data.total_pages || 1);
-      setAuditActionCounts(res.data.action_counts || {});
-    } catch (error) {
-      console.error('Failed to fetch audit logs:', error);
-      toast.error('Failed to load audit logs');
-    }
-  };
-
-  const fetchReelsDebugSessions = async (
-    page = reelsDebugPage,
-    stressSessionId = reelsDebugStressSessionId,
-    userId = reelsDebugUserId,
-    fromDate = reelsDebugFromDate,
-    toDate = reelsDebugToDate,
-    includeCaptures = reelsDebugIncludeCaptures,
-  ) => {
-    if (!isReelsDebugDateRangeValid(fromDate, toDate)) {
-      return;
-    }
-    setReelsDebugLoading(true);
-    try {
-      const params = {
-        page,
-        limit: 20,
-        include_captures: includeCaptures,
-      };
-      if (stressSessionId && stressSessionId.trim()) {
-        params.stress_session_id = stressSessionId.trim();
-      }
-      if (userId && userId.trim()) {
-        params.user_id = userId.trim();
-      }
-      if (fromDate) {
-        params.from_date = `${fromDate}T00:00:00`;
-      }
-      if (toDate) {
-        params.to_date = `${toDate}T23:59:59`;
-      }
-
-      const res = await adminAPI.getReelsDebugSessions(params);
-      setReelsDebugReports(res.data.reports || []);
-      setReelsDebugTotal(res.data.total || 0);
-      setReelsDebugPage(res.data.page || page);
-      setReelsDebugTotalPages(res.data.total_pages || 1);
-    } catch (error) {
-      console.error('Failed to fetch reels debug sessions:', error);
-      toast.error('Failed to load reels debug sessions');
+      const res = await adminAPI.sendNotification({
+        target: notifTarget,
+        title: notifTitle,
+        message: notifMessage,
+        type: notifType,
+      });
+      toast.success(`Sent to ${res.data.recipients} recipients`);
+      setNotifTitle('');
+      setNotifMessage('');
+    } catch {
+      toast.error('Failed to send notification');
     } finally {
-      setReelsDebugLoading(false);
-    }
-  };
-
-  const handleReelsDebugFilterApply = async () => {
-    if (!isReelsDebugDateRangeValid(reelsDebugFromDate, reelsDebugToDate)) {
-      return;
-    }
-    setReelsDebugPage(1);
-    await fetchReelsDebugSessions(
-      1,
-      reelsDebugStressSessionId,
-      reelsDebugUserId,
-      reelsDebugFromDate,
-      reelsDebugToDate,
-      reelsDebugIncludeCaptures,
-    );
-  };
-
-  const handleReelsDebugFilterClear = async () => {
-    setReelsDebugStressSessionId('');
-    setReelsDebugUserId('');
-    setReelsDebugFromDate('');
-    setReelsDebugToDate('');
-    setReelsDebugDateError('');
-    setReelsDebugRangeLabel('All Time');
-    setReelsDebugIncludeCaptures(false);
-    setReelsDebugPage(1);
-    await fetchReelsDebugSessions(1, '', '', '', '', false);
-  };
-
-  const isReelsDebugDateRangeValid = (fromDate = reelsDebugFromDate, toDate = reelsDebugToDate) => {
-    if (!fromDate || !toDate) {
-      setReelsDebugDateError('');
-      return true;
-    }
-    if (fromDate > toDate) {
-      setReelsDebugDateError('From date cannot be later than To date');
-      return false;
-    }
-    setReelsDebugDateError('');
-    return true;
-  };
-
-  const applyReelsDebugPreset = async (preset) => {
-    const today = new Date();
-    const start = new Date(today);
-
-    if (preset === 'today') {
-      // same day range
-    } else if (preset === '7d') {
-      start.setDate(today.getDate() - 6);
-    } else if (preset === '30d') {
-      start.setDate(today.getDate() - 29);
-    }
-
-    const from = formatAsDateInput(start);
-    const to = formatAsDateInput(today);
-    const presetLabel = preset === 'today' ? 'Today' : preset === '7d' ? 'Last 7 Days' : 'Last 30 Days';
-
-    setReelsDebugFromDate(from);
-    setReelsDebugToDate(to);
-    setReelsDebugRangeLabel(presetLabel);
-    setReelsDebugPage(1);
-    await fetchReelsDebugSessions(
-      1,
-      reelsDebugStressSessionId,
-      reelsDebugUserId,
-      from,
-      to,
-      reelsDebugIncludeCaptures,
-    );
-  };
-
-  const handleExportSingleReelsReport = (report) => {
-    try {
-      const payload = {
-        ...report,
-        exported_at: new Date().toISOString(),
-      };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-      const url = window.URL.createObjectURL(blob);
-      const safeSessionId = (report.stress_session_id || 'session').replace(/[^a-zA-Z0-9-_]/g, '_');
-      const safeReportId = (report.id || 'report').replace(/[^a-zA-Z0-9-_]/g, '_');
-      const fileName = `reels_debug_${safeSessionId}_${safeReportId}.json`;
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('Debug report exported');
-    } catch (error) {
-      console.error('Failed to export debug report:', error);
-      toast.error('Failed to export debug report');
-    }
-  };
-
-  const handleAuditActionFilterChange = async (action) => {
-    setAuditActionFilter(action);
-    setAuditLogsPage(1);
-    await fetchAuditLogs(action, 1, auditFromDate, auditToDate);
-  };
-
-  const handleAuditDateFilterApply = async () => {
-    if (!isAuditDateRangeValid(auditFromDate, auditToDate)) {
-      return;
-    }
-    setAuditLogsPage(1);
-    await fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, auditSearch);
-  };
-
-  const handleAuditSearchApply = async () => {
-    setAuditLogsPage(1);
-    await fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, auditSearch);
-  };
-
-  const handleAuditSearchClear = async () => {
-    setAuditSearch('');
-    setAuditLogsPage(1);
-    await fetchAuditLogs(auditActionFilter, 1, auditFromDate, auditToDate, '');
-  };
-
-  const handleExportAuditLogs = async () => {
-    if (!isAuditDateRangeValid(auditFromDate, auditToDate)) {
-      return;
-    }
-    setExportingAudit(true);
-    try {
-      const params = { limit: 5000 };
-      if (auditActionFilter !== 'all') {
-        params.action = auditActionFilter;
-      }
-      if (auditSearch && auditSearch.trim()) {
-        params.q = auditSearch.trim();
-      }
-      if (auditFromDate) {
-        params.from_date = `${auditFromDate}T00:00:00`;
-      }
-      if (auditToDate) {
-        params.to_date = `${auditToDate}T23:59:59`;
-      }
-
-      const response = await adminAPI.getAuditLogsCsv(params);
-      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8;' });
-      const url = window.URL.createObjectURL(blob);
-      const actionPart = auditActionFilter === 'all' ? 'all' : auditActionFilter;
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-      const fileName = `audit_logs_${actionPart}_${timestamp}.csv`;
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-
-      toast.success('Audit logs CSV exported');
-    } catch (error) {
-      console.error('Failed to export audit logs:', error);
-      toast.error('Failed to export CSV');
-    } finally {
-      setExportingAudit(false);
-    }
-  };
-
-  const handleMediaStatusChange = async (status) => {
-    setMediaJobStatus(status);
-    setMediaJobsPage(1);
-    await fetchMediaJobs(status, 1);
-  };
-
-  const handleRetryMediaJob = async (jobId) => {
-    setRetryingJobId(jobId);
-    try {
-      await adminAPI.retryMediaDeleteJob(jobId);
-      toast.success('Retry queued');
-      await fetchMediaJobs(mediaJobStatus, mediaJobsPage);
-    } catch (error) {
-      console.error('Failed to retry media job:', error);
-      toast.error(error?.response?.data?.detail || 'Failed to retry job');
-    } finally {
-      setRetryingJobId(null);
-    }
-  };
-
-  const handleResetRetryMediaJob = async (jobId) => {
-    setResettingJobId(jobId);
-    try {
-      await adminAPI.resetRetryMediaDeleteJob(jobId);
-      toast.success('Attempts reset and retry queued');
-      await fetchMediaJobs(mediaJobStatus, mediaJobsPage);
-    } catch (error) {
-      console.error('Failed to reset/retry media job:', error);
-      toast.error(error?.response?.data?.detail || 'Failed to reset/retry job');
-    } finally {
-      setResettingJobId(null);
-    }
-  };
-
-  const handleListingStatus = useCallback(async (listingId, status) => {
-    try {
-      await adminAPI.updateListingStatus(listingId, status);
-      setListings(listings.map((l) => (l.id === listingId ? { ...l, status } : l)));
-      toast.success(`Listing ${status}`);
-    } catch (error) {
-      toast.error('Failed to update listing status');
-    }
-  }, [listings]);
-
-  const handleAadharVerify = useCallback(async (userId, verified) => {
-    try {
-      await adminAPI.verifyAadhar(userId, verified);
-      setUsers(users.map((u) => (u.id === userId ? { ...u, aadhar_status: verified ? 'verified' : 'rejected' } : u)));
-      toast.success(verified ? 'Aadhar verified!' : 'Verification rejected');
-    } catch (error) {
-      toast.error('Failed to update verification status');
-    }
-  }, [users]);
-
-  const fetchAdminChats = async () => {
-    setAdminChatsLoading(true);
-    try {
-      const response = await adminAPI.getChats({ page: 1, limit: 100 });
-      setAdminChats(response?.data?.messages || []);
-    } catch (error) {
-      console.error('Failed to fetch admin chats:', error);
-      toast.error('Failed to load chats');
-    } finally {
-      setAdminChatsLoading(false);
+      setSendingNotif(false);
     }
   };
 
@@ -555,31 +274,6 @@ export const AdminDashboard = () => {
     logout();
     navigate('/');
   }, [logout, navigate]);
-
-  const handleTabChange = (nextTab) => {
-    setActiveTab(nextTab);
-    if (nextTab === 'reels-debug') {
-      const resolvedFrom = reelsDebugFromDate;
-      const resolvedTo = reelsDebugToDate;
-      fetchReelsDebugSessions(
-        1,
-        reelsDebugStressSessionId,
-        reelsDebugUserId,
-        resolvedFrom,
-        resolvedTo,
-        reelsDebugIncludeCaptures,
-      );
-    }
-    if (nextTab === 'chat-tracking') {
-      fetchAdminChats();
-    }
-  };
-
-  const recentUsers = useMemo(() => users.slice(0, 5), [users]);
-  const pendingListings = useMemo(
-    () => listings.filter((l) => l.status === 'pending'),
-    [listings],
-  );
 
   if (loading) {
     return (
@@ -589,105 +283,536 @@ export const AdminDashboard = () => {
     );
   }
 
+  const TABS = [
+    { id: 'overview', label: 'Overview', icon: BarChart3 },
+    { id: 'users', label: 'Users', icon: Users, badge: stats?.total_users },
+    { id: 'owners', label: 'Owner Requests', icon: Shield, badge: stats?.pending_aadhar, badgeColor: 'bg-red-500' },
+    { id: 'listings', label: 'Listings', icon: FileText, badge: stats?.pending_listings, badgeColor: 'bg-yellow-500' },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'logs', label: 'Activity Logs', icon: Activity },
+  ];
+
   return (
-    <div className="min-h-screen bg-stone-100" data-testid="admin-dashboard">
-      {/* Header */}
-      <header className="bg-stone-900 text-white">
-        <div className="container-main py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link to="/" className="flex items-center gap-2">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                <Home className="w-6 h-6" />
-              </div>
-              <span className="font-heading font-bold text-xl">GharSetu</span>
-            </Link>
-            <Badge className="bg-red-600">Admin</Badge>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-stone-400">{user?.email}</span>
-            <button onClick={handleLogout} className="text-stone-400 hover:text-white">
-              <LogOut className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <div className="container-main py-8">
-        <h1 className="font-heading text-3xl font-bold mb-8">Admin Dashboard</h1>
-
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <Users className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold">{stats?.total_users || 0}</p>
-                <p className="text-sm text-muted-foreground">Total Users</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <Shield className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold">{stats?.total_owners || 0}</p>
-                <p className="text-sm text-muted-foreground">Owners</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <FileText className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold">{stats?.total_listings || 0}</p>
-                <p className="text-sm text-muted-foreground">Listings</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <Clock className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold">{stats?.pending_listings || 0}</p>
-                <p className="text-sm text-muted-foreground">Pending</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <Calendar className="w-8 h-8 text-pink-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold">{stats?.total_bookings || 0}</p>
-                <p className="text-sm text-muted-foreground">Bookings</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="text-center">
-                <TrendingUp className="w-8 h-8 text-orange-600 mx-auto mb-2" />
-                <p className="text-2xl font-bold">{stats?.total_videos || 0}</p>
-                <p className="text-sm text-muted-foreground">Videos</p>
-              </div>
-            </CardContent>
-          </Card>
+    <div className="min-h-screen bg-stone-100 flex" data-testid="admin-dashboard-v2">
+      <aside className="w-64 bg-stone-900 text-white flex flex-col fixed h-screen z-40">
+        <div className="p-6 border-b border-stone-700">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
+              <Home className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-bold text-sm">GharSetu</p>
+              <p className="text-xs text-stone-400">Admin Panel</p>
+            </div>
+          </Link>
         </div>
 
-        {/* Category Stats */}
-        <Card className="mb-8">
+        <nav className="flex-1 p-4 space-y-1">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                  activeTab === tab.id
+                    ? 'bg-primary text-white'
+                    : 'text-stone-400 hover:bg-stone-800 hover:text-white'
+                }`}
+              >
+                <Icon className="w-4 h-4 flex-shrink-0" />
+                <span className="flex-1 text-left">{tab.label}</span>
+                {tab.badge > 0 && (
+                  <span className={`text-xs text-white rounded-full px-1.5 py-0.5 ${tab.badgeColor || 'bg-stone-600'}`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-stone-700">
+          <p className="text-xs text-stone-400 truncate mb-2">{user?.email}</p>
+          <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-stone-400 hover:text-red-400 text-sm rounded-lg hover:bg-stone-800 transition-colors">
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 ml-64 p-8 min-h-screen">
+        {activeTab === 'overview' && (
+          <OverviewTab stats={stats} onNavigate={setActiveTab} />
+        )}
+
+        {activeTab === 'users' && (
+          <UsersTab
+            users={users}
+            total={usersTotal}
+            page={usersPage}
+            search={userSearch}
+            roleFilter={userRoleFilter}
+            onSearch={(v) => { setUserSearch(v); fetchUsers(1, v, userRoleFilter); }}
+            onRoleFilter={(v) => { setUserRoleFilter(v); fetchUsers(1, userSearch, v); }}
+            onPageChange={(p) => fetchUsers(p)}
+            onVerifyEmail={handleVerifyEmail}
+            onViewProfile={openProfile}
+            onBlock={(u) => setBlockModal({ userId: u.id, userName: u.name })}
+            onUnblock={handleUnblock}
+            onDelete={(userId) => handleDeleteUser(userId, 'Removed by admin')}
+          />
+        )}
+
+        {activeTab === 'owners' && (
+          <OwnersTab
+            owners={pendingOwners}
+            total={pendingOwnersTotal}
+            onVerify={(id) => handleAadharVerify(id, 'verified')}
+            onReject={(owner) => setRejectModal({ ownerId: owner.id, ownerName: owner.name })}
+            onViewProfile={openProfile}
+          />
+        )}
+
+        {activeTab === 'listings' && (
+          <ListingsTab
+            listings={listings}
+            pendingListings={pendingListings}
+            total={listingsTotal}
+            page={listingsPage}
+            statusFilter={listingStatusFilter}
+            onStatusFilter={(v) => { setListingStatusFilter(v); fetchListings(1, v); }}
+            onPageChange={(p) => fetchListings(p)}
+            onAction={handleListingAction}
+          />
+        )}
+
+        {activeTab === 'notifications' && (
+          <NotificationsTab
+            target={notifTarget}
+            title={notifTitle}
+            message={notifMessage}
+            type={notifType}
+            sending={sendingNotif}
+            onTargetChange={setNotifTarget}
+            onTitleChange={setNotifTitle}
+            onMessageChange={setNotifMessage}
+            onTypeChange={setNotifType}
+            onSend={handleSendNotification}
+            stats={stats}
+          />
+        )}
+
+        {activeTab === 'logs' && (
+          <LogsTab
+            logs={activityLogs}
+            total={logsTotal}
+            page={logsPage}
+            onPageChange={fetchActivityLogs}
+          />
+        )}
+      </main>
+
+      <Dialog open={!!profileModal} onOpenChange={() => { setProfileModal(null); setProfileData(null); }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>User Profile</DialogTitle>
+          </DialogHeader>
+          <ProfileModalContent data={profileData} onVerifyEmail={handleVerifyEmail} />
+        </DialogContent>
+      </Dialog>
+
+      <BlockUserModal
+        modal={blockModal}
+        onClose={() => setBlockModal(null)}
+        onBlock={handleBlock}
+      />
+
+      <RejectAadharModal
+        modal={rejectModal}
+        onClose={() => setRejectModal(null)}
+        onReject={handleAadharVerify}
+      />
+    </div>
+  );
+};
+
+const OverviewTab = ({ stats, onNavigate }) => {
+  if (!stats) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+
+  const ownerTypes = stats.owner_type_breakdown || {};
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-stone-900">Dashboard Overview</h1>
+        <p className="text-stone-500 text-sm mt-1">Real-time platform health</p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Total Users', value: stats.total_users, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', delta: stats.new_users_7d, tab: 'users' },
+          { label: 'Total Owners', value: stats.total_owners, icon: Shield, color: 'text-green-600', bg: 'bg-green-50', delta: stats.new_owners_7d, tab: 'owners' },
+          { label: 'Total Listings', value: stats.total_listings, icon: FileText, color: 'text-purple-600', bg: 'bg-purple-50', delta: stats.new_listings_7d, tab: 'listings' },
+          { label: 'Pending Approvals', value: (stats.pending_listings || 0) + (stats.pending_aadhar || 0), icon: Clock, color: 'text-orange-600', bg: 'bg-orange-50', urgent: true },
+        ].map(({ label, value, icon: Icon, color, bg, delta, urgent, tab }) => (
+          <Card
+            key={label}
+            className={`cursor-pointer hover:shadow-md transition-shadow ${urgent && value > 0 ? 'ring-2 ring-orange-300' : ''}`}
+            onClick={() => tab && onNavigate(tab)}
+          >
+            <CardContent className="pt-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs text-stone-500 font-medium">{label}</p>
+                  <p className="text-3xl font-bold text-stone-900 mt-1">{value?.toLocaleString()}</p>
+                  {delta !== undefined && (
+                    <p className="text-xs text-green-600 mt-1">+{delta} this week</p>
+                  )}
+                </div>
+                <div className={`w-11 h-11 ${bg} rounded-xl flex items-center justify-center`}>
+                  <Icon className={`w-5 h-5 ${color}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Owner Types (5 categories)</CardTitle></CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            {Object.entries(OWNER_ROLE_LABELS).map(([role, label]) => (
+              <div key={role} className={`rounded-lg p-3 ${OWNER_ROLE_COLORS[role] || 'bg-stone-100'}`}>
+                <p className="text-xs font-medium">{label}</p>
+                <p className="text-2xl font-bold mt-1">{ownerTypes[role] || 0}</p>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
           <CardHeader>
-            <CardTitle>Listings by Category</CardTitle>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="w-4 h-4 text-yellow-500" />
+              Pending Listing Approvals
+              {(stats.pending_listings || 0) > 0 && (
+                <Badge className="bg-yellow-100 text-yellow-700 ml-auto">{stats.pending_listings}</Badge>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              {Object.entries(stats?.category_stats || {}).map(([cat, count]) => {
-                const Icon = categoryIcons[cat] || FileText;
+            {(stats.pending_listings || 0) === 0 ? (
+              <p className="text-sm text-stone-400 text-center py-4">No pending listings</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-stone-600">{stats.pending_listings} listings awaiting approval</p>
+                <Button size="sm" onClick={() => onNavigate('listings')} className="w-full mt-2">
+                  Review Listings ?
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Shield className="w-4 h-4 text-red-500" />
+              Pending Aadhar Verifications
+              {(stats.pending_aadhar || 0) > 0 && (
+                <Badge className="bg-red-100 text-red-700 ml-auto">{stats.pending_aadhar}</Badge>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(stats.pending_aadhar || 0) === 0 ? (
+              <p className="text-sm text-stone-400 text-center py-4">No pending verifications</p>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-stone-600">{stats.pending_aadhar} owner requests pending</p>
+                <Button size="sm" onClick={() => onNavigate('owners')} className="w-full mt-2 bg-red-600 hover:bg-red-700">
+                  Review Owners ?
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {stats.daily_growth?.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-base">7-Day Growth</CardTitle></CardHeader>
+          <CardContent>
+            <MiniBarChart data={stats.daily_growth} />
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Email Verified', value: stats.email_verified || 0, color: 'text-green-600' },
+          { label: 'Email Unverified', value: stats.email_unverified || 0, color: 'text-yellow-600' },
+          { label: 'Blocked Users', value: (stats.blocked_temp || 0) + (stats.blocked_perm || 0), color: 'text-red-600' },
+          { label: 'Verified Owners', value: stats.verified_owners || 0, color: 'text-blue-600' },
+        ].map(({ label, value, color }) => (
+          <div key={label} className="bg-white rounded-xl border border-stone-200 p-4">
+            <p className="text-xs text-stone-500">{label}</p>
+            <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const UsersTab = ({ users, total, page, search, roleFilter, onSearch, onRoleFilter, onPageChange,
+  onVerifyEmail, onViewProfile, onBlock, onUnblock, onDelete }) => {
+  const totalPages = Math.ceil(total / 50);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Users</h1>
+          <p className="text-stone-500 text-sm">{total.toLocaleString()} total</p>
+        </div>
+      </div>
+
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+          <Input
+            placeholder="Search name, email, phone..."
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <select
+          value={roleFilter}
+          onChange={(e) => onRoleFilter(e.target.value)}
+          className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+        >
+          <option value="">All roles</option>
+          <option value="user">User</option>
+          <option value="property_owner">Property Owner</option>
+          <option value="stay_owner">Stay Owner</option>
+          <option value="service_provider">Service Provider</option>
+          <option value="hotel_owner">Hotel Owner</option>
+          <option value="event_owner">Event Owner</option>
+        </select>
+      </div>
+
+      <Card>
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-stone-50">
+                  <th className="text-left p-4 font-medium text-stone-600">User</th>
+                  <th className="text-left p-4 font-medium text-stone-600">Role</th>
+                  <th className="text-left p-4 font-medium text-stone-600">Email</th>
+                  <th className="text-left p-4 font-medium text-stone-600">Status</th>
+                  <th className="text-left p-4 font-medium text-stone-600">Joined</th>
+                  <th className="text-left p-4 font-medium text-stone-600">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-12 text-stone-400">No users found</td></tr>
+                ) : users.map((u) => (
+                  <tr key={u.id} className="border-b hover:bg-stone-50 transition-colors">
+                    <td className="p-4">
+                      <div>
+                        <p className="font-medium">{u.name}</p>
+                        <p className="text-xs text-stone-400">{u.phone}</p>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <Badge className={OWNER_ROLE_COLORS[u.role] || 'bg-blue-100 text-blue-700'}>
+                        {OWNER_ROLE_LABELS[u.role] || u.role}
+                      </Badge>
+                    </td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-stone-600 truncate max-w-36">{u.email}</span>
+                        {u.is_email_verified
+                          ? <CheckCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0" />
+                          : <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
+                        }
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      {u.block_status === 'permanent' && <Badge className="bg-red-100 text-red-700">Perm. Blocked</Badge>}
+                      {u.block_status === 'temporary' && <Badge className="bg-orange-100 text-orange-700">Temp. Blocked</Badge>}
+                      {!u.block_status && <Badge className="bg-green-100 text-green-700">Active</Badge>}
+                    </td>
+                    <td className="p-4 text-stone-400 text-xs">
+                      {u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '--'}
+                    </td>
+                    <td className="p-4">
+                      <div className="flex gap-1 flex-wrap">
+                        <Button size="icon" variant="ghost" title="View profile" onClick={() => onViewProfile(u.id)}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        {!u.is_email_verified && (
+                          <Button size="icon" variant="ghost" title="Verify email" onClick={() => onVerifyEmail(u.id)}>
+                            <Mail className="w-4 h-4 text-blue-500" />
+                          </Button>
+                        )}
+                        {u.block_status ? (
+                          <Button size="icon" variant="ghost" title="Unblock" onClick={() => onUnblock(u.id)}>
+                            <RotateCcw className="w-4 h-4 text-green-500" />
+                          </Button>
+                        ) : (
+                          <Button size="icon" variant="ghost" title="Block" onClick={() => onBlock(u)}>
+                            <Ban className="w-4 h-4 text-orange-500" />
+                          </Button>
+                        )}
+                        <Button size="icon" variant="ghost" title="Delete" onClick={() => onDelete(u.id)}>
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t">
+              <p className="text-sm text-stone-500">Page {page} of {totalPages} - {total} total</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+const OwnersTab = ({ owners, total, onVerify, onReject, onViewProfile }) => (
+  <div className="space-y-6">
+    <div>
+      <h1 className="text-2xl font-bold">Owner Verification Requests</h1>
+      <p className="text-stone-500 text-sm">{total} pending Aadhar verifications</p>
+    </div>
+
+    {owners.length === 0 ? (
+      <Card>
+        <CardContent className="py-16 text-center">
+          <CheckCircle className="w-12 h-12 text-green-400 mx-auto mb-3" />
+          <p className="text-stone-500">No pending verification requests</p>
+        </CardContent>
+      </Card>
+    ) : (
+      <div className="space-y-4">
+        {owners.map((owner) => (
+          <Card key={owner.id}>
+            <CardContent className="pt-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold">{owner.name}</h3>
+                    <Badge className={OWNER_ROLE_COLORS[owner.role] || 'bg-gray-100 text-gray-700'}>
+                      {OWNER_ROLE_LABELS[owner.role] || owner.role}
+                    </Badge>
+                    <Badge className="bg-yellow-100 text-yellow-700">Pending Aadhar</Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-stone-600">
+                    <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{owner.email}</span>
+                    <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{owner.phone}</span>
+                    <span className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" />
+                      Aadhar: ****{owner.aadhar_number?.slice(-4) || 'N/A'}
+                    </span>
+                    <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{owner.city}, {owner.state}</span>
+                  </div>
+                  {owner.aadhar_name && (
+                    <p className="mt-1 text-sm text-stone-500">Aadhar name: {owner.aadhar_name}</p>
+                  )}
+                  {owner.business_name && (
+                    <p className="text-sm text-stone-500">Business: {owner.business_name}</p>
+                  )}
+                  <p className="text-xs text-stone-400 mt-1">
+                    Registered: {owner.created_at ? new Date(owner.created_at).toLocaleDateString('en-IN') : '--'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 flex-shrink-0">
+                  <Button size="sm" onClick={() => onViewProfile(owner.id)} variant="outline">
+                    <Eye className="w-4 h-4 mr-1" /> Profile
+                  </Button>
+                  <Button size="sm" onClick={() => onVerify(owner.id)} className="bg-green-600 hover:bg-green-700">
+                    <CheckCircle className="w-4 h-4 mr-1" /> Approve
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => onReject(owner)} className="text-red-600 border-red-200 hover:bg-red-50">
+                    <XCircle className="w-4 h-4 mr-1" /> Reject
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const ListingsTab = ({ listings, pendingListings, total, page, statusFilter, onStatusFilter, onPageChange, onAction }) => {
+  const totalPages = Math.ceil(total / 50);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Listings</h1>
+        <p className="text-stone-500 text-sm">{total.toLocaleString()} total - {pendingListings.length} pending</p>
+      </div>
+
+      {pendingListings.length > 0 && (
+        <Card className="border-yellow-200">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Clock className="w-4 h-4 text-yellow-500" />
+              Pending Approval Queue ({pendingListings.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {pendingListings.slice(0, 10).map((l) => {
+                const Icon = CATEGORY_ICONS[l.category] || FileText;
                 return (
-                  <div key={cat} className="flex items-center gap-3 p-4 bg-stone-50 rounded-lg">
-                    <Icon className="w-6 h-6 text-primary" />
-                    <div>
-                      <p className="font-bold">{count}</p>
-                      <p className="text-sm text-muted-foreground capitalize">{cat}</p>
+                  <div key={l.id} className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
+                    <div className="w-14 h-14 rounded overflow-hidden flex-shrink-0">
+                      <img src={l.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200'}
+                        alt="" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <Icon className="w-3.5 h-3.5 text-stone-400" />
+                        <p className="font-medium text-sm truncate">{l.title}</p>
+                      </div>
+                      <p className="text-xs text-stone-500">By {l.owner_name} - INR {l.price?.toLocaleString('en-IN')}</p>
+                      {l.owner_info && (
+                        <p className="text-xs text-stone-400">Owner: {l.owner_info.email}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button size="sm" onClick={() => onAction(l.id, 'approved')} className="bg-green-600 hover:bg-green-700">
+                        <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => onAction(l.id, 'rejected')} className="text-red-600">
+                        <XCircle className="w-3.5 h-3.5 mr-1" /> Reject
+                      </Button>
                     </div>
                   </div>
                 );
@@ -695,878 +820,465 @@ export const AdminDashboard = () => {
             </div>
           </CardContent>
         </Card>
+      )}
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="users">Users ({users.length})</TabsTrigger>
-            <TabsTrigger value="listings">Listings ({listings.length})</TabsTrigger>
-            <TabsTrigger value="bookings">Bookings ({bookings.length})</TabsTrigger>
-            <TabsTrigger value="chat-tracking">Chat Tracking ({adminChats.length})</TabsTrigger>
-            <TabsTrigger value="media-jobs">Media Jobs ({mediaJobs.length})</TabsTrigger>
-            <TabsTrigger value="audit-logs">Audit Logs ({auditLogsTotal})</TabsTrigger>
-            <TabsTrigger value="reels-debug">Reels Debug ({reelsDebugTotal})</TabsTrigger>
-          </TabsList>
+      <div className="flex gap-3">
+        <select
+          value={statusFilter}
+          onChange={(e) => onStatusFilter(e.target.value)}
+          className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+        >
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
 
-          <TabsContent value="overview">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Recent Users */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Users</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {recentUsers.map((u) => (
-                      <div key={u.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
-                        <div>
-                          <p className="font-medium">{u.name}</p>
-                          <p className="text-sm text-muted-foreground">{u.email}</p>
-                        </div>
-                        <Badge className={u.role === 'owner' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}>
-                          {u.role}
-                        </Badge>
-                      </div>
-                    ))}
+      <Card>
+        <CardContent className="p-0">
+          <div className="divide-y">
+            {listings.length === 0 ? (
+              <p className="text-center py-12 text-stone-400">No listings found</p>
+            ) : listings.map((l) => {
+              const Icon = CATEGORY_ICONS[l.category] || FileText;
+              return (
+                <div key={l.id} className="flex items-center gap-4 p-4 hover:bg-stone-50">
+                  <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
+                    <img src={l.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200'}
+                      alt="" className="w-full h-full object-cover" />
                   </div>
-                </CardContent>
-              </Card>
-
-              {/* Pending Listings */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Pending Approvals</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {pendingListings
-                      .slice(0, 5)
-                      .map((listing) => (
-                        <div key={listing.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
-                          <div className="flex-1 min-w-0 mr-4">
-                            <p className="font-medium truncate">{listing.title}</p>
-                            <p className="text-sm text-muted-foreground capitalize">{listing.category}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleListingStatus(listing.id, 'approved')}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              <CheckCircle className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleListingStatus(listing.id, 'rejected')}
-                              className="text-red-600"
-                            >
-                              <XCircle className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    {pendingListings.length === 0 && (
-                      <p className="text-center text-muted-foreground py-4">No pending approvals</p>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5 text-stone-400" />
+                      <span className="text-xs text-stone-400 capitalize">{l.category}</span>
+                      <Badge className={
+                        l.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
+                      }>{l.status}</Badge>
+                    </div>
+                    <p className="font-medium text-sm truncate mt-0.5">{l.title}</p>
+                    <p className="text-xs text-stone-500">By {l.owner_name} - INR {l.price?.toLocaleString('en-IN')}</p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    {l.status === 'pending' && (
+                      <>
+                        <Button size="sm" onClick={() => onAction(l.id, 'approved')} className="bg-green-600 hover:bg-green-700">
+                          Approve
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => onAction(l.id, 'rejected')} className="text-red-600">
+                          Reject
+                        </Button>
+                      </>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="users">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-3 px-4">Name</th>
-                        <th className="text-left py-3 px-4">Email</th>
-                        <th className="text-left py-3 px-4">Phone</th>
-                        <th className="text-left py-3 px-4">Role</th>
-                        <th className="text-left py-3 px-4">Verified</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((u) => (
-                        <tr key={u.id} className="border-b hover:bg-stone-50">
-                          <td className="py-3 px-4">{u.name}</td>
-                          <td className="py-3 px-4">{u.email}</td>
-                          <td className="py-3 px-4">{u.phone}</td>
-                          <td className="py-3 px-4">
-                            <Badge className={
-                              u.role === 'admin' ? 'bg-red-100 text-red-700' :
-                              u.role?.includes('owner') || u.role === 'service_provider' ? 'bg-green-100 text-green-700' :
-                              'bg-blue-100 text-blue-700'
-                            }>
-                              {u.role}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4">
-                            {u.aadhar_status === 'verified' ? (
-                              <Badge className="bg-green-100 text-green-700">
-                                <CheckCircle className="w-3 h-3 mr-1" />
-                                Verified
-                              </Badge>
-                            ) : u.aadhar_number ? (
-                              <div className="flex items-center gap-2">
-                                <Badge className="bg-yellow-100 text-yellow-700">Pending</Badge>
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className="h-7 text-xs"
-                                  onClick={() => handleAadharVerify(u.id, true)}
-                                >
-                                  Verify
-                                </Button>
-                              </div>
-                            ) : (
-                              <Badge className="bg-stone-100 text-stone-600">No Aadhar</Badge>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="listings">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  {listings.map((listing) => {
-                    const Icon = categoryIcons[listing.category] || FileText;
-                    return (
-                      <div key={listing.id} className="flex items-center gap-4 p-4 bg-stone-50 rounded-lg">
-                        <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
-                          <img
-                            src={listing.images?.[0] || 'https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=200'}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Icon className="w-4 h-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground capitalize">{listing.category}</span>
-                            <Badge className={
-                              listing.status === 'approved' ? 'bg-green-100 text-green-700' :
-                              listing.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-red-100 text-red-700'
-                            }>
-                              {listing.status}
-                            </Badge>
-                          </div>
-                          <h4 className="font-medium truncate">{listing.title}</h4>
-                          <p className="text-sm text-muted-foreground">by {listing.owner_name}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-primary">₹{listing.price?.toLocaleString('en-IN')}</p>
-                          <p className="text-sm text-muted-foreground capitalize">{listing.listing_type}</p>
-                        </div>
-                        {listing.status === 'pending' && (
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={() => handleListingStatus(listing.id, 'approved')}
-                              className="bg-green-600 hover:bg-green-700"
-                            >
-                              Approve
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleListingStatus(listing.id, 'rejected')}
-                              className="text-red-600"
-                            >
-                              Reject
-                            </Button>
-                          </div>
-                        )}
-                        <Link to={`/listing/${listing.id}`}>
-                          <Button variant="ghost" size="sm">
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        </Link>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="bookings">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="space-y-4">
-                  {bookings.map((booking) => (
-                    <div key={booking.id} className="flex items-center gap-4 p-4 bg-stone-50 rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge className={
-                            booking.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                            booking.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                            booking.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                            'bg-blue-100 text-blue-700'
-                          }>
-                            {booking.status}
-                          </Badge>
-                        </div>
-                        <h4 className="font-medium">{booking.listing_title}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Booked by: {booking.user_name} | Date: {booking.booking_date}
-                        </p>
-                      </div>
-                      <p className="font-bold text-primary">₹{booking.total_price?.toLocaleString('en-IN')}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="chat-tracking">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageCircle className="w-5 h-5" />
-                    All Chats
-                  </CardTitle>
-                  <Button variant="outline" size="sm" onClick={fetchAdminChats}>Refresh</Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {adminChatsLoading ? (
-                  <div className="flex justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                  </div>
-                ) : adminChats.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No chats available.</p>
-                ) : (
-                  <div className="space-y-3">
-                    {adminChats.map((chat) => (
-                      <div key={chat.id} className="rounded-lg border p-3 bg-stone-50">
-                        <p className="text-xs text-muted-foreground mb-1">
-                          listing: {chat.listing_id || 'n/a'} | owner: {chat.owner_id || 'n/a'} | user: {chat.user_id || chat.sender_id}
-                        </p>
-                        <p className="text-sm text-stone-900 break-words">{chat.message || chat.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="media-jobs">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <CardTitle>Media Delete Jobs</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={mediaJobStatus}
-                      onChange={(e) => handleMediaStatusChange(e.target.value)}
-                      className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-                    >
-                      <option value="failed">Failed</option>
-                      <option value="retry">Retry</option>
-                      <option value="pending">Pending</option>
-                      <option value="processing">Processing</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                    <Button variant="outline" size="sm" onClick={() => fetchMediaJobs(mediaJobStatus, mediaJobsPage)}>
-                      Refresh
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setMediaAutoRefreshEnabled((prev) => !prev)}
-                    >
-                      {mediaAutoRefreshEnabled ? 'Pause Auto' : 'Resume Auto'}
-                    </Button>
-                    {activeTab === 'media-jobs' && (
-                      <Badge className={mediaAutoRefreshEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-200 text-stone-700'}>
-                        {mediaAutoRefreshEnabled ? 'Auto refresh: 15s' : 'Auto refresh: paused'}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-                  <div className="rounded-lg bg-red-50 p-3">
-                    <p className="text-xs text-red-700">Failed</p>
-                    <p className="text-xl font-bold text-red-700">{mediaJobCounts.failed || 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-amber-50 p-3">
-                    <p className="text-xs text-amber-700">Retry</p>
-                    <p className="text-xl font-bold text-amber-700">{mediaJobCounts.retry || 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-blue-50 p-3">
-                    <p className="text-xs text-blue-700">Pending</p>
-                    <p className="text-xl font-bold text-blue-700">{mediaJobCounts.pending || 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-indigo-50 p-3">
-                    <p className="text-xs text-indigo-700">Processing</p>
-                    <p className="text-xl font-bold text-indigo-700">{mediaJobCounts.processing || 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-emerald-50 p-3">
-                    <p className="text-xs text-emerald-700">Completed</p>
-                    <p className="text-xl font-bold text-emerald-700">{mediaJobCounts.completed || 0}</p>
-                  </div>
-                </div>
-
-                {mediaJobs.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No media jobs found</p>
-                ) : (
-                  <div className="space-y-3">
-                    {mediaJobs.map((job) => (
-                      <div key={job.id} className="flex items-center justify-between gap-4 p-4 bg-stone-50 rounded-lg">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium truncate">{job.public_id}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Status: {job.status} | Attempts: {job.attempts || 0}
-                          </p>
-                          {job.last_error && (
-                            <p className="text-xs text-red-600 mt-1 truncate">Error: {job.last_error}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {(job.status === 'failed' || job.status === 'retry') && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleRetryMediaJob(job.id)}
-                              disabled={retryingJobId === job.id || (job.attempts || 0) >= mediaJobMaxAttempts}
-                            >
-                              {retryingJobId === job.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <RotateCcw className="w-4 h-4" />
-                              )}
-                            </Button>
-                          )}
-                          {job.status === 'failed' && (job.attempts || 0) >= mediaJobMaxAttempts && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleResetRetryMediaJob(job.id)}
-                              disabled={resettingJobId === job.id}
-                            >
-                              {resettingJobId === job.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                'Reset+Retry'
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-5 flex items-center justify-between border-t pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Page {mediaJobsPage} of {mediaJobsTotalPages} • Total {mediaJobsTotal}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchMediaJobs(mediaJobStatus, Math.max(1, mediaJobsPage - 1))}
-                      disabled={mediaJobsPage <= 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchMediaJobs(mediaJobStatus, Math.min(mediaJobsTotalPages, mediaJobsPage + 1))}
-                      disabled={mediaJobsPage >= mediaJobsTotalPages}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="audit-logs">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <CardTitle>Admin Audit Logs</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={auditActionFilter}
-                      onChange={(e) => handleAuditActionFilterChange(e.target.value)}
-                      className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-                    >
-                      <option value="all">All Actions</option>
-                      <option value="media_delete_job_retry">Retry</option>
-                      <option value="media_delete_job_reset_retry">Reset Retry</option>
-                    </select>
-                    <Button variant="outline" size="sm" onClick={() => fetchAuditLogs(auditActionFilter, auditLogsPage)}>
-                      Refresh
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleExportAuditLogs}
-                      disabled={exportingAudit}
-                    >
-                      {exportingAudit ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        'Export CSV'
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    value={auditSearch}
-                    onChange={(e) => setAuditSearch(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAuditSearchApply();
-                      }
-                    }}
-                    placeholder="Search actor/job/public_id"
-                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm min-w-[240px]"
-                  />
-                  <Button variant="outline" size="sm" onClick={handleAuditSearchApply}>
-                    Search
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleAuditSearchClear}>
-                    Clear Search
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => applyAuditPreset('today')}>
-                    Today
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => applyAuditPreset('7d')}>
-                    Last 7 Days
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => applyAuditPreset('30d')}>
-                    Last 30 Days
-                  </Button>
-                  <input
-                    type="date"
-                    value={auditFromDate}
-                    onChange={(e) => {
-                      setAuditFromDate(e.target.value);
-                      setAuditRangeLabel('Custom');
-                      if (auditDateError) {
-                        isAuditDateRangeValid(e.target.value, auditToDate);
-                      }
-                    }}
-                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-                  />
-                  <input
-                    type="date"
-                    value={auditToDate}
-                    onChange={(e) => {
-                      setAuditToDate(e.target.value);
-                      setAuditRangeLabel('Custom');
-                      if (auditDateError) {
-                        isAuditDateRangeValid(auditFromDate, e.target.value);
-                      }
-                    }}
-                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-                  />
-                  <Button variant="outline" size="sm" onClick={handleAuditDateFilterApply}>
-                    Apply Dates
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={async () => {
-                      setAuditFromDate('');
-                      setAuditToDate('');
-                      setAuditDateError('');
-                      setAuditRangeLabel('All Time');
-                      setAuditLogsPage(1);
-                      await fetchAuditLogs(auditActionFilter, 1, '', '', auditSearch);
-                    }}
-                  >
-                    Clear Dates
-                  </Button>
-                  <Badge className="bg-stone-200 text-stone-700">Range: {auditRangeLabel}</Badge>
-                </div>
-                {auditDateError && (
-                  <p className="mt-2 text-sm text-red-600">{auditDateError}</p>
-                )}
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-                  <div className="rounded-lg bg-stone-100 p-3">
-                    <p className="text-xs text-stone-600">Total Logs</p>
-                    <p className="text-xl font-bold text-stone-800">{auditLogsTotal}</p>
-                  </div>
-                  <div className="rounded-lg bg-blue-50 p-3">
-                    <p className="text-xs text-blue-700">Retry Actions</p>
-                    <p className="text-xl font-bold text-blue-700">{auditActionCounts.media_delete_job_retry || 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-indigo-50 p-3">
-                    <p className="text-xs text-blue-700">Reset Retry Actions</p>
-                    <p className="text-xl font-bold text-blue-700">{auditActionCounts.media_delete_job_reset_retry || 0}</p>
-                  </div>
-                  <div className="rounded-lg bg-emerald-50 p-3 md:col-span-1">
-                    <p className="text-xs text-emerald-700">Visible Rows</p>
-                    <p className="text-xl font-bold text-emerald-700">{auditLogs.length}</p>
-                  </div>
-                </div>
-
-                {auditLogs.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No audit logs found</p>
-                ) : (
-                  <div className="space-y-3">
-                    {auditLogs.map((log) => (
-                      <div key={log.id} className="p-4 bg-stone-50 rounded-lg">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-medium">{log.action}</p>
-                          <Badge className="bg-stone-200 text-stone-700">{new Date(log.created_at).toLocaleString('en-IN')}</Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Actor: {log.actor_email || log.actor_id} | Target: {log.target_type} ({log.target_id})
-                        </p>
-                        {log.meta && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Prev status: {log.meta.previous_status || '-'} | Prev attempts: {log.meta.previous_attempts ?? '-'}
-                          </p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-5 flex items-center justify-between border-t pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Page {auditLogsPage} of {auditLogsTotalPages} • Total {auditLogsTotal}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchAuditLogs(auditActionFilter, Math.max(1, auditLogsPage - 1))}
-                      disabled={auditLogsPage <= 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchAuditLogs(auditActionFilter, Math.min(auditLogsTotalPages, auditLogsPage + 1))}
-                      disabled={auditLogsPage >= auditLogsTotalPages}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="reels-debug">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <CardTitle>Reels Debug Sessions</CardTitle>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchReelsDebugSessions(reelsDebugPage)}
-                      disabled={reelsDebugLoading}
-                    >
-                      {reelsDebugLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Refresh'}
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => applyReelsDebugPreset('today')} disabled={reelsDebugLoading}>
-                    Today
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => applyReelsDebugPreset('7d')} disabled={reelsDebugLoading}>
-                    Last 7 Days
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => applyReelsDebugPreset('30d')} disabled={reelsDebugLoading}>
-                    Last 30 Days
-                  </Button>
-                  <input
-                    type="text"
-                    value={reelsDebugStressSessionId}
-                    onChange={(e) => setReelsDebugStressSessionId(e.target.value)}
-                    placeholder="Stress session ID"
-                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm min-w-[220px]"
-                  />
-                  <input
-                    type="text"
-                    value={reelsDebugUserId}
-                    onChange={(e) => setReelsDebugUserId(e.target.value)}
-                    placeholder="User ID"
-                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm min-w-[220px]"
-                  />
-                  <input
-                    type="date"
-                    value={reelsDebugFromDate}
-                    onChange={(e) => {
-                      setReelsDebugFromDate(e.target.value);
-                      setReelsDebugRangeLabel('Custom');
-                      if (reelsDebugDateError) {
-                        isReelsDebugDateRangeValid(e.target.value, reelsDebugToDate);
-                      }
-                    }}
-                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-                  />
-                  <input
-                    type="date"
-                    value={reelsDebugToDate}
-                    onChange={(e) => {
-                      setReelsDebugToDate(e.target.value);
-                      setReelsDebugRangeLabel('Custom');
-                      if (reelsDebugDateError) {
-                        isReelsDebugDateRangeValid(reelsDebugFromDate, e.target.value);
-                      }
-                    }}
-                    className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-                  />
-                  <label className="h-9 inline-flex items-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={reelsDebugIncludeCaptures}
-                      onChange={(e) => setReelsDebugIncludeCaptures(e.target.checked)}
-                    />
-                    Include captures
-                  </label>
-                  <Button variant="outline" size="sm" onClick={handleReelsDebugFilterApply} disabled={reelsDebugLoading}>
-                    Apply Filters
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleReelsDebugFilterClear} disabled={reelsDebugLoading}>
-                    Clear
-                  </Button>
-                  <Badge className="bg-stone-200 text-stone-700">Range: {reelsDebugRangeLabel}</Badge>
-                </div>
-                {reelsDebugDateError && (
-                  <p className="mt-2 text-sm text-red-600">{reelsDebugDateError}</p>
-                )}
-              </CardHeader>
-
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-5">
-                  <div className="rounded-lg bg-stone-100 p-3">
-                    <p className="text-xs text-stone-600">Total Reports</p>
-                    <p className="text-xl font-bold text-stone-800">{reelsDebugTotal}</p>
-                  </div>
-                  <div className="rounded-lg bg-blue-50 p-3">
-                    <p className="text-xs text-blue-700">Visible Reports</p>
-                    <p className="text-xl font-bold text-blue-700">{reelsDebugReports.length}</p>
-                  </div>
-                  <div className="rounded-lg bg-amber-50 p-3">
-                    <p className="text-xs text-amber-700">Reports With Captures</p>
-                    <p className="text-xl font-bold text-amber-700">
-                      {reelsDebugReports.filter((r) => (r.total_captures || 0) > 0).length}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-emerald-50 p-3">
-                    <p className="text-xs text-emerald-700">Total Captures (Visible)</p>
-                    <p className="text-xl font-bold text-emerald-700">
-                      {reelsDebugReports.reduce((sum, r) => sum + (r.total_captures || 0), 0)}
-                    </p>
-                  </div>
-                </div>
-
-                {reelsDebugLoading ? (
-                  <div className="py-8 flex items-center justify-center text-muted-foreground gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading reports...
-                  </div>
-                ) : reelsDebugReports.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No debug reports found</p>
-                ) : (
-                  <div className="space-y-3">
-                    {reelsDebugReports.map((report) => {
-                      const stats = report.stats || {};
-                      const snapshotHits = Number(stats.snapshotHits || 0);
-                      const snapshotMisses = Number(stats.snapshotMisses || 0);
-                      const totalSnapshotReads = snapshotHits + snapshotMisses;
-                      const snapshotHitRate = totalSnapshotReads > 0
-                        ? Math.round((snapshotHits / totalSnapshotReads) * 100)
-                        : null;
-
-                      return (
-                        <div key={report.id} className="p-4 bg-stone-50 rounded-lg">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-medium">Session: {report.stress_session_id || '-'}</p>
-                              <p className="text-sm text-muted-foreground">
-                                User: {report.user_email || report.user_id || '-'}
-                              </p>
-                            </div>
-                            <Badge className="bg-stone-200 text-stone-700">
-                              {report.created_at ? new Date(report.created_at).toLocaleString('en-IN') : '-'}
-                            </Badge>
-                          </div>
-
-                          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                            <div className="rounded bg-white p-2">
-                              <p className="text-xs text-muted-foreground">Snapshot Calls</p>
-                              <p className="font-semibold">{Number(stats.snapshotHttpCalls || 0)}</p>
-                            </div>
-                            <div className="rounded bg-white p-2">
-                              <p className="text-xs text-muted-foreground">Snapshot Hit Rate</p>
-                              <p className="font-semibold">{snapshotHitRate === null ? '-' : `${snapshotHitRate}%`}</p>
-                            </div>
-                            <div className="rounded bg-white p-2">
-                              <p className="text-xs text-muted-foreground">Stale Follow Skips</p>
-                              <p className="font-semibold">{Number(stats.staleFollowSkips || 0)}</p>
-                            </div>
-                            <div className="rounded bg-white p-2">
-                              <p className="text-xs text-muted-foreground">Stale Like Skips</p>
-                              <p className="font-semibold">{Number(stats.staleLikeSkips || 0)}</p>
-                            </div>
-                          </div>
-
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Captures: {report.total_captures || 0} | History points: {(report.hit_rate_history || []).length}
-                          </p>
-
-                          <div className="mt-3 flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setSelectedReelsDebugReport(report)}
-                            >
-                              <ExternalLink className="w-4 h-4 mr-1" />
-                              View Details
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleExportSingleReelsReport(report)}
-                            >
-                              <Download className="w-4 h-4 mr-1" />
-                              Export JSON
-                            </Button>
-                          </div>
-
-                          {reelsDebugIncludeCaptures && Array.isArray(report.captures) && report.captures.length > 0 && (
-                            <details className="mt-2">
-                              <summary className="cursor-pointer text-sm text-primary">Show captures ({report.captures.length})</summary>
-                              <pre className="mt-2 max-h-56 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
-                                {JSON.stringify(report.captures.slice(0, 5), null, 2)}
-                              </pre>
-                            </details>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className="mt-5 flex items-center justify-between border-t pt-4">
-                  <p className="text-sm text-muted-foreground">
-                    Page {reelsDebugPage} of {reelsDebugTotalPages} • Total {reelsDebugTotal}
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchReelsDebugSessions(Math.max(1, reelsDebugPage - 1))}
-                      disabled={reelsDebugLoading || reelsDebugPage <= 1}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fetchReelsDebugSessions(Math.min(reelsDebugTotalPages, reelsDebugPage + 1))}
-                      disabled={reelsDebugLoading || reelsDebugPage >= reelsDebugTotalPages}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Dialog
-              open={Boolean(selectedReelsDebugReport)}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setSelectedReelsDebugReport(null);
-                }
-              }}
-            >
-              <DialogContent className="max-w-4xl">
-                <DialogHeader>
-                  <DialogTitle>Reels Debug Report Details</DialogTitle>
-                </DialogHeader>
-                {selectedReelsDebugReport && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                      <div className="rounded bg-stone-100 p-3">
-                        <p><span className="font-semibold">Report ID:</span> {selectedReelsDebugReport.id || '-'}</p>
-                        <p><span className="font-semibold">Session:</span> {selectedReelsDebugReport.stress_session_id || '-'}</p>
-                        <p><span className="font-semibold">User:</span> {selectedReelsDebugReport.user_email || selectedReelsDebugReport.user_id || '-'}</p>
-                      </div>
-                      <div className="rounded bg-stone-100 p-3">
-                        <p><span className="font-semibold">Created:</span> {selectedReelsDebugReport.created_at ? new Date(selectedReelsDebugReport.created_at).toLocaleString('en-IN') : '-'}</p>
-                        <p><span className="font-semibold">Captures:</span> {selectedReelsDebugReport.total_captures || 0}</p>
-                        <p><span className="font-semibold">History points:</span> {(selectedReelsDebugReport.hit_rate_history || []).length}</p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-semibold mb-1">Stats</p>
-                      <pre className="max-h-48 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
-                        {JSON.stringify(selectedReelsDebugReport.stats || {}, null, 2)}
-                      </pre>
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-semibold mb-1">Hit Rate History</p>
-                      <pre className="max-h-40 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
-                        {JSON.stringify(selectedReelsDebugReport.hit_rate_history || [], null, 2)}
-                      </pre>
-                    </div>
-
-                    <div>
-                      <p className="text-sm font-semibold mb-1">Captures</p>
-                      <pre className="max-h-64 overflow-auto rounded bg-stone-900 text-stone-100 p-3 text-xs">
-                        {JSON.stringify(selectedReelsDebugReport.captures || [], null, 2)}
-                      </pre>
-                    </div>
-
-                    <div className="flex items-center justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleExportSingleReelsReport(selectedReelsDebugReport)}
-                      >
-                        <Download className="w-4 h-4 mr-1" />
-                        Export This Report
+                    {l.status === 'approved' && (
+                      <Button size="sm" variant="outline" onClick={() => onAction(l.id, 'remove', 'Removed by admin')} className="text-red-600">
+                        Remove
                       </Button>
-                    </div>
+                    )}
+                    <Link to={`/listing/${l.id}`}>
+                      <Button size="icon" variant="ghost"><Eye className="w-4 h-4" /></Button>
+                    </Link>
                   </div>
-                )}
-              </DialogContent>
-            </Dialog>
-          </TabsContent>
-        </Tabs>
+                </div>
+              );
+            })}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t">
+              <p className="text-sm text-stone-500">Page {page} of {totalPages}</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+const NotificationsTab = ({ target, title, message, type, sending, onTargetChange,
+  onTitleChange, onMessageChange, onTypeChange, onSend, stats }) => (
+    <div className="space-y-6 max-w-2xl">
+      <div>
+        <h1 className="text-2xl font-bold">Send Notification</h1>
+        <p className="text-stone-500 text-sm">Broadcast messages to users and owners</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { label: 'Total users', value: stats?.total_users || 0 },
+          { label: 'Total owners', value: stats?.total_owners || 0 },
+          { label: 'All combined', value: (stats?.total_users || 0) + (stats?.total_owners || 0) },
+        ].map(({ label, value }) => (
+          <div key={label} className="bg-stone-100 rounded-xl p-4">
+            <p className="text-xs text-stone-500">{label}</p>
+            <p className="text-xl font-bold mt-0.5">{value.toLocaleString()}</p>
+          </div>
+        ))}
+      </div>
+
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div>
+            <label className="text-sm font-medium text-stone-700">Send to</label>
+            <select
+              value={target}
+              onChange={(e) => onTargetChange(e.target.value)}
+              className="mt-1 w-full h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+            >
+              <option value="all">All (users + owners)</option>
+              <option value="users">All users only</option>
+              <option value="owners">All owners only</option>
+            </select>
+            <p className="text-xs text-stone-400 mt-1">To send to a specific person, enter their user ID here.</p>
+            {!['all', 'users', 'owners'].includes(target) && target && (
+              <p className="text-xs text-blue-600 mt-0.5">Targeting user ID: {target}</p>
+            )}
+            <Input
+              className="mt-2"
+              placeholder="Or paste specific user ID..."
+              onBlur={(e) => e.target.value && onTargetChange(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-stone-700">Type</label>
+            <select
+              value={type}
+              onChange={(e) => onTypeChange(e.target.value)}
+              className="mt-1 w-full h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+            >
+              <option value="admin_message">Admin Message</option>
+              <option value="warning">Warning</option>
+              <option value="system">System Update</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-stone-700">Title</label>
+            <Input
+              className="mt-1"
+              placeholder="Notification title..."
+              value={title}
+              onChange={(e) => onTitleChange(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-stone-700">Message</label>
+            <Textarea
+              className="mt-1"
+              rows={4}
+              placeholder="Write your message here..."
+              value={message}
+              onChange={(e) => onMessageChange(e.target.value)}
+            />
+          </div>
+
+          <Button onClick={onSend} disabled={sending || !title.trim() || !message.trim()} className="w-full">
+            {sending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Bell className="w-4 h-4 mr-2" />Send Notification</>}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+const LogsTab = ({ logs, total, page, onPageChange }) => {
+  const totalPages = Math.ceil(total / 50);
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Activity Logs</h1>
+        <p className="text-stone-500 text-sm">{total.toLocaleString()} total actions</p>
+      </div>
+      <Card>
+        <CardContent className="p-0">
+          <div className="divide-y">
+            {logs.length === 0 ? (
+              <p className="text-center py-12 text-stone-400">No logs found</p>
+            ) : logs.map((log) => (
+              <div key={log.id} className="p-4 flex items-center gap-4">
+                <div className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <Activity className="w-4 h-4 text-stone-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Badge className="bg-stone-100 text-stone-700 text-xs">{log.action}</Badge>
+                    <span className="text-xs text-stone-500">{log.target_type}: {log.target_id?.slice(0, 12)}...</span>
+                  </div>
+                  <p className="text-xs text-stone-400 mt-0.5">By {log.actor_email || log.actor_id}</p>
+                  {log.meta?.reason && <p className="text-xs text-stone-500">Reason: {log.meta.reason}</p>}
+                </div>
+                <p className="text-xs text-stone-400 flex-shrink-0">
+                  {log.created_at ? new Date(log.created_at).toLocaleString('en-IN') : '--'}
+                </p>
+              </div>
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-4 border-t">
+              <p className="text-sm text-stone-500">Page {page} of {totalPages}</p>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+const ProfileModalContent = ({ data, onVerifyEmail }) => {
+  if (!data) return (
+    <div className="flex justify-center py-12">
+      <Loader2 className="w-6 h-6 animate-spin text-primary" />
+    </div>
+  );
+  const {
+    user, listings, bookings, stats, admin_logs,
+  } = data;
+  if (!user) return <p className="text-center py-8 text-stone-400">User not found</p>;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-4">
+        <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center">
+          <span className="text-xl font-bold text-primary">{user.name?.[0]?.toUpperCase()}</span>
+        </div>
+        <div>
+          <h3 className="font-bold text-lg">{user.name}</h3>
+          <div className="flex items-center gap-2 flex-wrap mt-0.5">
+            <Badge className={OWNER_ROLE_COLORS[user.role] || 'bg-blue-100 text-blue-700'}>
+              {OWNER_ROLE_LABELS[user.role] || user.role}
+            </Badge>
+            {user.aadhar_status === 'verified' && <Badge className="bg-green-100 text-green-700">Aadhar Verified</Badge>}
+            {user.block_status && <Badge className="bg-red-100 text-red-700">Blocked</Badge>}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        {[
+          { label: 'Email', value: user.email, verified: user.is_email_verified },
+          { label: 'Phone', value: user.phone },
+          { label: 'City', value: `${user.city}, ${user.state}` },
+          { label: 'Last login', value: user.last_login ? new Date(user.last_login).toLocaleDateString('en-IN') : 'Never' },
+          { label: 'Joined', value: user.created_at ? new Date(user.created_at).toLocaleDateString('en-IN') : '--' },
+          { label: 'Email verified', value: user.is_email_verified ? 'Yes' : 'No' },
+        ].map(({ label, value, verified }) => (
+          <div key={label}>
+            <p className="text-xs text-stone-400">{label}</p>
+            <div className="flex items-center gap-1">
+              <p className="font-medium">{value || '--'}</p>
+              {verified === false && (
+                <Button size="sm" variant="ghost" className="h-5 text-xs px-1 text-blue-600" onClick={() => onVerifyEmail(user.id)}>
+                  Verify
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {stats && (
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: 'Listings', value: stats.total_listings },
+            { label: 'Bookings', value: stats.total_bookings },
+            { label: 'Views', value: stats.total_views },
+            { label: 'Likes', value: stats.total_likes },
+          ].map(({ label, value }) => (
+            <div key={label} className="bg-stone-100 rounded-lg p-3 text-center">
+              <p className="text-xs text-stone-500">{label}</p>
+              <p className="text-xl font-bold">{value || 0}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {listings?.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2">Listings ({listings.length})</p>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {listings.map((l) => (
+              <div key={l.id} className="flex items-center gap-2 p-2 bg-stone-50 rounded text-sm">
+                <Badge className={
+                  l.status === 'approved' ? 'bg-green-100 text-green-700' :
+                  l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
+                }>{l.status}</Badge>
+                <span className="truncate">{l.title}</span>
+                <span className="text-stone-400 flex-shrink-0">{l.price?.toLocaleString('en-IN')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {admin_logs?.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2">Admin actions ({admin_logs.length})</p>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {admin_logs.map((l) => (
+              <div key={l.id} className="flex items-center gap-2 text-xs text-stone-500 py-1">
+                <Badge className="bg-stone-100 text-stone-600 text-xs">{l.action}</Badge>
+                <span>{new Date(l.created_at).toLocaleDateString('en-IN')}</span>
+                {l.meta?.reason && <span>- {l.meta.reason}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {bookings?.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2">Bookings ({bookings.length})</p>
+          <div className="space-y-1 max-h-32 overflow-y-auto">
+            {bookings.slice(0, 10).map((b) => (
+              <div key={b.id} className="text-xs text-stone-500 py-1">
+                {b.status} - {b.created_at ? new Date(b.created_at).toLocaleDateString('en-IN') : '--'}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const BlockUserModal = ({ modal, onClose, onBlock }) => {
+  const [blockType, setBlockType] = useState('temporary');
+  const [reason, setReason] = useState('');
+  const [hours, setHours] = useState(24);
+
+  if (!modal) return null;
+
+  const handleSubmit = () => {
+    if (!reason.trim()) {
+      toast.error('Reason required');
+      return;
+    }
+    onBlock({
+      userId: modal.userId,
+      blockType,
+      reason,
+      durationHours: hours,
+    });
+  };
+
+  return (
+    <Dialog open={!!modal} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Block User: {modal.userName}</DialogTitle>
+          <DialogDescription>This will restrict their access immediately.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Block type</label>
+            <select value={blockType} onChange={(e) => setBlockType(e.target.value)}
+              className="mt-1 w-full h-9 rounded-md border border-stone-300 bg-white px-3 text-sm">
+              <option value="temporary">Temporary</option>
+              <option value="permanent">Permanent</option>
+            </select>
+          </div>
+          {blockType === 'temporary' && (
+            <div>
+              <label className="text-sm font-medium">Duration (hours)</label>
+              <Input type="number" min={1} value={hours} onChange={(e) => setHours(Number(e.target.value))} className="mt-1" />
+            </div>
+          )}
+          <div>
+            <label className="text-sm font-medium">Reason</label>
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1" rows={3} placeholder="Why are you blocking this user?" />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button onClick={handleSubmit} className="flex-1 bg-red-600 hover:bg-red-700">Block User</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const RejectAadharModal = ({ modal, onClose, onReject }) => {
+  const [reason, setReason] = useState('');
+
+  if (!modal) return null;
+
+  return (
+    <Dialog open={!!modal} onOpenChange={onClose}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Reject Aadhar: {modal.ownerName}</DialogTitle>
+          <DialogDescription>The owner will be notified with your rejection reason.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Rejection reason</label>
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} className="mt-1" rows={3}
+              placeholder="e.g. Documents unclear, name mismatch..." />
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button onClick={() => {
+              if (!reason.trim()) {
+                toast.error('Rejection reason required');
+                return;
+              }
+              onReject(modal.ownerId, 'rejected', reason);
+            }} className="flex-1 bg-red-600 hover:bg-red-700">Reject</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const MiniBarChart = ({ data }) => {
+  const maxVal = Math.max(...data.map((d) => (d.users || 0) + (d.owners || 0)), 1);
+  return (
+    <div>
+      <div className="flex items-end gap-2 h-28">
+        {data.map((d, i) => {
+          const total = (d.users || 0) + (d.owners || 0);
+          const heightPct = (total / maxVal) * 100;
+          const usersPct = total > 0 ? ((d.users || 0) / total) * 100 : 0;
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center gap-1">
+              <p className="text-xs text-stone-400">{total}</p>
+              <div className="w-full flex flex-col-reverse overflow-hidden rounded-t"
+                style={{ height: `${Math.max(heightPct * 0.8, 2)}px` }}>
+                <div className="bg-blue-400" style={{ height: `${usersPct}%` }} />
+                <div className="bg-green-400 flex-1" />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-4 mt-3 text-xs text-stone-500">
+        {data.map((d, i) => (
+          <span key={i} className="flex-1 text-center truncate">{d.date?.slice(5)}</span>
+        ))}
+      </div>
+      <div className="flex gap-4 mt-2 text-xs text-stone-400">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-blue-400 rounded-sm inline-block" />Users</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 bg-green-400 rounded-sm inline-block" />Owners</span>
       </div>
     </div>
   );
