@@ -468,6 +468,7 @@ export const TrendingSection = () => {
     { id: 'business', label: 'Business' },
     { id: 'stay', label: 'Stay' },
     { id: 'event', label: 'Event' },
+    { id: 'services', label: 'Services' },
   ];
 
   return (

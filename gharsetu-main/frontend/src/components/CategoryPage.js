@@ -56,12 +56,59 @@ const categoryColors = {
   services: 'bg-orange-500',
 };
 
+const categoryThemes = {
+  home: {
+    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
+    panel: 'border-white/20 bg-white/8',
+    icon: 'bg-white/12 ring-white/35',
+    chip: 'border-white/30 bg-white/12',
+  },
+  business: {
+    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
+    panel: 'border-white/20 bg-white/8',
+    icon: 'bg-white/12 ring-white/35',
+    chip: 'border-white/30 bg-white/12',
+  },
+  stay: {
+    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
+    panel: 'border-white/20 bg-white/8',
+    icon: 'bg-white/12 ring-white/35',
+    chip: 'border-white/30 bg-white/12',
+  },
+  event: {
+    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
+    panel: 'border-white/20 bg-white/8',
+    icon: 'bg-white/12 ring-white/35',
+    chip: 'border-white/30 bg-white/12',
+  },
+  services: {
+    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
+    panel: 'border-white/20 bg-white/8',
+    icon: 'bg-white/12 ring-white/35',
+    chip: 'border-white/30 bg-white/12',
+  },
+  default: {
+    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
+    panel: 'border-white/20 bg-white/8',
+    icon: 'bg-white/12 ring-white/35',
+    chip: 'border-white/30 bg-white/12',
+  },
+};
+
 const categoryTitles = {
   home: { en: 'Home', gu: 'ઘર' },
   business: { en: 'Business', gu: 'બિઝનેસ' },
   stay: { en: 'Stay', gu: 'રહેવાનું' },
   event: { en: 'Event', gu: 'ઇવેન્ટ' },
   services: { en: 'Services', gu: 'સેવાઓ' },
+};
+
+const categoryDescriptions = {
+  home: 'Explore premium residential spaces tailored for modern living.',
+  business: 'Discover high-visibility commercial spaces to grow your brand.',
+  stay: 'Find comfortable hospitality options for short and long stays.',
+  event: 'Book curated venues designed for memorable celebrations and gatherings.',
+  services: 'Connect with trusted professionals for home and business needs.',
 };
 
 export const CategoryPage = () => {
@@ -187,7 +234,11 @@ export const CategoryPage = () => {
   }, [fetchListings]);
 
   const handleFilterChange = (key, value) => {
-    const newFilters = { ...filters, [key]: value, page: 1 };
+    const newFilters = {
+      ...filters,
+      [key]: value,
+      page: key === 'page' ? value : 1,
+    };
     setFilters(newFilters);
 
     const params = new URLSearchParams();
@@ -214,7 +265,10 @@ export const CategoryPage = () => {
   const currentCategory = categories.find((c) => c.id === category);
   const Icon = categoryIcons[category] || Home;
   const bgColor = categoryColors[category] || 'bg-primary';
+  const theme = categoryThemes[category] || categoryThemes.default;
   const title = categoryTitles[category] || { en: 'Listings', gu: '' };
+  const description =
+    categoryDescriptions[category] || 'Discover verified listings curated for your needs.';
 
   const handleWishlist = async (listingId, e) => {
     e.preventDefault();
@@ -241,28 +295,30 @@ export const CategoryPage = () => {
       <Header />
 
       {/* Hero Banner */}
-      <div className={`${bgColor} text-white py-16`}>
+      <div className={`${theme.banner} text-white py-10 md:py-12`}>
         <div className="container-main">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
-              <Icon className="w-8 h-8" />
+          <div className={`rounded-3xl border ${theme.panel} backdrop-blur-md p-6 md:p-8 shadow-[0_20px_80px_-32px_rgba(0,0,0,0.7)]`}>
+            <div className="flex items-center gap-4 mb-4">
+              <div className={`w-16 h-16 ${theme.icon} rounded-2xl flex items-center justify-center ring-1`}>
+                <Icon className="w-8 h-8" />
+              </div>
+              <div>
+                <h1 className="font-heading text-4xl md:text-5xl font-bold tracking-tight">{title.en}</h1>
+                <p className="text-white/80 text-lg">{title.gu}</p>
+              </div>
             </div>
-            <div>
-              <h1 className="font-heading text-4xl md:text-5xl font-bold">{title.en}</h1>
-              <p className="text-white/80 text-lg">{title.gu}</p>
+            <p className="text-white/90 text-base md:text-lg max-w-3xl leading-relaxed">{description}</p>
+            <div className={`mt-5 inline-flex items-center rounded-full border ${theme.chip} px-4 py-2 text-sm text-white/95`}>
+              Verified listings and fast discovery
             </div>
           </div>
-          <p className="text-white/80 max-w-2xl">
-            {currentCategory?.sub_categories?.map((s) => s.name).join(' • ') ||
-              'Find the perfect space for your needs'}
-          </p>
         </div>
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white border-b border-stone-200 sticky top-16 md:top-20 z-30">
+      <div className="bg-white/90 backdrop-blur-md border-b border-stone-200 sticky top-16 md:top-20 z-30 shadow-sm">
         <div className="container-main py-4">
-          <div className="flex items-center gap-4 flex-wrap">
+          <div className="rounded-2xl border border-stone-200 bg-white p-3 md:p-4 flex items-center gap-3 md:gap-4 flex-wrap shadow-sm">
             {/* Search */}
             <div className="relative flex-1 min-w-[200px]">
               <SmartSearchInput
@@ -280,7 +336,7 @@ export const CategoryPage = () => {
               value={filters.sub_category || "all"}
               onValueChange={(value) => handleFilterChange('sub_category', value === "all" ? "" : value)}
             >
-              <SelectTrigger className="w-[180px]" data-testid="subcategory-filter">
+              <SelectTrigger className="w-[180px] rounded-xl" data-testid="subcategory-filter">
                 <SelectValue placeholder="Sub Category" />
               </SelectTrigger>
               <SelectContent>
@@ -298,7 +354,7 @@ export const CategoryPage = () => {
               value={filters.listing_type || "all"}
               onValueChange={(value) => handleFilterChange('listing_type', value === "all" ? "" : value)}
             >
-              <SelectTrigger className="w-[140px]" data-testid="type-filter">
+              <SelectTrigger className="w-[140px] rounded-xl" data-testid="type-filter">
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent>
@@ -311,7 +367,7 @@ export const CategoryPage = () => {
             {/* More Filters */}
             <Sheet open={showFilters} onOpenChange={setShowFilters}>
               <SheetTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button variant="outline" className="gap-2 rounded-xl">
                   <SlidersHorizontal className="w-4 h-4" />
                   More Filters
                 </Button>
@@ -372,16 +428,16 @@ export const CategoryPage = () => {
             </Sheet>
 
             {/* View Toggle */}
-            <div className="hidden md:flex items-center gap-1 border rounded-lg p-1">
+            <div className="hidden md:flex items-center gap-1 border border-stone-200 rounded-xl p-1 bg-stone-50">
               <button
                 onClick={() => setViewMode('grid')}
-                className={`p-2 rounded ${viewMode === 'grid' ? 'bg-primary text-white' : ''}`}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'grid' ? 'bg-primary text-white' : 'text-stone-600 hover:bg-stone-100'}`}
               >
                 <Grid className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
-                className={`p-2 rounded ${viewMode === 'list' ? 'bg-primary text-white' : ''}`}
+                className={`p-2 rounded-lg transition-colors ${viewMode === 'list' ? 'bg-primary text-white' : 'text-stone-600 hover:bg-stone-100'}`}
               >
                 <List className="w-4 h-4" />
               </button>

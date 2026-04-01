@@ -37,6 +37,25 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const recognitionRef = useRef(null);
+  const autoNavigateTimerRef = useRef(null);
+
+  const navigateToSearch = useCallback((payload) => {
+    if (!payload) return;
+
+    const params = new URLSearchParams();
+    if (payload.normalizedQuery || payload.query) {
+      params.set('q', payload.normalizedQuery || payload.query);
+    }
+    if (payload.city) params.set('city', payload.city);
+    if (payload.subCategory) params.set('sub_category', payload.subCategory);
+
+    if (payload.category) {
+      navigate(`/category/${payload.category}?${params.toString()}`);
+    } else {
+      navigate(`/search?${params.toString()}`);
+    }
+    onClose();
+  }, [navigate, onClose]);
 
   const processVoiceQuery = useCallback(async (query) => {
     setProcessing(true);
@@ -44,7 +63,7 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
       const response = await chatAPI.voiceSearch(query);
       const data = response?.data || {};
 
-      setResults({
+      const parsedResults = {
         query,
         normalizedQuery: data.normalized_query || query,
         category: data?.parsed?.category || null,
@@ -53,7 +72,17 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
         city: data?.parsed?.location || null,
         didYouMean: data.did_you_mean || '',
         totalResults: data.total || 0,
-      });
+      };
+
+      setResults(parsedResults);
+
+      // Auto-run search flow after voice parsing so users don't need an extra click.
+      if (autoNavigateTimerRef.current) {
+        clearTimeout(autoNavigateTimerRef.current);
+      }
+      autoNavigateTimerRef.current = setTimeout(() => {
+        navigateToSearch(parsedResults);
+      }, 250);
     } catch (error) {
       console.error('Voice processing failed:', error);
       const lowerQuery = query.toLowerCase();
@@ -66,18 +95,27 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
       }
       const detectedCity = cities.find(city => lowerQuery.includes(city.toLowerCase())) || null;
 
-      setResults({
+      const parsedResults = {
         query,
         normalizedQuery: query,
         category: detectedCategory,
         city: detectedCity,
         didYouMean: '',
         totalResults: 0,
-      });
+      };
+
+      setResults(parsedResults);
+
+      if (autoNavigateTimerRef.current) {
+        clearTimeout(autoNavigateTimerRef.current);
+      }
+      autoNavigateTimerRef.current = setTimeout(() => {
+        navigateToSearch(parsedResults);
+      }, 250);
     } finally {
       setProcessing(false);
     }
-  }, []);
+  }, [navigateToSearch]);
 
   const startListening = useCallback(() => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
@@ -141,6 +179,9 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
       startListening();
     }
     return () => {
+      if (autoNavigateTimerRef.current) {
+        clearTimeout(autoNavigateTimerRef.current);
+      }
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
@@ -156,20 +197,7 @@ export const VoiceSearchModal = ({ isOpen, onClose }) => {
 
   const handleSearch = () => {
     if (!results) return;
-
-    const params = new URLSearchParams();
-    if (results.normalizedQuery || results.query) {
-      params.set('q', results.normalizedQuery || results.query);
-    }
-    if (results.city) params.set('city', results.city);
-    if (results.subCategory) params.set('sub_category', results.subCategory);
-
-    if (results.category) {
-      navigate(`/category/${results.category}?${params.toString()}`);
-    } else {
-      navigate(`/search?${params.toString()}`);
-    }
-    onClose();
+    navigateToSearch(results);
   };
 
   const getCategoryIcon = (category) => {

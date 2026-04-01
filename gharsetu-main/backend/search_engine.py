@@ -212,6 +212,7 @@ async def smart_search_listings(
     normalized = normalize_search_query(query)
     expanded_terms = normalized["expanded_terms"]
     normalized_query = normalized["normalized_query"]
+    query_lower = query.lower()
 
     db_query: Dict[str, Any] = {
         "status": {"$in": ["approved", "boosted"]},
@@ -243,8 +244,6 @@ async def smart_search_listings(
 
     detected_sub_category = None
     detected_sub_category_pattern = None
-    query_lower = query.lower()
-
     # Handle patterns like "3 bhk", "2-bhk", "4bhk" reliably.
     bhk_match = re.search(r"\b([1-9])\s*[-_]?\s*bhk\b", query_lower)
     if bhk_match:
@@ -260,18 +259,41 @@ async def smart_search_listings(
             break
 
     # Area detection for location-level filtering (more specific than city).
-    area_keywords = [
-        "vesu", "adajan", "katargam", "varachha", "piplod", "pal",
-        "althan", "bhatar", "citylight", "athwalines", "sarthana",
-        "udhna", "limbayat", "palanpur", "sachin", "hazira",
-        "satellite", "sg highway", "bopal", "thaltej", "prahlad nagar",
-        "navrangpura", "vastrapur", "ellisbridge", "maninagar",
-        "alkapuri", "fatehgunj", "manjalpur", "gotri",
-    ]
+    area_aliases = {
+        "vesu": ["vesu"],
+        "adajan": ["adajan"],
+        "katargam": ["katargam"],
+        "varachha": ["varachha", "varacha", "nana varachha", "nana varacha", "mota varachha", "mota varacha"],
+        "piplod": ["piplod"],
+        "pal": ["pal"],
+        "althan": ["althan"],
+        "bhatar": ["bhatar"],
+        "citylight": ["citylight", "city light"],
+        "athwalines": ["athwalines", "athwa lines", "athwa"],
+        "sarthana": ["sarthana"],
+        "udhna": ["udhna"],
+        "limbayat": ["limbayat"],
+        "palanpur": ["palanpur"],
+        "sachin": ["sachin"],
+        "hazira": ["hazira"],
+        "satellite": ["satellite"],
+        "sg highway": ["sg highway", "s g highway", "sarkhej gandhinagar"],
+        "bopal": ["bopal"],
+        "thaltej": ["thaltej"],
+        "prahlad nagar": ["prahlad nagar", "prahladnagar"],
+        "navrangpura": ["navrangpura"],
+        "vastrapur": ["vastrapur"],
+        "ellisbridge": ["ellisbridge", "ellis bridge"],
+        "maninagar": ["maninagar"],
+        "alkapuri": ["alkapuri"],
+        "fatehgunj": ["fatehgunj", "fateh ganj"],
+        "manjalpur": ["manjalpur"],
+        "gotri": ["gotri"],
+    }
     detected_area = None
-    for area in area_keywords:
-        if area in query_lower:
-            detected_area = area
+    for canonical_area, aliases in area_aliases.items():
+        if any(alias in query_lower for alias in aliases):
+            detected_area = canonical_area
             break
 
     # Apply specific filters: sub_category first, then category.
@@ -287,7 +309,17 @@ async def smart_search_listings(
         db_query["category"] = effective_category
 
     if detected_area:
-        db_query["location"] = {"$regex": detected_area, "$options": "i"}
+        location_pattern_map = {
+            "varachha": r"varach+h?a|varacha|nana\s*varach+h?a|nana\s*varacha|mota\s*varach+h?a|mota\s*varacha",
+            "citylight": r"city\s*light|citylight",
+            "athwalines": r"athwa\s*lines?|athwalines",
+            "sg highway": r"sg\s*highway|s\s*g\s*highway|sarkhej\s*gandhinagar",
+            "prahlad nagar": r"prahlad\s*nagar|prahladnagar",
+            "ellisbridge": r"ellis\s*bridge|ellisbridge",
+            "fatehgunj": r"fateh\s*ganj|fatehgunj",
+        }
+        location_pattern = location_pattern_map.get(detected_area, re.escape(detected_area))
+        db_query["location"] = {"$regex": location_pattern, "$options": "i"}
 
     if expanded_terms:
         regex_pattern = "|".join(re.escape(t) for t in expanded_terms[:30])
@@ -310,6 +342,17 @@ async def smart_search_listings(
         "created_at": 1,
     }
     candidates = await db.listings.find(db_query, projection).limit(max_candidates).to_list(max_candidates)
+
+    # Fallback: if strict sub-category + area query becomes too narrow, relax progressively.
+    if not candidates and (detected_sub_category or detected_sub_category_pattern):
+        relaxed_query = dict(db_query)
+        relaxed_query.pop("sub_category", None)
+        candidates = await db.listings.find(relaxed_query, projection).limit(max_candidates).to_list(max_candidates)
+
+    if not candidates and detected_area:
+        relaxed_query = dict(db_query)
+        relaxed_query.pop("location", None)
+        candidates = await db.listings.find(relaxed_query, projection).limit(max_candidates).to_list(max_candidates)
 
     ranked: List[Tuple[float, Dict[str, Any]]] = []
     for listing in candidates:
