@@ -297,11 +297,13 @@ export const AdminDashboard = () => {
       <aside className="w-64 bg-stone-900 text-white flex flex-col fixed h-screen z-40">
         <div className="p-6 border-b border-stone-700">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
-              <Home className="w-5 h-5" />
-            </div>
+            <img
+              src="/GruvoraLogo.jpeg"
+              alt="Gruvora"
+              className="w-9 h-9 rounded-lg object-cover"
+            />
             <div>
-              <p className="font-bold text-sm">GharSetu</p>
+              <p className="font-bold text-sm">Gruvora</p>
               <p className="text-xs text-stone-400">Admin Panel</p>
             </div>
           </Link>

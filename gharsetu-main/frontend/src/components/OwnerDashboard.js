@@ -202,10 +202,12 @@ export const OwnerDashboard = () => {
       {/* Mobile Header */}
       <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <Home className="w-5 h-5 text-white" />
-          </div>
-          <span className="font-heading font-bold text-lg text-primary">GharSetu</span>
+          <img
+            src="/GruvoraLogo.jpeg"
+            alt="Gruvora"
+            className="w-8 h-8 rounded-lg object-cover"
+          />
+          <span className="font-heading font-bold text-lg text-primary">Gruvora</span>
         </div>
         <button onClick={() => setSidebarOpen(true)} className="p-2">
           <Menu className="w-6 h-6" />
@@ -217,10 +219,12 @@ export const OwnerDashboard = () => {
         <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="p-6">
             <Link to="/" className="flex items-center gap-2 mb-8">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                <Home className="w-6 h-6 text-white" />
-              </div>
-              <span className="font-heading font-bold text-xl text-primary">GharSetu</span>
+              <img
+                src="/GruvoraLogo.jpeg"
+                alt="Gruvora"
+                className="w-10 h-10 rounded-xl object-cover"
+              />
+              <span className="font-heading font-bold text-xl text-primary">Gruvora</span>
             </Link>
 
             <button

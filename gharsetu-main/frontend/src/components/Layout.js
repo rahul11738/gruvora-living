@@ -63,12 +63,12 @@ export const Header = () => {
         <div className="flex items-center justify-between h-14 md:h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2" data-testid="logo">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-              <Home className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-heading font-bold text-xl md:text-2xl text-primary">
-              GharSetu
-            </span>
+            <img
+              src="/GruvoraLogo.jpeg"
+              alt="Gruvora"
+              className="w-10 h-10 rounded-xl object-cover"
+            />
+            <span className="font-heading font-bold text-xl md:text-2xl text-primary">Gruvora</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -273,10 +273,12 @@ export const Footer = () => {
           {/* Brand */}
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-                <Home className="w-6 h-6 text-white" />
-              </div>
-              <span className="font-heading font-bold text-2xl">GharSetu</span>
+              <img
+                src="/GruvoraLogo.jpeg"
+                alt="Gruvora"
+                className="w-10 h-10 rounded-xl object-cover"
+              />
+              <span className="font-heading font-bold text-2xl">Gruvora</span>
             </div>
             <p className="text-stone-400 mb-4">
               Connecting you to your perfect space. Find homes, businesses, stays, event venues, and services all in one place.

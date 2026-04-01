@@ -87,10 +87,12 @@ export const LoginPage = () => {
       <div className="flex-1 flex items-center justify-center p-8 bg-stone-50">
         <div className="w-full max-w-md">
           <Link to="/" className="flex items-center gap-2 mb-8">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-              <Home className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-heading font-bold text-2xl text-primary">GharSetu</span>
+            <img
+              src="/GruvoraLogo.jpeg"
+              alt="Gruvora"
+              className="w-10 h-10 rounded-xl object-cover"
+            />
+            <span className="font-heading font-bold text-2xl text-primary">Gruvora</span>
           </Link>
 
           <h1 className="font-heading text-3xl font-bold text-stone-900 mb-2">Welcome Back</h1>
@@ -262,10 +264,12 @@ export const RegisterPage = () => {
       <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
         <div className="w-full max-w-lg">
           <Link to="/" className="flex items-center gap-2 mb-8">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
-              <Home className="w-6 h-6 text-white" />
-            </div>
-            <span className="font-heading font-bold text-2xl text-primary">GharSetu</span>
+            <img
+              src="/GruvoraLogo.jpeg"
+              alt="Gruvora"
+              className="w-10 h-10 rounded-xl object-cover"
+            />
+            <span className="font-heading font-bold text-2xl text-primary">Gruvora</span>
           </Link>
 
           <h1 className="font-heading text-3xl font-bold text-stone-900 mb-2">Create Account</h1>
