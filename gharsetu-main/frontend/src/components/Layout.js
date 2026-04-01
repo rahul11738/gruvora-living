@@ -278,7 +278,7 @@ export const Footer = () => {
                 alt="Gruvora"
                 className="w-10 h-10 rounded-xl object-cover"
               />
-              <span className="font-heading font-bold text-2xl">Gruvora</span>
+              <span className="font-heading font-bold text-2xl">GRUVORA LIVING</span>
             </div>
             <p className="text-stone-400 mb-4">
               Connecting you to your perfect space. Find homes, businesses, stays, event venues, and services all in one place.
@@ -332,7 +332,7 @@ export const Footer = () => {
                   onClick={() => markRouteNavigation('/reels', 'footer-reels-link')}
                   className="text-stone-400 hover:text-white transition-colors"
                 >
-                  GharSetu Reels
+                  GUVORA LIVING Reels
                 </Link>
               </li>
             </ul>
@@ -343,15 +343,15 @@ export const Footer = () => {
             <h3 className="font-heading font-semibold text-lg mb-4">Contact</h3>
             <ul className="space-y-2 text-stone-400">
               <li>Surat, Gujarat, India</li>
-              <li>info@gharsetu.com</li>
-              <li>+91 9876543210</li>
+              <li>gruvora@gmail.com</li>
+              <li>+91 9875231321</li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-stone-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-stone-400 text-sm">
-            © 2024 GharSetu. All rights reserved.
+             2026 GRUVORA LIVING. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <Link to="/privacy" className="text-stone-400 hover:text-white text-sm transition-colors">
