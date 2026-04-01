@@ -540,7 +540,7 @@ export const ListingDetailPage = () => {
                   <li>• Always visit the property before making any payment</li>
                   <li>• Verify owner documents and ownership proof</li>
                   <li>• Don't share OTPs or sensitive information</li>
-                  <li>• Report suspicious listings to GharSetu</li>
+                  <li>• Report suspicious listings to GRUVORA LIVING</li>
                 </ul>
               </CardContent>
             </Card>

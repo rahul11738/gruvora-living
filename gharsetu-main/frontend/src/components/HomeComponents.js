@@ -308,7 +308,7 @@ export const HeroSection = () => {
                   <Home className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">10K+</p>
+                  <p className="text-2xl font-bold">500+</p>
                   <p className="text-stone-400 text-sm">Properties</p>
                 </div>
               </motion.div>
@@ -321,7 +321,7 @@ export const HeroSection = () => {
                   <Users className="w-6 h-6" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold">5K+</p>
+                  <p className="text-2xl font-bold">1K+</p>
                   <p className="text-stone-400 text-sm">Verified Owners</p>
                 </div>
               </motion.div>
@@ -502,7 +502,7 @@ export const TrendingSection = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {displayListings.slice(0, 4).map((listing) => (
+          {listings.slice(0, 4).map((listing) => (
             <PropertyCard key={listing.id} listing={listing} />
           ))}
         </div>
@@ -824,7 +824,7 @@ export const ReelsPromoSection = () => {
               <span className="text-secondary font-medium text-sm">New Feature</span>
             </div>
             <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 mb-6">
-              GRUVORA LIVING Reels
+              Reels
             </h2>
             <p className="text-lg text-muted-foreground mb-4">
               Watch property videos like Instagram! Scroll through listings, like your favorites, and save for later.
@@ -968,7 +968,7 @@ export const TrustSection = () => {
                 </div>
                 <div>
                   <p className="font-bold text-2xl">4.8/5</p>
-                  <p className="text-sm text-muted-foreground">50K+ Reviews</p>
+                  <p className="text-sm text-muted-foreground">Good Reviews</p>
                 </div>
               </div>
             </div>
