@@ -53,7 +53,7 @@ import {
 const categoryIcons = {
   home: Home,
   business: Building2,
-  stay: Hotel,
+  Hotel: Hotel,
   event: PartyPopper,
   services: Wrench,
 };
@@ -61,7 +61,7 @@ const categoryIcons = {
 const categoryColors = {
   home: 'from-emerald-500 to-emerald-600',
   business: 'from-blue-500 to-blue-600',
-  stay: 'from-purple-500 to-purple-600',
+  Hotel: 'from-purple-500 to-purple-600',
   event: 'from-pink-500 to-pink-600',
   services: 'from-orange-500 to-orange-600',
 };
@@ -69,7 +69,7 @@ const categoryColors = {
 const categoryBgColors = {
   home: 'bg-emerald-500',
   business: 'bg-blue-500',
-  stay: 'bg-purple-500',
+  Hotel: 'bg-purple-500',
   event: 'bg-pink-500',
   services: 'bg-orange-500',
 };
@@ -462,67 +462,6 @@ export const TrendingSection = () => {
     fetchTrending();
   }, [fetchTrending]);
 
-  const sampleListings = [
-    {
-      id: '1',
-      title: '3 BHK Luxury Apartment',
-      category: 'home',
-      sub_category: '3bhk',
-      price: 45000,
-      listing_type: 'rent',
-      location: 'Vesu, Surat',
-      city: 'Surat',
-      images: ['https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400'],
-      views: 1250,
-      likes: 89,
-      owner_verified: true,
-    },
-    {
-      id: '2',
-      title: 'Premium Office Space',
-      category: 'business',
-      sub_category: 'office',
-      price: 35000,
-      listing_type: 'rent',
-      location: 'Dumas Road',
-      city: 'Surat',
-      images: ['https://images.unsplash.com/photo-1497366216548-37526070297c?w=400'],
-      views: 980,
-      likes: 65,
-      owner_verified: true,
-    },
-    {
-      id: '3',
-      title: 'Grand Banquet Hall',
-      category: 'event',
-      sub_category: 'banquethall',
-      price: 150000,
-      listing_type: 'rent',
-      location: 'Adajan',
-      city: 'Surat',
-      images: ['https://images.unsplash.com/photo-1519167758481-83f550bb49b3?w=400'],
-      views: 2100,
-      likes: 156,
-      owner_verified: true,
-    },
-    {
-      id: '4',
-      title: 'Boutique Hotel',
-      category: 'stay',
-      sub_category: 'hotel',
-      price: 2500,
-      listing_type: 'rent',
-      location: 'Athwa',
-      city: 'Surat',
-      images: ['https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400'],
-      views: 750,
-      likes: 42,
-      owner_verified: false,
-    },
-  ];
-
-  const displayListings = listings.length > 0 ? listings : sampleListings;
-
   const categoryTabs = [
     { id: null, label: 'All' },
     { id: 'home', label: 'Home' },
@@ -840,7 +779,7 @@ export const FeaturesSection = () => {
             Platform Features
           </span>
           <h2 className="font-heading text-3xl md:text-4xl font-bold text-stone-900 mt-3">
-            Why Choose GharSetu?
+            Why Choose GRUVORA LIVING?
           </h2>
         </div>
 
@@ -885,7 +824,7 @@ export const ReelsPromoSection = () => {
               <span className="text-secondary font-medium text-sm">New Feature</span>
             </div>
             <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 mb-6">
-              GharSetu Reels
+              GRUVORA LIVING Reels
             </h2>
             <p className="text-lg text-muted-foreground mb-4">
               Watch property videos like Instagram! Scroll through listings, like your favorites, and save for later.
@@ -973,7 +912,7 @@ export const TrustSection = () => {
               100% Verified & Trusted
             </h2>
             <p className="text-emerald-100 text-lg mb-8">
-              Every property owner on GharSetu is verified with Aadhar card and mobile number, ensuring you connect with genuine listings only.
+              Every property owner on GRUVORA LIVING is verified with Aadhar card and mobile number, ensuring you connect with genuine listings only.
             </p>
 
             <div className="grid grid-cols-2 gap-6">
