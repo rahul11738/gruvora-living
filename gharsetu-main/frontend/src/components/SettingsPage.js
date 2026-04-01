@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { authAPI, listingsAPI } from '../lib/api';
+import api, { authAPI, listingsAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Header } from './Layout';
 import { Button } from './ui/button';
@@ -33,11 +33,16 @@ const tabs = [
 ];
 
 export const SettingsPage = () => {
-  const { user, refreshUser, isOwner } = useAuth();
+  const { user, updateProfile, isOwner } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
   const [saving, setSaving] = useState(false);
   const [loadingListings, setLoadingListings] = useState(false);
   const [ownedListings, setOwnedListings] = useState([]);
+  const [selectedProfileImageFile, setSelectedProfileImageFile] = useState(null);
+  const [selectedProfileImagePreview, setSelectedProfileImagePreview] = useState('');
+  const [uploadingProfileImage, setUploadingProfileImage] = useState(false);
+  const profileImageInputRef = useRef(null);
+  const isUpdatingProfileImageRef = useRef(false);
 
   const [profileForm, setProfileForm] = useState({
     name: '',
@@ -65,11 +70,12 @@ export const SettingsPage = () => {
   });
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || isUpdatingProfileImageRef.current) return;
+    const cachedProfileImage = localStorage.getItem('gharsetu_profile_image') || '';
     setProfileForm({
       name: user.name || '',
       phone: user.phone || '',
-      profile_image: user.profile_image || '',
+      profile_image: user.profile_image || cachedProfileImage,
     });
     setAccountForm({
       email: user.email || '',
@@ -83,6 +89,102 @@ export const SettingsPage = () => {
       auto_reply_message: user.auto_reply_message || '',
     });
   }, [user]);
+
+  useEffect(() => () => {
+    if (selectedProfileImagePreview) {
+      URL.revokeObjectURL(selectedProfileImagePreview);
+    }
+  }, [selectedProfileImagePreview]);
+
+  const uploadProfileImageToCloudinary = useCallback(async (file) => {
+    const signedResponse = await api.post('/upload/signature', {
+      folder: 'profile',
+      resource_type: 'image',
+    });
+
+    const signed = signedResponse.data;
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('api_key', signed.api_key);
+    formData.append('timestamp', String(signed.timestamp));
+    formData.append('signature', signed.signature);
+    formData.append('folder', signed.folder);
+
+    const endpoint = `https://api.cloudinary.com/v1_1/${signed.cloud_name}/${signed.resource_type}/upload`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.error?.message || 'Profile image upload failed');
+    }
+
+    const uploaded = await response.json();
+    return uploaded.secure_url;
+  }, []);
+
+  const handleProfileImageFileChange = useCallback((event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select a valid image file');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image size must be 10MB or less');
+      event.target.value = '';
+      return;
+    }
+
+    if (selectedProfileImagePreview) {
+      URL.revokeObjectURL(selectedProfileImagePreview);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedProfileImageFile(file);
+    setSelectedProfileImagePreview(previewUrl);
+  }, [selectedProfileImagePreview]);
+
+  const handleProfileImageUpload = useCallback(async () => {
+    if (!selectedProfileImageFile) {
+      toast.error('Select an image first');
+      return;
+    }
+
+    setUploadingProfileImage(true);
+    isUpdatingProfileImageRef.current = true;
+    try {
+      const uploadedUrl = await uploadProfileImageToCloudinary(selectedProfileImageFile);
+      const imageUrl = `${uploadedUrl}${uploadedUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
+
+      setProfileForm((prev) => ({ ...prev, profile_image: imageUrl }));
+      localStorage.setItem('gharsetu_profile_image', imageUrl);
+
+      await updateProfile({ profile_image: imageUrl });
+      toast.success('Profile image updated');
+
+      if (selectedProfileImagePreview) {
+        URL.revokeObjectURL(selectedProfileImagePreview);
+      }
+      setSelectedProfileImageFile(null);
+      setSelectedProfileImagePreview('');
+      if (profileImageInputRef.current) {
+        profileImageInputRef.current.value = '';
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.detail || error?.message || 'Failed to update profile image');
+    } finally {
+      setUploadingProfileImage(false);
+      setTimeout(() => {
+        isUpdatingProfileImageRef.current = false;
+      }, 1000);
+    }
+  }, [selectedProfileImageFile, selectedProfileImagePreview, updateProfile, uploadProfileImageToCloudinary]);
 
   const loadOwnerListings = useCallback(async () => {
     if (!isOwner || !user?.id) return;
@@ -106,43 +208,40 @@ export const SettingsPage = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      await authAPI.updateProfile(profileForm);
-      await refreshUser();
+      await updateProfile(profileForm);
       toast.success('Profile updated successfully');
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
-  }, [profileForm, refreshUser]);
+  }, [profileForm, updateProfile]);
 
   const handleAccountSave = useCallback(async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await authAPI.updateProfile(accountForm);
-      await refreshUser();
+      await updateProfile(accountForm);
       toast.success('Account settings updated');
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to update account settings');
     } finally {
       setSaving(false);
     }
-  }, [accountForm, refreshUser]);
+  }, [accountForm, updateProfile]);
 
   const handleNotificationSave = useCallback(async (e) => {
     e.preventDefault();
     setSaving(true);
     try {
-      await authAPI.updateProfile(notificationForm);
-      await refreshUser();
+      await updateProfile(notificationForm);
       toast.success('Notification preferences saved');
     } catch (error) {
       toast.error(error?.response?.data?.detail || 'Failed to save notification preferences');
     } finally {
       setSaving(false);
     }
-  }, [notificationForm, refreshUser]);
+  }, [notificationForm, updateProfile]);
 
   const handlePasswordSave = useCallback(async (e) => {
     e.preventDefault();
@@ -233,22 +332,49 @@ export const SettingsPage = () => {
                     </div>
 
                     <div>
-                      <label className="text-sm font-medium mb-1 block">Profile Image URL</label>
-                      <Input
-                        value={profileForm.profile_image}
-                        onChange={(e) => setProfileForm((prev) => ({ ...prev, profile_image: e.target.value }))}
-                        placeholder="https://..."
-                      />
-                      {profileForm.profile_image ? (
-                        <img
-                          src={profileForm.profile_image}
-                          alt="Profile preview"
-                          className="w-24 h-24 rounded-full object-cover mt-3 border"
-                          onError={(event) => {
-                            event.currentTarget.style.display = 'none';
-                          }}
+                      <label className="text-sm font-medium mb-1 block">Profile Image</label>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <input
+                          ref={profileImageInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleProfileImageFileChange}
                         />
-                      ) : null}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => profileImageInputRef.current?.click()}
+                          className="gap-2"
+                        >
+                          <Image className="w-4 h-4" />
+                          Select Photo
+                        </Button>
+
+                        <Button
+                          type="button"
+                          onClick={handleProfileImageUpload}
+                          disabled={!selectedProfileImageFile || uploadingProfileImage}
+                          className="gap-2"
+                        >
+                          <Save className="w-4 h-4" />
+                          {uploadingProfileImage ? 'Updating Image...' : 'Update Image'}
+                        </Button>
+                      </div>
+
+                      <div className="mt-3">
+                        {(selectedProfileImagePreview || profileForm.profile_image) ? (
+                          <img
+                            src={selectedProfileImagePreview || profileForm.profile_image}
+                            alt="Profile preview"
+                            className="w-24 h-24 rounded-full object-cover border"
+                          />
+                        ) : (
+                          <div className="w-24 h-24 rounded-full border border-dashed border-stone-300 flex items-center justify-center text-stone-400 text-xs">
+                            No image
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <Button type="submit" disabled={saving} className="gap-2">

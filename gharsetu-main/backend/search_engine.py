@@ -242,10 +242,21 @@ async def smart_search_listings(
     }
 
     detected_sub_category = None
+    detected_sub_category_pattern = None
     query_lower = query.lower()
+
+    # Handle patterns like "3 bhk", "2-bhk", "4bhk" reliably.
+    bhk_match = re.search(r"\b([1-9])\s*[-_]?\s*bhk\b", query_lower)
+    if bhk_match:
+        bhk_digit = bhk_match.group(1)
+        detected_sub_category = f"{bhk_digit}bhk"
+        detected_sub_category_pattern = rf"{bhk_digit}\s*[-_]?\s*bhk"
+
     for phrase, sub_cat in sub_category_map.items():
         if phrase in query_lower:
             detected_sub_category = sub_cat
+            if sub_cat in {"1bhk", "2bhk", "3bhk", "4bhk"}:
+                detected_sub_category_pattern = rf"{sub_cat[0]}\s*[-_]?\s*bhk"
             break
 
     # Area detection for location-level filtering (more specific than city).
@@ -264,8 +275,12 @@ async def smart_search_listings(
             break
 
     # Apply specific filters: sub_category first, then category.
-    if detected_sub_category:
-        db_query["sub_category"] = {"$regex": detected_sub_category, "$options": "i"}
+    if detected_sub_category_pattern:
+        db_query["sub_category"] = {"$regex": detected_sub_category_pattern, "$options": "i"}
+        if effective_category:
+            db_query["category"] = effective_category
+    elif detected_sub_category:
+        db_query["sub_category"] = {"$regex": re.escape(detected_sub_category), "$options": "i"}
         if effective_category:
             db_query["category"] = effective_category
     elif effective_category:

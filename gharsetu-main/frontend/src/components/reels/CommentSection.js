@@ -8,8 +8,19 @@ const CommentSection = React.memo(({ comments }) => {
 
   return comments.map((comment) => (
     <div key={comment.id} className="flex gap-3">
-      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-        <User className="w-4 h-4 text-gray-500" />
+      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
+        {comment.user_profile_image ? (
+          <img
+            src={comment.user_profile_image}
+            alt={comment.user_name || 'User avatar'}
+            className="w-full h-full object-cover"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        ) : (
+          <User className="w-4 h-4 text-gray-500" />
+        )}
       </div>
       <div className="flex-1">
         <p className="text-sm">

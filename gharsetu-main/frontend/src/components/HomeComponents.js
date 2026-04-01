@@ -163,11 +163,12 @@ export const HeroSection = () => {
       </div>
 
       <div className="container-main relative z-10 py-16 pt-16 md:pt-20">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-24 items-center">
+        <div className="grid grid-cols-1 gap-10 items-center justify-items-center">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
+            className="w-full max-w-5xl text-center flex flex-col items-center"
           >
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -200,7 +201,7 @@ export const HeroSection = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
-              className="text-lg md:text-xl text-stone-300 mb-6 leading-relaxed max-w-xl"
+              className="text-lg md:text-xl text-stone-300 mb-6 leading-relaxed max-w-3xl mx-auto"
             >
               Discover homes, business spaces, hotels, event venues, and professional services - all in one place.
             </motion.p>
@@ -218,68 +219,77 @@ export const HeroSection = () => {
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7 }}
-              onSubmit={handleSearch} 
-              className="search-container bg-white rounded-2xl p-3 md:p-4 shadow-2xl max-w-5xl"
+              onSubmit={handleSearch}
+              className="search-container w-full bg-white rounded-2xl p-4 md:p-5 lg:p-6 shadow-2xl max-w-5xl border-2 border-secondary/20 hover:border-secondary/40 transition-colors mx-auto"
             >
-              <div className="flex flex-col md:flex-row md:items-center gap-3">
-                <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1 xl:pb-0">
-                {[
-                  { id: 'home', label: 'Home', labelGu: 'ઘર', icon: Home },
-                  { id: 'business', label: 'Business', labelGu: 'બિઝનેસ', icon: Building2 },
-                  { id: 'stay', label: 'Stay', labelGu: 'રહેવાનું', icon: Hotel },
-                  { id: 'event', label: 'Event', labelGu: 'ઇવેન્ટ', icon: PartyPopper },
-                  { id: 'services', label: 'Services', labelGu: 'સેવાઓ', icon: Wrench },
-                ].map((cat) => {
-                  const Icon = cat.icon;
-                  return (
-                    <button
-                      key={cat.id}
-                      type="button"
-                      onClick={() => setCategory(cat.id)}
-                      className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                        category === cat.id
-                          ? 'bg-primary text-white shadow-md shadow-primary/30'
-                          : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                      }`}
+              <div className="flex flex-col gap-4">
+                {/* Category Pills Row */}
+                <div className="w-full overflow-x-auto hide-scrollbar pb-1">
+                  <div className="flex w-max mx-auto items-center gap-2 px-1">
+                    {[
+                    { id: 'home', label: 'Home', labelGu: 'ઘર', icon: Home },
+                    { id: 'business', label: 'Business', labelGu: 'બિઝનેસ', icon: Building2 },
+                    { id: 'stay', label: 'Stay', labelGu: 'રહેવાનું', icon: Hotel },
+                    { id: 'event', label: 'Event', labelGu: 'ઇવેન્ટ', icon: PartyPopper },
+                    { id: 'services', label: 'Services', labelGu: 'સેવાઓ', icon: Wrench },
+                    ].map((cat) => {
+                      const Icon = cat.icon;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => setCategory(cat.id)}
+                          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
+                            category === cat.id
+                              ? 'bg-primary text-white shadow-md shadow-primary/30'
+                              : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                          <span className="hidden md:inline">{cat.label}</span>
+                          <span className="md:hidden">{cat.labelGu}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Search Inputs Row - Balanced Layout */}
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="flex-1 relative">
+                    <Input
+                      type="text"
+                      placeholder="Search properties, office spaces..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-4 pr-14 md:pr-16 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base focus:bg-stone-100 focus:outline-none transition-colors"
+                      data-testid="hero-search-input"
+                    />
+                    <VoiceSearchButton className="absolute top-1/2 -translate-y-1/2 right-3 md:right-4" />
+                  </div>
+
+                  {/* Location Dropdown */}
+                  <div className="w-full md:w-[210px] md:flex-shrink-0 relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none z-10" />
+                    <select
+                      value={location}
+                      onChange={(e) => setLocation(e.target.value)}
+                      className="w-full pl-10 pr-8 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base text-stone-700 focus:bg-stone-100 focus:outline-none transition-colors"
+                      data-testid="hero-location-input"
                     >
-                      <Icon className="w-4 h-4" />
-                      <span className="hidden md:inline">{cat.label}</span>
-                      <span className="md:hidden">{cat.labelGu}</span>
-                    </button>
-                  );
-                })}
-                </div>
+                      <option value="">All Cities</option>
+                      {gujaratCities.map((city) => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="search-input-wrap flex-1 min-w-[240px] relative">
-                  <Input
-                    type="text"
-                    placeholder="Search properties, office spaces, hotels..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-11 md:pl-12 pr-4 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base"
-                    data-testid="hero-search-input"
-                  />
-                  <VoiceSearchButton className="voice-btn absolute top-1/2 -translate-y-1/2" />
+                  <Button type="submit" className="btn-primary h-12 md:h-14 px-4 md:px-8 text-sm md:text-base w-full md:w-auto md:flex-shrink-0" data-testid="hero-search-btn">
+                    <Search className="w-4 md:w-5 h-4 md:h-5 mr-2" />
+                    <span className="hidden sm:inline">Search</span>
+                    <span className="sm:hidden">Go</span>
+                  </Button>
                 </div>
-
-                <div className="w-full xl:w-[210px] relative">
-                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none" />
-                  <select
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                    className="w-full pl-10 pr-8 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base text-stone-700"
-                    data-testid="hero-location-input"
-                  >
-                    <option value="">All Cities</option>
-                    {gujaratCities.map((city) => (
-                      <option key={city} value={city}>{city}</option>
-                    ))}
-                  </select>
-                </div>
-                <Button type="submit" className="btn-primary h-12 md:h-14 px-6 md:px-8 text-sm md:text-base" data-testid="hero-search-btn">
-                  <Search className="w-4 md:w-5 h-4 md:h-5 mr-2" />
-                  Search
-                </Button>
               </div>
             </motion.form>
 
@@ -288,7 +298,7 @@ export const HeroSection = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.9 }}
-              className="flex flex-wrap items-center gap-6 mt-10 text-white"
+              className="flex flex-wrap items-center justify-center gap-6 mt-10 text-white"
             >
               <motion.div 
                 whileHover={{ scale: 1.05 }}
@@ -331,62 +341,6 @@ export const HeroSection = () => {
             </motion.div>
           </motion.div>
 
-          {/* Hero Cards */}
-          <div className="hidden lg:block relative h-[480px]">
-            <motion.div 
-              initial={{ opacity: 0, x: 50, rotate: 6 }}
-              animate={{ opacity: 1, x: 0, rotate: 3 }}
-              transition={{ delay: 0.5, duration: 0.6 }}
-              whileHover={{ rotate: 0, scale: 1.02 }}
-              className="absolute top-0 right-0 w-80 bg-white rounded-2xl shadow-2xl p-6 cursor-pointer"
-            >
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-16 h-16 rounded-xl overflow-hidden">
-                  <img src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200" alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
-                </div>
-                <div>
-                  <h4 className="font-semibold">3 BHK Luxury Flat</h4>
-                  <p className="text-sm text-muted-foreground">Vesu, Surat</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <p className="font-bold text-xl text-primary">₹45,000/mo</p>
-                <Badge className="bg-green-100 text-green-700">Available</Badge>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, x: -30, rotate: -6 }}
-              animate={{ opacity: 1, x: 0, rotate: -3 }}
-              transition={{ delay: 0.7, duration: 0.6 }}
-              whileHover={{ rotate: 0, scale: 1.02 }}
-              className="absolute top-44 left-0 w-72 bg-white rounded-2xl shadow-2xl p-4 cursor-pointer"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-secondary/10 rounded-xl flex items-center justify-center">
-                  <Play className="w-6 h-6 text-secondary" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-sm">GharSetu Reels</h4>
-                  <p className="text-xs text-muted-foreground">Watch property videos</p>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div 
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.9, duration: 0.6 }}
-              whileHover={{ scale: 1.05 }}
-              className="absolute bottom-0 right-4 w-64 bg-primary rounded-2xl shadow-2xl p-4 text-white cursor-pointer"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <Shield className="w-8 h-8" />
-                <span className="font-semibold">Verified Owners</span>
-              </div>
-              <p className="text-sm text-emerald-100">100% Aadhar verified property owners</p>
-            </motion.div>
-          </div>
         </div>
       </div>
     </section>

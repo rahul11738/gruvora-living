@@ -160,8 +160,19 @@ export const OwnerProfilePage = () => {
             >
               <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gradient-to-tr from-pink-500 via-purple-500 to-orange-500 p-1">
                 <div className="w-full h-full rounded-full bg-white p-1">
-                  <div className="w-full h-full rounded-full bg-primary flex items-center justify-center">
-                    <User className="w-16 h-16 md:w-20 md:h-20 text-white" />
+                  <div className="w-full h-full rounded-full bg-primary overflow-hidden flex items-center justify-center">
+                    {owner.profile_image ? (
+                      <img
+                        src={owner.profile_image}
+                        alt={owner.name || 'Owner avatar'}
+                        className="w-full h-full object-cover"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <User className="w-16 h-16 md:w-20 md:h-20 text-white" />
+                    )}
                   </div>
                 </div>
               </div>

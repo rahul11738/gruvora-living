@@ -18,7 +18,7 @@ import csv
 import io
 from enum import Enum
 import asyncio
-from collections import defaultdict
+from collections import defaultdict, Counter
 import hashlib
 import socketio
 from pymongo import ReturnDocument
@@ -225,6 +225,16 @@ class ReviewCreate(BaseModel):
 class ChatMessage(BaseModel):
     message: str
 
+class RecommendationInteractionEvent(BaseModel):
+    listing_id: Optional[str] = None
+    action: str = Field(..., min_length=2, max_length=48)
+    source: Optional[str] = Field(default=None, max_length=64)
+    query: Optional[str] = Field(default=None, max_length=200)
+    city: Optional[str] = Field(default=None, max_length=80)
+    category: Optional[str] = Field(default=None, max_length=32)
+    price: Optional[float] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
 class UploadSignatureRequest(BaseModel):
     folder: str = "listings"
     resource_type: str = "auto"
@@ -242,6 +252,17 @@ DELETE_JOB_MAX_ATTEMPTS = 5
 DELETE_RETRY_DELAYS_SECONDS = [30, 120, 600, 1800, 3600]
 ADMIN_STATS_CACHE_KEY = "admin:stats:v2"
 ADMIN_STATS_CACHE_TTL_SECONDS = int(os.environ.get("ADMIN_STATS_CACHE_TTL_SECONDS", "60"))
+RECOMMENDATIONS_CACHE_TTL_SECONDS = int(os.environ.get("RECOMMENDATIONS_CACHE_TTL_SECONDS", "120"))
+RECOMMENDATION_ALLOWED_ACTIONS = {
+    "view",
+    "search",
+    "map_marker_click",
+    "map_card_click",
+    "detail_view",
+    "wishlist_add",
+    "wishlist_remove",
+    "contact_reveal",
+}
 
 OWNER_UPLOAD_ROLES = {
     UserRole.PROPERTY_OWNER,
@@ -1146,6 +1167,9 @@ async def get_listing(listing_id: str):
     listing = await db.listings.find_one({"id": listing_id}, {"_id": 0})
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
+
+    owner = await db.users.find_one({"id": listing.get("owner_id")}, {"_id": 0, "profile_image": 1})
+    listing["owner_profile_image"] = (owner or {}).get("profile_image", "")
     
     await db.listings.update_one({"id": listing_id}, {"$inc": {"views": 1}})
     listing["views"] = listing.get("views", 0) + 1
@@ -2731,6 +2755,19 @@ async def get_video_comments(video_id: str, page: int = 1, limit: int = 50):
         {"video_id": video_id}, 
         {"_id": 0}
     ).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+
+    user_ids = list({comment.get("user_id") for comment in comments if comment.get("user_id")})
+    user_map: Dict[str, Dict[str, Any]] = {}
+    if user_ids:
+      users = await db.users.find(
+          {"id": {"$in": user_ids}},
+          {"_id": 0, "id": 1, "profile_image": 1},
+      ).to_list(len(user_ids))
+      user_map = {item.get("id"): item for item in users if item.get("id")}
+
+    for comment in comments:
+      if not comment.get("user_profile_image"):
+          comment["user_profile_image"] = (user_map.get(comment.get("user_id")) or {}).get("profile_image", "")
     
     return {"comments": comments, "page": page}
 
@@ -2749,6 +2786,7 @@ async def add_video_comment(
         "video_id": video_id,
         "user_id": user["id"],
         "user_name": user["name"],
+        "user_profile_image": user.get("profile_image", ""),
         "comment": comment_data.comment,
         "likes": 0,
         "created_at": datetime.now(timezone.utc).isoformat()
@@ -3427,16 +3465,47 @@ async def voice_search(query: str, user: dict = Depends(get_current_user)):
         limit=10,
     )
 
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     await db.users.update_one(
         {"id": user["id"]},
         {
             "$push": {
                 "search_history": {
-                    "$each": [{"query": query, "date": datetime.now(timezone.utc).isoformat()}],
+                    "$each": [{"query": query, "date": now_iso}],
                     "$slice": -50,
                 }
             }
         },
+    )
+
+    await db.search_history.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "query": query,
+            "normalized_query": results.get("normalized_query", normalized.get("normalized_query", query.lower().strip())),
+            "language": results.get("detected_language", normalized.get("detected_language", "en")),
+            "city": detected_city,
+            "category": results.get("detected_category"),
+            "source": "voice",
+            "created_at": now_iso,
+        }
+    )
+
+    await db.interactions.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "listing_id": None,
+            "action": "search",
+            "source": "voice",
+            "query": query,
+            "city": detected_city,
+            "category": results.get("detected_category"),
+            "price": None,
+            "created_at": now_iso,
+        }
     )
 
     return {
@@ -4692,10 +4761,34 @@ async def get_categories():
 # ============ SEARCH HISTORY ============
 @api_router.post("/search/history")
 async def add_search_history(query: str, user: dict = Depends(get_current_user)):
+    normalized = normalize_search_query(query)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
     await db.users.update_one(
         {"id": user["id"]},
-        {"$push": {"search_history": {"$each": [{"query": query, "date": datetime.now(timezone.utc).isoformat()}], "$slice": -50}}}
+        {"$push": {"search_history": {"$each": [{"query": query, "date": now_iso}], "$slice": -50}}}
     )
+
+    await db.search_history.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "query": query,
+            "normalized_query": normalized.get("normalized_query", (query or "").strip().lower()),
+            "language": normalized.get("detected_language", "en"),
+            "city": next(
+                (
+                    token
+                    for token in normalized.get("normalized_tokens", [])
+                    if token in {"surat", "ahmedabad", "vadodara", "rajkot", "gandhinagar"}
+                ),
+                None,
+            ),
+            "category": normalized.get("detected_category"),
+            "created_at": now_iso,
+        }
+    )
+
     return {"message": "Search recorded"}
 
 @api_router.get("/search/history")
@@ -4973,114 +5066,279 @@ async def mark_all_notifications_read(
     return {'success': True, 'count': result.modified_count}
 
 # ============ AI PROPERTY RECOMMENDATION ============
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY')
+def _recommendation_cache_key(user_id: str, limit: int) -> str:
+    return f"recommendations:v3:{user_id}:{limit}"
+
+
+async def _get_cached_recommendations_payload(cache_key: str) -> Optional[Dict[str, Any]]:
+    if not redis_client:
+        return None
+    try:
+        cached = await redis_client.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        return None
+    return None
+
+
+async def _set_cached_recommendations_payload(cache_key: str, payload: Dict[str, Any]) -> None:
+    if not redis_client:
+        return
+    try:
+        await redis_client.set(cache_key, json.dumps(payload), ex=RECOMMENDATIONS_CACHE_TTL_SECONDS)
+    except Exception:
+        return
+
+
+async def _clear_user_recommendation_cache(user_id: str) -> None:
+    if not redis_client:
+        return
+    try:
+        keys = await redis_client.keys(f"recommendations:v3:{user_id}:*")
+        if keys:
+            await redis_client.delete(*keys)
+    except Exception:
+        return
+
+
+def _normalize_city_name(city: Optional[str]) -> str:
+    return str(city or "").strip().lower()
+
+
+def _compute_preferred_price_window(prices: List[float]) -> Optional[Dict[str, float]]:
+    cleaned = [float(p) for p in prices if isinstance(p, (int, float)) and float(p) > 0]
+    if not cleaned:
+        return None
+    cleaned.sort()
+    median = cleaned[len(cleaned) // 2]
+    return {
+        "min": max(median * 0.65, 0),
+        "max": median * 1.45,
+        "median": median,
+    }
+
+
+async def _build_recommendation_payload(user_id: str, limit: int) -> Dict[str, Any]:
+    search_history = await db.search_history.find(
+        {"user_id": user_id},
+        {"_id": 0, "query": 1, "category": 1, "city": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(60).to_list(60)
+
+    interactions = await db.interactions.find(
+        {"user_id": user_id},
+        {"_id": 0, "listing_id": 1, "action": 1, "city": 1, "category": 1, "price": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(300).to_list(300)
+
+    wishlist_docs = await db.wishlists.find(
+        {"user_id": user_id},
+        {"_id": 0, "listing_id": 1},
+    ).to_list(500)
+    wishlist_ids = {doc.get("listing_id") for doc in wishlist_docs if doc.get("listing_id")}
+
+    action_weights = {
+        "view": 1.0,
+        "search": 1.5,
+        "map_marker_click": 1.7,
+        "map_card_click": 2.1,
+        "detail_view": 2.6,
+        "wishlist_add": 3.0,
+        "contact_reveal": 3.2,
+    }
+
+    category_counter: Counter = Counter()
+    city_counter: Counter = Counter()
+    viewed_listing_ids: Counter = Counter()
+    observed_prices: List[float] = []
+
+    for row in interactions:
+        weight = action_weights.get(str(row.get("action") or "").strip(), 0.75)
+        listing_id = row.get("listing_id")
+        if listing_id:
+            viewed_listing_ids[listing_id] += weight
+        category = str(row.get("category") or "").strip().lower()
+        city = _normalize_city_name(row.get("city"))
+        if category:
+            category_counter[category] += weight
+        if city:
+            city_counter[city] += weight
+        price = row.get("price")
+        if isinstance(price, (int, float)) and float(price) > 0:
+            observed_prices.append(float(price))
+
+    for row in search_history:
+        category = str(row.get("category") or "").strip().lower()
+        city = _normalize_city_name(row.get("city"))
+        if category:
+            category_counter[category] += 1.15
+        if city:
+            city_counter[city] += 1.1
+
+    preferred_categories = [entry[0] for entry in category_counter.most_common(4)]
+    preferred_cities = [entry[0] for entry in city_counter.most_common(4)]
+    preferred_price_window = _compute_preferred_price_window(observed_prices)
+
+    listing_query: Dict[str, Any] = {
+        "status": {"$in": [ListingStatus.APPROVED.value, ListingStatus.BOOSTED.value]},
+        "is_available": True,
+    }
+    if preferred_categories:
+        listing_query["category"] = {"$in": preferred_categories}
+
+    candidates = await db.listings.find(
+        listing_query,
+        {
+            "_id": 0,
+            "id": 1,
+            "title": 1,
+            "category": 1,
+            "city": 1,
+            "location": 1,
+            "price": 1,
+            "views": 1,
+            "likes": 1,
+            "listing_type": 1,
+            "images": 1,
+            "latitude": 1,
+            "longitude": 1,
+            "created_at": 1,
+        },
+    ).limit(400).to_list(400)
+
+    scored = []
+    for listing in candidates:
+        listing_id = listing.get("id")
+        if not listing_id or listing_id in wishlist_ids:
+            continue
+
+        score = 0.0
+        category = str(listing.get("category") or "").strip().lower()
+        city = _normalize_city_name(listing.get("city"))
+        price = float(listing.get("price") or 0)
+
+        score += min(float(listing.get("views") or 0) / 3000.0, 2.5)
+        score += min(float(listing.get("likes") or 0) / 700.0, 2.0)
+
+        if category and category_counter.get(category):
+            score += min(category_counter[category], 8.0)
+        if city and city_counter.get(city):
+            score += min(city_counter[city], 8.0)
+
+        if preferred_price_window and price > 0:
+            if preferred_price_window["min"] <= price <= preferred_price_window["max"]:
+                score += 2.2
+            elif abs(price - preferred_price_window["median"]) / preferred_price_window["median"] < 0.25:
+                score += 1.2
+
+        if viewed_listing_ids.get(listing_id):
+            score -= min(viewed_listing_ids[listing_id] * 0.5, 2.0)
+
+        listing["_recommendation_score"] = round(score, 3)
+        scored.append((score, listing))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    recommendations = [item[1] for item in scored[: max(limit, 1)]]
+
+    category_reason = preferred_categories[:2]
+    city_reason = preferred_cities[:2]
+    reason_parts = []
+    if category_reason:
+        reason_parts.append(f"categories: {', '.join(category_reason)}")
+    if city_reason:
+        reason_parts.append(f"cities: {', '.join(city_reason)}")
+    if preferred_price_window:
+        reason_parts.append("price affinity")
+
+    explanation = "Recommendations tuned from your recent behavior"
+    if reason_parts:
+        explanation = f"Recommendations tuned from {', '.join(reason_parts)}"
+
+    return {
+        "recommendations": recommendations,
+        "ai_explanation": explanation,
+        "context": {
+            "categories": preferred_categories,
+            "cities": preferred_cities,
+            "price_window": preferred_price_window,
+            "interaction_samples": len(interactions),
+            "search_samples": len(search_history),
+        },
+        "total": len(recommendations),
+    }
+
+
+@api_router.post("/recommendations/track")
+async def track_recommendation_interaction(
+    event: RecommendationInteractionEvent,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    user = await get_current_user(credentials)
+
+    action = event.action.strip().lower()
+    if action not in RECOMMENDATION_ALLOWED_ACTIONS:
+        raise HTTPException(status_code=400, detail="Unsupported interaction action")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    normalized = normalize_search_query(event.query or "") if event.query else None
+
+    payload = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["id"],
+        "listing_id": (event.listing_id or "").strip() or None,
+        "action": action,
+        "source": (event.source or "").strip() or "frontend",
+        "query": (event.query or "").strip() or None,
+        "city": (event.city or "").strip().lower() or None,
+        "category": (event.category or "").strip().lower() or None,
+        "price": event.price,
+        "metadata": event.metadata or {},
+        "created_at": now_iso,
+    }
+
+    if normalized:
+        payload["normalized_query"] = normalized.get("normalized_query")
+        payload["detected_language"] = normalized.get("detected_language")
+        if not payload["category"] and normalized.get("detected_category"):
+            payload["category"] = normalized.get("detected_category")
+
+    await db.interactions.insert_one(payload)
+
+    if action == "search" and payload.get("query"):
+        await db.search_history.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user["id"],
+                "query": payload["query"],
+                "normalized_query": payload.get("normalized_query", payload["query"].lower()),
+                "language": payload.get("detected_language", "en"),
+                "city": payload.get("city"),
+                "category": payload.get("category"),
+                "source": payload.get("source", "frontend"),
+                "created_at": now_iso,
+            }
+        )
+
+    await _clear_user_recommendation_cache(user["id"])
+    return {"ok": True}
+
 
 @api_router.get("/recommendations")
 async def get_ai_recommendations(
-    limit: int = Query(6, le=12),
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    limit: int = Query(6, ge=1, le=20),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
-    """Get AI-powered property recommendations based on user behavior"""
+    """Get recommendation results based on user behavior, search signals, and listing similarity."""
     user = await get_current_user(credentials)
     user_id = user["id"]
-    
-    # Get user's search history, viewed listings, saved videos, and wishlist
-    search_history = await db.search_history.find(
-        {'user_id': user_id}
-    ).sort('created_at', -1).limit(10).to_list(10)
-    
-    wishlist = await db.wishlists.find(
-        {'user_id': user_id}
-    ).to_list(20)
-    wishlist_ids = [w.get('listing_id') for w in wishlist]
-    
-    saved_videos = user.get('saved_videos', [])
-    
-    # Get user's preferred categories from search history
-    categories_searched = [s.get('category') for s in search_history if s.get('category')]
-    cities_searched = [s.get('city') for s in search_history if s.get('city')]
-    
-    # Build recommendation context
-    context = {
-        'categories': list(set(categories_searched)) or ['home', 'stay'],
-        'cities': list(set(cities_searched)) or ['Surat'],
-        'price_range': 'medium',  # Can be enhanced with actual data
-        'saved_count': len(wishlist_ids),
-    }
-    
-    # Get some listings from preferred categories
-    preferred_listings = await db.listings.find(
-        {
-            'category': {'$in': context['categories']},
-            'status': 'approved',
-            'id': {'$nin': wishlist_ids}  # Exclude already saved
-        },
-        {'_id': 0}
-    ).limit(20).to_list(20)
-    
-    # If user has EMERGENT_LLM_KEY, use AI for smart recommendations
-    recommended = []
-    ai_explanation = ""
-    
-    if EMERGENT_LLM_KEY and len(preferred_listings) > 0:
-        try:
-            from emergentintegrations.llm.chat import LlmChat, UserMessage
-            
-            chat = LlmChat(
-                api_key=EMERGENT_LLM_KEY,
-                session_id=f"rec_{user_id}_{datetime.now().strftime('%Y%m%d')}",
-                system_message="""You are a property recommendation AI for GharSetu, Gujarat's #1 real estate platform. 
-                Analyze user preferences and recommend the best matching properties. 
-                Be concise and helpful. Respond in JSON format with 'recommended_ids' array and 'explanation' string."""
-            ).with_model("openai", "gpt-4.1-mini")
-            
-            listings_summary = "\n".join([
-                f"- ID: {l['id'][:8]}, {l['title']}, {l['category']}, ₹{l.get('price', 0)}, {l.get('city', 'Unknown')}"
-                for l in preferred_listings[:10]
-            ])
-            
-            prompt = f"""User preferences:
-- Searched categories: {context['categories']}
-- Searched cities: {context['cities']}
-- Saved {context['saved_count']} properties
+    cache_key = _recommendation_cache_key(user_id, limit)
 
-Available listings:
-{listings_summary}
+    cached = await _get_cached_recommendations_payload(cache_key)
+    if cached:
+        return cached
 
-Select top {min(limit, 6)} properties that best match user preferences. Return JSON with:
-{{"recommended_ids": ["id1", "id2", ...], "explanation": "Brief explanation in Gujarati"}}"""
-            
-            response = await chat.send_message(UserMessage(text=prompt))
-            
-            # Parse AI response
-            import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                ai_result = json.loads(json_match.group())
-                rec_ids = ai_result.get('recommended_ids', [])
-                ai_explanation = ai_result.get('explanation', '')
-                
-                # Get full listing details for recommended IDs
-                for l in preferred_listings:
-                    if any(l['id'].startswith(rid) for rid in rec_ids):
-                        recommended.append(l)
-                        if len(recommended) >= limit:
-                            break
-        except Exception as e:
-            logger.error(f"AI recommendation failed: {e}")
-    
-    # Fallback to simple recommendations if AI fails or not available
-    if len(recommended) < limit:
-        # Add trending/popular listings
-        fallback = preferred_listings[:limit - len(recommended)]
-        recommended.extend(fallback)
-    
-    return {
-        'recommendations': recommended[:limit],
-        'ai_explanation': ai_explanation,
-        'context': context,
-        'total': len(recommended)
-    }
+    payload = await _build_recommendation_payload(user_id=user_id, limit=limit)
+    await _set_cached_recommendations_payload(cache_key, payload)
+    return payload
 
 @api_router.get("/recommendations/similar/{listing_id}")
 async def get_similar_properties(
@@ -5784,6 +6042,14 @@ async def startup_services():
     await db.notifications.create_index("id", unique=True)
     await db.notifications.create_index([("user_id", 1), ("read", 1), ("created_at", -1)])
     await db.notifications.create_index([("sent_by_admin", 1), ("created_at", -1)])
+    await db.interactions.create_index("id", unique=True)
+    await db.interactions.create_index([("user_id", 1), ("created_at", -1)])
+    await db.interactions.create_index([("user_id", 1), ("action", 1), ("created_at", -1)])
+    await db.interactions.create_index([("listing_id", 1), ("created_at", -1)], sparse=True)
+    await db.search_history.create_index("id", unique=True)
+    await db.search_history.create_index([("user_id", 1), ("created_at", -1)])
+    await db.search_history.create_index([("user_id", 1), ("city", 1), ("category", 1), ("created_at", -1)])
+    await db.wishlists.create_index([("user_id", 1), ("listing_id", 1)], unique=True)
 
     # Search-related indexes for smart query filters and fast suggestions.
     await db.listings.create_index([("status", 1), ("is_available", 1), ("city", 1), ("category", 1)])
