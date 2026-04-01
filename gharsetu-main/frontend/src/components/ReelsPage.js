@@ -23,7 +23,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 export const ReelsPage = () => {
   const [searchParams] = useSearchParams();
   const preferredListingId = searchParams.get('listingId') || '';
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isOwner, isAdmin, user } = useAuth();
+  const canCreateReel = isAuthenticated && (isOwner || isAdmin);
   const isDev = process.env.NODE_ENV === 'development';
   const debugEnabled = isDev && process.env.REACT_APP_ENABLE_REELS_DEBUG === 'true';
   const {
@@ -181,7 +182,7 @@ export const ReelsPage = () => {
         </Link>
         
         <div className="flex items-center gap-3">
-          {isAuthenticated && (
+          {canCreateReel && (
             <button
               onClick={() => setShowUpload(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-full text-black text-sm font-semibold"
@@ -256,6 +257,7 @@ export const ReelsPage = () => {
               likePending={Boolean(pendingLikeMap[video.id])}
               onLike={handleLikeToggle}
               onFollow={handleFollowToggle}
+              isAdmin={isAdmin}
             />
           ))}
         </div>
@@ -265,7 +267,7 @@ export const ReelsPage = () => {
             <Camera className="w-20 h-20 mx-auto mb-4 opacity-40" />
             <h3 className="text-xl font-bold mb-2">No Reels Yet</h3>
             <p className="text-white/60 mb-6 text-sm">Be the first to share a property reel!</p>
-            {isAuthenticated && (
+            {canCreateReel && (
               <Button onClick={() => setShowUpload(true)} className="bg-white text-black hover:bg-gray-100">
                 <Plus className="w-4 h-4 mr-2" />
                 Create Reel

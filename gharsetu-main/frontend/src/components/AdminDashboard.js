@@ -49,6 +49,7 @@ export const AdminDashboard = () => {
   const [usersPage, setUsersPage] = useState(1);
   const [userSearch, setUserSearch] = useState('');
   const [userRoleFilter, setUserRoleFilter] = useState('');
+  const [blockStatusFilter, setBlockStatusFilter] = useState('');
 
   const [pendingOwners, setPendingOwners] = useState([]);
   const [pendingOwnersTotal, setPendingOwnersTotal] = useState(0);
@@ -94,10 +95,13 @@ export const AdminDashboard = () => {
     }
   };
 
-  const fetchUsers = useCallback(async (page = 1, search = userSearch, role = userRoleFilter) => {
+  const fetchUsers = useCallback(async (page = 1, search = userSearch, role = userRoleFilter, blockStatus = blockStatusFilter) => {
     try {
       const res = await adminAPI.getUsers({
-        page, limit: 50, search: search || undefined, role: role || undefined,
+        page, limit: 50,
+        search: search || undefined,
+        role: role || undefined,
+        block_status: blockStatus || undefined,
       });
       setUsers(res.data.users || []);
       setUsersTotal(res.data.total || 0);
@@ -105,7 +109,7 @@ export const AdminDashboard = () => {
     } catch {
       toast.error('Failed to load users');
     }
-  }, [userSearch, userRoleFilter]);
+  }, [userSearch, userRoleFilter, blockStatusFilter]);
 
   const fetchPendingOwners = useCallback(async () => {
     try {
@@ -345,7 +349,23 @@ export const AdminDashboard = () => {
 
       <main className="flex-1 ml-64 p-8 min-h-screen">
         {activeTab === 'overview' && (
-          <OverviewTab stats={stats} onNavigate={setActiveTab} />
+          <OverviewTab
+            stats={stats}
+            onNavigate={setActiveTab}
+            onNavigateWithFilter={(tab, filters = {}) => {
+              setActiveTab(tab);
+              if (filters.role !== undefined) {
+                setUserRoleFilter(filters.role);
+                setBlockStatusFilter('');
+                fetchUsers(1, userSearch, filters.role, '');
+              }
+              if (filters.blockStatus !== undefined) {
+                setBlockStatusFilter(filters.blockStatus);
+                setUserRoleFilter('');
+                fetchUsers(1, userSearch, '', filters.blockStatus);
+              }
+            }}
+          />
         )}
 
         {activeTab === 'users' && (
@@ -355,8 +375,10 @@ export const AdminDashboard = () => {
             page={usersPage}
             search={userSearch}
             roleFilter={userRoleFilter}
-            onSearch={(v) => { setUserSearch(v); fetchUsers(1, v, userRoleFilter); }}
-            onRoleFilter={(v) => { setUserRoleFilter(v); fetchUsers(1, userSearch, v); }}
+            blockStatusFilter={blockStatusFilter}
+            onSearch={(v) => { setUserSearch(v); fetchUsers(1, v, userRoleFilter, blockStatusFilter); }}
+            onRoleFilter={(v) => { setUserRoleFilter(v); fetchUsers(1, userSearch, v, ''); }}
+            onBlockStatusFilter={(v) => { setBlockStatusFilter(v); fetchUsers(1, userSearch, '', v); }}
             onPageChange={(p) => fetchUsers(p)}
             onVerifyEmail={handleVerifyEmail}
             onViewProfile={openProfile}
@@ -439,7 +461,7 @@ export const AdminDashboard = () => {
   );
 };
 
-const OverviewTab = ({ stats, onNavigate }) => {
+const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
   if (!stats) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
   const ownerTypes = stats.owner_type_breakdown || {};
@@ -486,9 +508,15 @@ const OverviewTab = ({ stats, onNavigate }) => {
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {Object.entries(OWNER_ROLE_LABELS).map(([role, label]) => (
-              <div key={role} className={`rounded-lg p-3 ${OWNER_ROLE_COLORS[role] || 'bg-stone-100'}`}>
+              <div
+                key={role}
+                onClick={() => onNavigateWithFilter('users', { role })}
+                className={`rounded-lg p-3 cursor-pointer hover:opacity-75 active:scale-95 transition-all ${OWNER_ROLE_COLORS[role] || 'bg-stone-100'}`}
+                title={`Show ${label}s`}
+              >
                 <p className="text-xs font-medium">{label}</p>
                 <p className="text-2xl font-bold mt-1">{ownerTypes[role] || 0}</p>
+                <p className="text-xs opacity-70 mt-1">Click to filter →</p>
               </div>
             ))}
           </div>
@@ -556,14 +584,31 @@ const OverviewTab = ({ stats, onNavigate }) => {
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'Email Verified', value: stats.email_verified || 0, color: 'text-green-600' },
-          { label: 'Email Unverified', value: stats.email_unverified || 0, color: 'text-yellow-600' },
-          { label: 'Blocked Users', value: (stats.blocked_temp || 0) + (stats.blocked_perm || 0), color: 'text-red-600' },
-          { label: 'Verified Owners', value: stats.verified_owners || 0, color: 'text-blue-600' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-white rounded-xl border border-stone-200 p-4">
+          {
+            label: 'Email Verified', value: stats.email_verified || 0, color: 'text-green-600',
+            onClick: () => onNavigateWithFilter('users', { role: 'user' }),
+          },
+          {
+            label: 'Email Unverified', value: stats.email_unverified || 0, color: 'text-yellow-600',
+            onClick: () => onNavigateWithFilter('users', { role: 'user' }),
+          },
+          {
+            label: 'Blocked Users', value: (stats.blocked_temp || 0) + (stats.blocked_perm || 0), color: 'text-red-600',
+            onClick: () => onNavigateWithFilter('users', { blockStatus: 'temporary' }),
+          },
+          {
+            label: 'Verified Owners', value: stats.verified_owners || 0, color: 'text-blue-600',
+            onClick: () => onNavigateWithFilter('users', { role: 'property_owner' }),
+          },
+        ].map(({ label, value, color, onClick }) => (
+          <div
+            key={label}
+            onClick={onClick}
+            className="bg-white rounded-xl border border-stone-200 p-4 cursor-pointer hover:shadow-md hover:border-stone-300 active:scale-95 transition-all"
+          >
             <p className="text-xs text-stone-500">{label}</p>
             <p className={`text-2xl font-bold mt-1 ${color}`}>{value}</p>
+            <p className="text-xs text-stone-400 mt-1">Click to view →</p>
           </div>
         ))}
       </div>
@@ -571,7 +616,7 @@ const OverviewTab = ({ stats, onNavigate }) => {
   );
 };
 
-const UsersTab = ({ users, total, page, search, roleFilter, onSearch, onRoleFilter, onPageChange,
+const UsersTab = ({ users, total, page, search, roleFilter, blockStatusFilter = '', onSearch, onRoleFilter, onBlockStatusFilter = () => {}, onPageChange,
   onVerifyEmail, onViewProfile, onBlock, onUnblock, onDelete }) => {
   const totalPages = Math.ceil(total / 50);
 
@@ -596,7 +641,7 @@ const UsersTab = ({ users, total, page, search, roleFilter, onSearch, onRoleFilt
         </div>
         <select
           value={roleFilter}
-          onChange={(e) => onRoleFilter(e.target.value)}
+          onChange={(e) => { onRoleFilter(e.target.value); onBlockStatusFilter(''); }}
           className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
         >
           <option value="">All roles</option>
@@ -606,6 +651,15 @@ const UsersTab = ({ users, total, page, search, roleFilter, onSearch, onRoleFilt
           <option value="service_provider">Service Provider</option>
           <option value="hotel_owner">Hotel Owner</option>
           <option value="event_owner">Event Owner</option>
+        </select>
+        <select
+          value={blockStatusFilter}
+          onChange={(e) => { onBlockStatusFilter(e.target.value); onRoleFilter(''); }}
+          className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+        >
+          <option value="">All status</option>
+          <option value="temporary">Temp Blocked</option>
+          <option value="permanent">Perm Blocked</option>
         </select>
       </div>
 

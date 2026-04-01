@@ -2917,6 +2917,61 @@ async def share_video(video_id: str, user: dict = Depends(get_current_user)):
         "shares": updated.get("shares", 0) if updated else 0,
     }
 
+@api_router.patch("/videos/{video_id}/hide")
+async def hide_reel(video_id: str, user: dict = Depends(get_current_user)):
+    """Hide/unhide a reel. Owner can hide their own, admin can hide any."""
+    video = await db.videos.find_one({"id": video_id})
+    if not video:
+        raise HTTPException(status_code=404, detail="Reel not found")
+    
+    # Check authorization: owner of reel or admin
+    is_owner = video.get("owner_id") == user["id"]
+    is_admin = user.get("role") == UserRole.ADMIN
+    
+    if not (is_owner or is_admin):
+        raise HTTPException(status_code=403, detail="Not authorized to hide this reel")
+    
+    is_hidden = video.get("hidden", False)
+    await db.videos.update_one(
+        {"id": video_id},
+        {"$set": {"hidden": not is_hidden}}
+    )
+    
+    return {
+        "message": f"Reel {'unhidden' if is_hidden else 'hidden'} successfully",
+        "hidden": not is_hidden,
+        "video_id": video_id
+    }
+
+@api_router.delete("/videos/{video_id}")
+async def delete_reel(video_id: str, user: dict = Depends(get_current_user)):
+    """Delete a reel. Owner can delete their own, admin can delete any."""
+    video = await db.videos.find_one({"id": video_id})
+    if not video:
+        raise HTTPException(status_code=404, detail="Reel not found")
+    
+    # Check authorization: owner of reel or admin
+    is_owner = video.get("owner_id") == user["id"]
+    is_admin = user.get("role") == UserRole.ADMIN
+    
+    if not (is_owner or is_admin):
+        raise HTTPException(status_code=403, detail="Not authorized to delete this reel")
+    
+    # Delete the video
+    await db.videos.delete_one({"id": video_id})
+    
+    # Remove from user's videos if applicable
+    if is_owner:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$pull": {"videos": video_id}}
+        )
+    
+    return {
+        "message": "Reel deleted successfully",
+        "video_id": video_id
+    }
+
 # ============ USER FOLLOW ROUTES ============
 @api_router.get("/users/{user_id}")
 async def get_user_profile(

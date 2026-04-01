@@ -222,6 +222,8 @@ export const videosAPI = {
   share: (id) => api.post(`/videos/${id}/share`),
   save: (id) => api.post(`/videos/${id}/save`),
   unsave: (id) => api.delete(`/videos/${id}/save`),
+  hideReel: (id) => api.patch(`/videos/${id}/hide`),
+  deleteReel: (id) => api.delete(`/videos/${id}`),
   getSaved: () => api.get('/videos/saved'),
   // View tracking should be fire-and-forget and avoid auth-preflight overhead.
   recordView: (id) => api.post(`/videos/${id}/view`, null, { skipAuth: true, timeout: 4000 }),

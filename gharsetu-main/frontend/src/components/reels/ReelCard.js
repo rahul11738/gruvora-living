@@ -15,6 +15,10 @@ import {
   Check,
   Music,
   MapPin,
+  MoreVertical,
+  Eye,
+  EyeOff,
+  Trash2,
 } from 'lucide-react';
 import { videosAPI } from '../../lib/api';
 import FollowButton from './FollowButton';
@@ -40,6 +44,7 @@ const ReelCard = React.memo(({
   likePending,
   onLike,
   onFollow,
+  isAdmin = false,
 }) => {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -49,7 +54,12 @@ const ReelCard = React.memo(({
   const [shareLoading, setShareLoading] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [showMenu, setShowMenu] = useState(false);
+  const [hideLoading, setHideLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [isHidden, setIsHidden] = useState(video.hidden || false);
   const lastTap = useRef(0);
+  const menuRef = useRef(null);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -184,6 +194,59 @@ const ReelCard = React.memo(({
     }
   };
 
+  const handleHideReel = async () => {
+    if (hideLoading) return;
+    setHideLoading(true);
+
+    try {
+      await videosAPI.hideReel(videoId);
+      setIsHidden(!isHidden);
+      toast.success(isHidden ? 'Reel unhidden' : 'Reel hidden');
+      setShowMenu(false);
+    } catch (error) {
+      console.error('Hide failed:', error);
+      toast.error('Failed to hide reel');
+    } finally {
+      setHideLoading(false);
+    }
+  };
+
+  const handleDeleteReel = async () => {
+    if (deleteLoading) return;
+    if (!window.confirm('Are you sure you want to delete this reel? This action cannot be undone.')) {
+      return;
+    }
+
+    setDeleteLoading(true);
+
+    try {
+      await videosAPI.deleteReel(videoId);
+      toast.success('Reel deleted successfully');
+      setShowMenu(false);
+      // Optionally, you can call a callback to remove the reel from the list
+      // onReelDeleted?.(videoId);
+    } catch (error) {
+      console.error('Delete failed:', error);
+      toast.error('Failed to delete reel');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showMenu]);
+
   const formatNumber = (num) => {
     if (!num) return '0';
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
@@ -201,6 +264,46 @@ const ReelCard = React.memo(({
           />
         </div>
 
+        {/* Admin/Owner Moderation Menu */}
+        {isAuthenticated && (ownerId === userId || isAdmin) && (
+          <div className="absolute top-4 right-4 z-30" ref={menuRef}>
+            <button
+              onClick={() => setShowMenu(!showMenu)}
+              disabled={hideLoading || deleteLoading}
+              className="p-2 rounded-full bg-black/50 hover:bg-black/70 text-white disabled:opacity-50 transition-colors"
+            >
+              <MoreVertical className="w-5 h-5" />
+            </button>
+            
+            {showMenu && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="absolute top-full right-0 mt-2 bg-gray-900 border border-gray-700 rounded-lg shadow-lg py-2 w-40 z-40"
+              >
+                <button
+                  onClick={handleHideReel}
+                  disabled={hideLoading}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-white hover:bg-gray-800 disabled:opacity-50 text-sm transition-colors"
+                >
+                  {isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  <span>{isHidden ? 'Unhide Reel' : 'Hide Reel'}</span>
+                </button>
+                
+                <button
+                  onClick={handleDeleteReel}
+                  disabled={deleteLoading}
+                  className="w-full flex items-center gap-2 px-4 py-2 text-red-400 hover:bg-gray-800 disabled:opacity-50 text-sm transition-colors border-t border-gray-700"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Delete Reel</span>
+                </button>
+              </motion.div>
+            )}
+          </div>
+        )}
+
         <video
           ref={videoRef}
           src={shouldLoad ? (video.video_url || video.url) : undefined}
@@ -212,9 +315,8 @@ const ReelCard = React.memo(({
           className="h-full w-auto max-w-full max-h-screen object-contain bg-black mx-auto"
           onClick={togglePlay}
           onTimeUpdate={handleTimeUpdate}
-          onError={(e) => {
+          onError={() => {
             console.error('Video load error:', videoId);
-            e.target.style.display = 'none';
           }}
         />
 
@@ -299,16 +401,6 @@ const ReelCard = React.memo(({
               {video.owner_name || 'Owner'}
             </span>
             {following && <Check className="w-4 h-4 text-blue-400" />}
-            {ownerId !== userId && (
-              <span onClick={(e) => e.preventDefault()}>
-                <FollowButton
-                  following={following}
-                  pending={followPending}
-                  onClick={handleFollow}
-                  data-testid="follow-btn"
-                />
-              </span>
-            )}
           </Link>
 
           <p className="text-white text-sm mb-2 line-clamp-2">{video.description || video.title}</p>
