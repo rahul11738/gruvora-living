@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { listingsAPI, categoriesAPI, recommendationsAPI } from '../lib/api';
 import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
@@ -10,14 +10,6 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from './ui/dialog';
-import { VoiceSearchButton } from './VoiceSearch';
 import { toast } from 'sonner';
 import {
   Home,
@@ -53,7 +45,7 @@ import {
 const categoryIcons = {
   home: Home,
   business: Building2,
-  Hotel: Hotel,
+  stay: Hotel,
   event: PartyPopper,
   services: Wrench,
 };
@@ -61,7 +53,7 @@ const categoryIcons = {
 const categoryColors = {
   home: 'from-emerald-500 to-emerald-600',
   business: 'from-blue-500 to-blue-600',
-  Hotel: 'from-purple-500 to-purple-600',
+  stay: 'from-purple-500 to-purple-600',
   event: 'from-pink-500 to-pink-600',
   services: 'from-orange-500 to-orange-600',
 };
@@ -69,7 +61,7 @@ const categoryColors = {
 const categoryBgColors = {
   home: 'bg-emerald-500',
   business: 'bg-blue-500',
-  Hotel: 'bg-purple-500',
+  stay: 'bg-purple-500',
   event: 'bg-pink-500',
   services: 'bg-orange-500',
 };
@@ -87,8 +79,16 @@ const gujaratCities = [
   'Bhavnagar',
 ];
 
+const revealUp = (reduceMotion, delay = 0, offset = 20) => ({
+  initial: reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: offset },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true, amount: 0.2 },
+  transition: reduceMotion ? { duration: 0 } : { duration: 0.45, delay, ease: 'easeOut' },
+});
+
 export const HeroSection = () => {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('home');
@@ -102,7 +102,10 @@ export const HeroSection = () => {
   }, []);
 
   const handleVoiceSearch = () => {
-    if (!voiceSupported) return;
+    if (!voiceSupported) {
+      toast.error('Voice search is not supported in this browser.');
+      return;
+    }
     
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
@@ -134,9 +137,9 @@ export const HeroSection = () => {
       {/* Animated Background */}
       <div className="absolute inset-0">
         <motion.div
-          initial={{ scale: 1.1 }}
-          animate={{ scale: 1 }}
-          transition={{ duration: 10, ease: "easeOut" }}
+          initial={reduceMotion ? false : { scale: 1.1 }}
+          animate={reduceMotion ? { scale: 1 } : { scale: 1 }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 10, ease: 'easeOut' }}
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage: 'url(https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1920)',
@@ -145,35 +148,43 @@ export const HeroSection = () => {
         <div className="absolute inset-0 bg-gradient-to-r from-stone-900/95 via-stone-900/80 to-stone-900/40" />
         {/* Floating Elements */}
         <motion.div 
-          animate={{ 
+          animate={reduceMotion ? { opacity: 0.2, scale: 1 } : { 
             scale: [1, 1.2, 1],
             opacity: [0.2, 0.3, 0.2]
           }}
-          transition={{ duration: 4, repeat: Infinity }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 4, repeat: Infinity }}
           className="absolute top-20 right-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl" 
         />
         <motion.div 
-          animate={{ 
+          animate={reduceMotion ? { opacity: 0.2, scale: 1 } : { 
             scale: [1, 1.3, 1],
             opacity: [0.2, 0.4, 0.2]
           }}
-          transition={{ duration: 5, repeat: Infinity, delay: 1 }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 5, repeat: Infinity, delay: 1 }}
           className="absolute bottom-20 left-20 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" 
+        />
+        <motion.div
+          animate={reduceMotion ? { opacity: 0.12, y: 0 } : {
+            y: [0, -14, 0],
+            opacity: [0.12, 0.24, 0.12],
+          }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 6, repeat: Infinity, delay: 0.6 }}
+          className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[28rem] h-[18rem] bg-emerald-300/20 rounded-full blur-3xl"
         />
       </div>
 
       <div className="container-main relative z-10 py-16 pt-16 md:pt-20">
         <div className="grid grid-cols-1 gap-10 items-center justify-items-center">
           <motion.div
-            initial={{ opacity: 0, x: -50 }}
+            initial={reduceMotion ? false : { opacity: 0, x: -50 }}
             animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.8 }}
             className="w-full max-w-5xl text-center flex flex-col items-center"
           >
             <motion.div 
-              initial={{ opacity: 0, y: 20 }}
+              initial={reduceMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
+              transition={reduceMotion ? { duration: 0 } : { delay: 0.2 }}
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-8"
             >
               <Sparkles className="w-4 h-4 text-secondary" />
@@ -181,16 +192,16 @@ export const HeroSection = () => {
             </motion.div>
             
             <motion.h1 
-              initial={{ opacity: 0, y: 30 }}
+              initial={reduceMotion ? false : { opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.6 }}
+              transition={reduceMotion ? { duration: 0 } : { delay: 0.3, duration: 0.6 }}
               className="font-heading text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-8"
             >
               Find Your
               <motion.span 
-                initial={{ opacity: 0 }}
+                initial={reduceMotion ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.6 }}
+                transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
                 className="block bg-gradient-to-r from-secondary to-orange-400 bg-clip-text text-transparent"
               >
                 Perfect Space
@@ -198,83 +209,111 @@ export const HeroSection = () => {
             </motion.h1>
             
             <motion.p 
-              initial={{ opacity: 0 }}
+              initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
+              transition={reduceMotion ? { duration: 0 } : { delay: 0.5 }}
               className="text-lg md:text-xl text-stone-300 mb-6 leading-relaxed max-w-3xl mx-auto"
             >
               Discover homes, business spaces, hotels, event venues, and professional services - all in one place.
             </motion.p>
             <motion.p 
-              initial={{ opacity: 0 }}
+              initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.6 }}
+              transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
               className="text-stone-400 mb-10"
             >
               {/* તમારી સંપૂર્ણ જગ્યા શોધો - ઘર, બિઝનેસ, રહેવાનું, ઇવેન્ટ અને સેવાઓ */}
             </motion.p>
 
-            {/* Search Form with Category Filter */}
-            <motion.form 
-              initial={{ opacity: 0, y: 30 }}
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.7 }}
-              onSubmit={handleSearch}
-              className="search-container w-full bg-white rounded-2xl p-4 md:p-5 lg:p-6 shadow-2xl max-w-5xl border-2 border-secondary/20 hover:border-secondary/40 transition-colors mx-auto"
+              transition={reduceMotion ? { duration: 0 } : { delay: 0.66, duration: 0.4 }}
+              className="flex flex-wrap items-center justify-center gap-2 mb-8"
             >
-              <div className="flex flex-col gap-4">
-                {/* Category Pills Row */}
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-100 border border-emerald-400/35 backdrop-blur-sm">
+                <Shield className="w-3.5 h-3.5" /> Verified Owners
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 backdrop-blur-sm">
+                <CheckCircle className="w-3.5 h-3.5" /> Trusted Listings
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 backdrop-blur-sm">
+                <TrendingUp className="w-3.5 h-3.5" /> Fast Discovery
+              </span>
+            </motion.div>
+
+            {/* Search Form with Category Filter */}
+            <motion.form
+              initial={reduceMotion ? false : { opacity: 0, y: 24, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={reduceMotion ? { duration: 0 } : { delay: 0.7, duration: 0.55, ease: 'easeOut' }}
+              onSubmit={handleSearch}
+              className="hero-search-shell w-full max-w-5xl mx-auto"
+            >
+              <div className="hero-search-inner">
                 <div className="w-full overflow-x-auto hide-scrollbar pb-1">
                   <div className="flex w-max mx-auto items-center gap-2 px-1">
                     {[
-                    { id: 'home', label: 'Home', labelGu: 'ઘર', icon: Home },
-                    { id: 'business', label: 'Business', labelGu: 'બિઝનેસ', icon: Building2 },
-                    { id: 'stay', label: 'Stay', labelGu: 'રહેવાનું', icon: Hotel },
-                    { id: 'event', label: 'Event', labelGu: 'ઇવેન્ટ', icon: PartyPopper },
-                    { id: 'services', label: 'Services', labelGu: 'સેવાઓ', icon: Wrench },
-                    ].map((cat) => {
+                      { id: 'home', label: 'Home', labelGu: 'ઘર', icon: Home },
+                      { id: 'business', label: 'Business', labelGu: 'બિઝનેસ', icon: Building2 },
+                      { id: 'stay', label: 'Stay', labelGu: 'રહેવાનું', icon: Hotel },
+                      { id: 'event', label: 'Event', labelGu: 'ઇવેન્ટ', icon: PartyPopper },
+                      { id: 'services', label: 'Services', labelGu: 'સેવાઓ', icon: Wrench },
+                    ].map((cat, index) => {
                       const Icon = cat.icon;
+                      const isActive = category === cat.id;
                       return (
-                        <button
+                        <motion.button
                           key={cat.id}
                           type="button"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.78 + index * 0.04, duration: 0.25 }}
                           onClick={() => setCategory(cat.id)}
-                          className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition-all ${
-                            category === cat.id
-                              ? 'bg-primary text-white shadow-md shadow-primary/30'
-                              : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
-                          }`}
+                          className={`hero-pill ${isActive ? 'hero-pill-active' : ''}`}
                         >
                           <Icon className="w-4 h-4" />
                           <span className="hidden md:inline">{cat.label}</span>
                           <span className="md:hidden">{cat.labelGu}</span>
-                        </button>
+                        </motion.button>
                       );
                     })}
                   </div>
                 </div>
 
-                {/* Search Inputs Row - Balanced Layout */}
-                <div className="flex flex-col md:flex-row md:items-center gap-3">
-                  <div className="flex-1 relative">
+                <div className="hero-search-grid">
+                  <div className="hero-input-wrap">
                     <Input
                       type="text"
                       placeholder="Search properties, office spaces..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full pl-4 pr-14 md:pr-16 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base focus:bg-stone-100 focus:outline-none transition-colors"
+                      className="hero-search-input"
                       data-testid="hero-search-input"
                     />
-                    <VoiceSearchButton className="absolute top-1/2 -translate-y-1/2 right-3 md:right-4" />
+                    <div className="hero-voice-slot">
+                      <motion.button
+                        type="button"
+                        onClick={handleVoiceSearch}
+                        animate={isListening && !reduceMotion ? { scale: [1, 1.08, 1], boxShadow: ['0 0 0 0 rgba(16,185,129,0.4)', '0 0 0 8px rgba(16,185,129,0)', '0 0 0 0 rgba(16,185,129,0)'] } : { scale: 1, boxShadow: '0 0 0 0 rgba(16,185,129,0)' }}
+                        transition={reduceMotion ? { duration: 0 } : { duration: 1.2, repeat: isListening ? Infinity : 0 }}
+                        whileHover={reduceMotion ? undefined : { scale: 1.04 }}
+                        whileTap={{ scale: 0.97 }}
+                        className="w-10 h-10 bg-primary rounded-full flex items-center justify-center hover:bg-primary/90 transition-colors"
+                        data-testid="voice-search-trigger"
+                        aria-label="Voice Search"
+                      >
+                        {isListening ? <MicOff className="w-5 h-5 text-white" /> : <Mic className="w-5 h-5 text-white" />}
+                      </motion.button>
+                    </div>
                   </div>
 
-                  {/* Location Dropdown */}
-                  <div className="w-full md:w-[210px] md:flex-shrink-0 relative">
+                  <div className="hero-location-wrap">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 pointer-events-none z-10" />
                     <select
                       value={location}
                       onChange={(e) => setLocation(e.target.value)}
-                      className="w-full pl-10 pr-8 h-12 md:h-14 border-0 bg-stone-50 rounded-xl text-sm md:text-base text-stone-700 focus:bg-stone-100 focus:outline-none transition-colors"
+                      className="hero-location-select"
                       data-testid="hero-location-input"
                     >
                       <option value="">All Cities</option>
@@ -284,61 +323,15 @@ export const HeroSection = () => {
                     </select>
                   </div>
 
-                  <Button type="submit" className="btn-primary h-12 md:h-14 px-4 md:px-8 text-sm md:text-base w-full md:w-auto md:flex-shrink-0" data-testid="hero-search-btn">
+                  <Button type="submit" className="hero-search-btn" data-testid="hero-search-btn">
                     <Search className="w-4 md:w-5 h-4 md:h-5 mr-2" />
-                    <span className="hidden sm:inline">Search</span>
-                    <span className="sm:hidden">Go</span>
+                    <span>Search</span>
                   </Button>
                 </div>
               </div>
             </motion.form>
 
-            {/* Quick Stats */}
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.9 }}
-              className="flex flex-wrap items-center justify-center gap-6 mt-10 text-white"
-            >
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-3"
-              >
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-                  <Home className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">500+</p>
-                  <p className="text-stone-400 text-sm">Properties</p>
-                </div>
-              </motion.div>
-              <div className="w-px h-12 bg-white/20 hidden md:block" />
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-3"
-              >
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-                  <Users className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">1K+</p>
-                  <p className="text-stone-400 text-sm">Verified Owners</p>
-                </div>
-              </motion.div>
-              <div className="w-px h-12 bg-white/20 hidden md:block" />
-              <motion.div 
-                whileHover={{ scale: 1.05 }}
-                className="flex items-center gap-3"
-              >
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
-                  <Star className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold">4.8</p>
-                  <p className="text-stone-400 text-sm">User Rating</p>
-                </div>
-              </motion.div>
-            </motion.div>
+            <div className="h-4 md:h-6" aria-hidden="true" />
           </motion.div>
 
         </div>
@@ -348,6 +341,7 @@ export const HeroSection = () => {
 };
 
 export const CategoriesSection = () => {
+  const reduceMotion = useReducedMotion();
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
@@ -376,9 +370,7 @@ export const CategoriesSection = () => {
     <section className="section-padding bg-white" data-testid="categories-section">
       <div className="container-main">
         <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+          {...revealUp(reduceMotion, 0.02)}
           className="text-center mb-12"
         >
           <span className="inline-flex items-center gap-2 text-secondary font-medium text-sm uppercase tracking-wider">
@@ -401,10 +393,7 @@ export const CategoriesSection = () => {
             return (
               <motion.div
                 key={cat.id}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: index * 0.1 }}
+                {...revealUp(reduceMotion, index * 0.06, 24)}
               >
                 <Link
                   to={`/category/${cat.id}`}
@@ -417,7 +406,7 @@ export const CategoriesSection = () => {
                   {/* Content */}
                   <div className="relative z-10">
                     <motion.div 
-                      whileHover={{ scale: 1.1, rotate: 5 }}
+                      whileHover={reduceMotion ? undefined : { scale: 1.08, rotate: 4 }}
                       className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-6 shadow-lg`}
                     >
                       <Icon className="w-8 h-8 text-white" />
@@ -443,6 +432,7 @@ export const CategoriesSection = () => {
 };
 
 export const TrendingSection = () => {
+  const reduceMotion = useReducedMotion();
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
@@ -474,7 +464,10 @@ export const TrendingSection = () => {
   return (
     <section className="section-padding bg-gradient-to-b from-stone-50 to-white" data-testid="trending-section">
       <div className="container-main">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
+        <motion.div
+          {...revealUp(reduceMotion, 0.02)}
+          className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10"
+        >
           <div>
             <span className="inline-flex items-center gap-2 text-secondary font-medium text-sm uppercase tracking-wider">
               <TrendingUp className="w-4 h-4" />
@@ -500,22 +493,24 @@ export const TrendingSection = () => {
               </button>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {listings.slice(0, 4).map((listing) => (
-            <PropertyCard key={listing.id} listing={listing} />
+          {listings.slice(0, 4).map((listing, index) => (
+            <motion.div key={listing.id} {...revealUp(reduceMotion, 0.05 + index * 0.05, 20)}>
+              <PropertyCard listing={listing} />
+            </motion.div>
           ))}
         </div>
 
-        <div className="mt-10 text-center">
+        <motion.div {...revealUp(reduceMotion, 0.12, 14)} className="mt-10 text-center">
           <Link to="/search">
             <Button variant="outline" className="btn-outline text-base px-8 py-6">
               View All Properties
               <ArrowRight className="w-5 h-5 ml-2" />
             </Button>
           </Link>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
@@ -732,6 +727,7 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
 });
 
 export const FeaturesSection = () => {
+  const reduceMotion = useReducedMotion();
   const features = [
     {
       icon: Shield,
@@ -774,7 +770,7 @@ export const FeaturesSection = () => {
   return (
     <section className="section-padding bg-white" data-testid="features-section">
       <div className="container-main">
-        <div className="text-center mb-12">
+        <motion.div {...revealUp(reduceMotion, 0.02)} className="text-center mb-12">
           <span className="inline-flex items-center gap-2 text-secondary font-medium text-sm uppercase tracking-wider">
             <Sparkles className="w-4 h-4" />
             Platform Features
@@ -782,14 +778,16 @@ export const FeaturesSection = () => {
           <h2 className="font-heading text-3xl md:text-4xl font-bold text-stone-900 mt-3">
             Why Choose GRUVORA LIVING?
           </h2>
-        </div>
+        </motion.div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
-              <div
+              <motion.div
                 key={index}
+                {...revealUp(reduceMotion, 0.04 + index * 0.05, 18)}
+                whileHover={reduceMotion ? undefined : { y: -4 }}
                 className="group p-8 rounded-2xl bg-stone-50 hover:bg-white hover:shadow-xl transition-all duration-300"
               >
                 <div className={`w-14 h-14 ${feature.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
@@ -797,7 +795,7 @@ export const FeaturesSection = () => {
                 </div>
                 <h3 className="font-heading font-semibold text-xl text-stone-900 mb-3">{feature.title}</h3>
                 <p className="text-muted-foreground">{feature.description}</p>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -808,6 +806,7 @@ export const FeaturesSection = () => {
 
 export const ReelsPromoSection = () => {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
   const handleWatchReels = useCallback(() => {
     prefetchReelsRoute();
@@ -816,51 +815,60 @@ export const ReelsPromoSection = () => {
   }, [navigate]);
 
   return (
-    <section className="section-padding bg-gradient-to-br from-secondary/10 via-orange-50 to-pink-50" data-testid="reels-promo">
+    <section className="section-padding bg-white" data-testid="reels-promo">
       <div className="container-main">
-        <div className="flex flex-col lg:flex-row items-center gap-12">
-          <div className="flex-1">
-            <div className="inline-flex items-center gap-2 bg-secondary/20 px-4 py-2 rounded-full mb-6">
-              <Play className="w-4 h-4 text-secondary" />
-              <span className="text-secondary font-medium text-sm">New Feature</span>
-            </div>
-            <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 mb-6">
-              Reels
-            </h2>
-            <p className="text-lg text-muted-foreground mb-4">
-              Watch property videos like Instagram! Scroll through listings, like your favorites, and save for later.
-            </p>
-            <ul className="space-y-3 mb-8">
-              <li className="flex items-center gap-3 text-muted-foreground">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span>Vertical video feed - scroll to explore</span>
-              </li>
-              <li className="flex items-center gap-3 text-muted-foreground">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span>Like, save, and share property videos</span>
-              </li>
-              <li className="flex items-center gap-3 text-muted-foreground">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span>Owners can upload property walkthroughs</span>
-              </li>
-            </ul>
-            <Button
-              type="button"
-              onMouseEnter={prefetchReelsRoute}
-              onFocus={prefetchReelsRoute}
-              onClick={handleWatchReels}
-              className="btn-secondary text-lg px-8 py-6"
-            >
-              <Play className="w-5 h-5 mr-2" />
-              Watch Reels
-            </Button>
-          </div>
+        <motion.div
+          {...revealUp(reduceMotion, 0.02, 24)}
+          className="relative overflow-hidden rounded-3xl border border-stone-200 bg-gradient-to-br from-white via-stone-50 to-emerald-50/40 p-6 md:p-10 shadow-sm"
+        >
+          <div className="absolute -top-24 -right-24 w-72 h-72 bg-emerald-300/20 blur-3xl rounded-full" aria-hidden="true" />
 
-          <div className="flex-1 relative">
-            <div className="relative max-w-xs mx-auto">
-              {/* Phone Frame */}
-              <div className="bg-stone-900 rounded-[3rem] p-3 shadow-2xl">
-                <div className="bg-stone-800 rounded-[2.5rem] overflow-hidden aspect-[9/16] relative">
+          <div className="relative grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-10 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-300/40 px-4 py-2 rounded-full mb-5">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span className="text-emerald-700 font-medium text-sm">Reels Experience</span>
+              </div>
+
+              <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 leading-tight mb-4">
+                Explore Properties In
+                <span className="block text-emerald-600">Short Video Format</span>
+              </h2>
+
+              <p className="text-stone-600 text-base md:text-lg mb-6 max-w-2xl">
+                Swipe through property reels, shortlist favorites instantly, and discover listings faster with a mobile-first viewing experience.
+              </p>
+
+              <ul className="space-y-3 mb-8">
+                <li className="flex items-center gap-3 text-stone-700">
+                  <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  <span>Vertical reel feed with smooth swipe browsing</span>
+                </li>
+                <li className="flex items-center gap-3 text-stone-700">
+                  <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  <span>One-tap like, save, and share actions</span>
+                </li>
+                <li className="flex items-center gap-3 text-stone-700">
+                  <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  <span>Owner walkthrough videos for better trust</span>
+                </li>
+              </ul>
+
+              <Button
+                type="button"
+                onMouseEnter={prefetchReelsRoute}
+                onFocus={prefetchReelsRoute}
+                onClick={handleWatchReels}
+                className="h-12 rounded-full px-7 text-base font-semibold bg-emerald-500 hover:bg-emerald-400 text-stone-950"
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Watch Reels
+              </Button>
+            </div>
+
+            <div className="relative">
+              <div className="mx-auto w-[230px] sm:w-[260px] rounded-[2.5rem] border border-white/20 bg-stone-900 p-2.5 shadow-[0_28px_60px_rgba(0,0,0,0.45)]">
+                <div className="rounded-[2rem] overflow-hidden aspect-[9/16] relative bg-stone-800">
                   <img
                     src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400"
                     alt="Reels Preview"
@@ -868,205 +876,245 @@ export const ReelsPromoSection = () => {
                     decoding="async"
                     className="w-full h-full object-cover"
                   />
-                  {/* Play Button Overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
                   <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="w-16 h-16 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={handleWatchReels}
+                      className="w-16 h-16 rounded-full bg-white/25 hover:bg-white/35 backdrop-blur-sm flex items-center justify-center transition-colors"
+                      aria-label="Play Reels"
+                    >
                       <Play className="w-8 h-8 text-white ml-1" />
+                    </button>
+                  </div>
+
+                  <div className="absolute right-3 bottom-4 flex flex-col gap-3">
+                    <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <Heart className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="w-9 h-9 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <MessageCircle className="w-4 h-4 text-white" />
                     </div>
                   </div>
-                  {/* UI Elements */}
-                  <div className="absolute right-4 bottom-20 flex flex-col gap-4">
-                    <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                      <Heart className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                      <MessageCircle className="w-5 h-5 text-white" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {/* Floating Stats */}
-              <div className="absolute -left-16 top-20 bg-white rounded-xl p-3 shadow-xl">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                    <Heart className="w-4 h-4 text-white fill-white" />
-                  </div>
-                  <span className="font-bold">2.5K</span>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
 };
 
 export const TrustSection = () => {
+  const reduceMotion = useReducedMotion();
+  const trustPoints = [
+    {
+      icon: Shield,
+      title: 'Aadhar Verified',
+      description: 'Owner identity verified',
+    },
+    {
+      icon: Phone,
+      title: 'Mobile Verified',
+      description: 'OTP verification',
+    },
+    {
+      icon: Award,
+      title: 'Quality Listings',
+      description: 'Admin approved only',
+    },
+    {
+      icon: Globe,
+      title: 'Pan Gujarat',
+      description: 'All major cities covered',
+    },
+  ];
+
   return (
-    <section className="section-padding bg-primary text-white" data-testid="trust-section">
+    <section className="section-padding bg-white" data-testid="trust-section">
       <div className="container-main">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          <div>
-            <span className="text-emerald-300 font-medium text-sm uppercase tracking-wider">Why Trust Us</span>
-            <h2 className="font-heading text-3xl md:text-4xl font-bold mt-2 mb-6">
-              100% Verified & Trusted
-            </h2>
-            <p className="text-emerald-100 text-lg mb-8">
-              Every property owner on GRUVORA LIVING is verified with Aadhar card and mobile number, ensuring you connect with genuine listings only.
-            </p>
+        <motion.div
+          {...revealUp(reduceMotion, 0.02, 24)}
+          className="relative overflow-hidden rounded-3xl border border-stone-200 bg-gradient-to-br from-white via-stone-50 to-emerald-50/50 p-6 md:p-10 shadow-sm"
+        >
+          <motion.div
+            initial={reduceMotion ? false : { opacity: 0.35, scale: 0.9 }}
+            whileInView={{ opacity: 0.7, scale: 1 }}
+            viewport={{ once: true }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 1.2, ease: 'easeOut' }}
+            className="pointer-events-none absolute -top-24 -left-20 w-72 h-72 rounded-full bg-emerald-200/35 blur-3xl"
+            aria-hidden="true"
+          />
+          <motion.div
+            initial={reduceMotion ? false : { opacity: 0.25, scale: 0.9 }}
+            whileInView={{ opacity: 0.55, scale: 1 }}
+            viewport={{ once: true }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 1.2, delay: 0.15, ease: 'easeOut' }}
+            className="pointer-events-none absolute -bottom-24 -right-20 w-80 h-80 rounded-full bg-cyan-200/25 blur-3xl"
+            aria-hidden="true"
+          />
 
-            <div className="grid grid-cols-2 gap-6">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Shield className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-1">Aadhar Verified</h4>
-                  <p className="text-emerald-200 text-sm">Owner identity verified</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Phone className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-1">Mobile Verified</h4>
-                  <p className="text-emerald-200 text-sm">OTP verification</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Award className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-1">Quality Listings</h4>
-                  <p className="text-emerald-200 text-sm">Admin approved only</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <Globe className="w-6 h-6" />
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-1">Pan Gujarat</h4>
-                  <p className="text-emerald-200 text-sm">All major cities covered</p>
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
+            <div className="relative z-10">
+              <motion.span
+                {...revealUp(reduceMotion, 0.03, 10)}
+                className="inline-flex items-center gap-2 text-emerald-700 font-medium text-sm uppercase tracking-wider bg-emerald-500/10 border border-emerald-300/40 px-4 py-2 rounded-full"
+              >
+                <Shield className="w-4 h-4" />
+                Why Trust Us
+              </motion.span>
+
+              <motion.h2
+                {...revealUp(reduceMotion, 0.05, 14)}
+                className="font-heading text-3xl md:text-5xl font-bold text-stone-900 mt-4 mb-5 leading-tight"
+              >
+                100% Verified
+                <span className="block text-emerald-600">And Trusted Listings</span>
+              </motion.h2>
+
+              <motion.p
+                {...revealUp(reduceMotion, 0.08, 14)}
+                className="text-stone-600 text-base md:text-lg mb-8 max-w-2xl"
+              >
+                Every property owner on GRUVORA LIVING is verified with Aadhar and mobile checks, helping you connect only with genuine listings.
+              </motion.p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {trustPoints.map((point, index) => {
+                  const Icon = point.icon;
+
+                  return (
+                    <motion.div
+                      key={point.title}
+                      {...revealUp(reduceMotion, 0.12 + index * 0.06, 18)}
+                      whileHover={reduceMotion ? undefined : { y: -4, scale: 1.01 }}
+                      className="group flex items-start gap-3 p-4 rounded-2xl bg-white/95 border border-stone-200 shadow-[0_8px_22px_rgba(2,6,23,0.05)]"
+                    >
+                      <div className="w-11 h-11 bg-emerald-500/10 text-emerald-600 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-105">
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-stone-900 mb-0.5">{point.title}</h4>
+                        <p className="text-stone-600 text-sm">{point.description}</p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
               </div>
             </div>
-          </div>
 
-          <div className="relative">
-            <img
-              src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600"
-              alt="Happy Family"
-              className="rounded-2xl shadow-2xl"
-            />
-            <div className="absolute -bottom-6 -left-6 bg-white text-stone-900 rounded-xl p-4 shadow-xl">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                  <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0, x: 24 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.5, delay: 0.12 }}
+              className="relative z-10"
+            >
+              <motion.img
+                src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600"
+                alt="Happy Family"
+                whileHover={reduceMotion ? undefined : { scale: 1.02 }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.4, ease: 'easeOut' }}
+                className="rounded-2xl shadow-xl border border-stone-200"
+              />
+
+              <motion.div
+                {...revealUp(reduceMotion, 0.2, 12)}
+                animate={reduceMotion ? undefined : { y: [0, -3, 0] }}
+                className="absolute -bottom-5 -left-5 bg-white text-stone-900 rounded-xl p-3 shadow-lg border border-stone-200"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
+                    <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-2xl leading-none">4.8/5</p>
+                    <p className="text-xs text-muted-foreground mt-1">Good Reviews</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-2xl">4.8/5</p>
-                  <p className="text-sm text-muted-foreground">Good Reviews</p>
-                </div>
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
 };
 
 export const CTASection = () => {
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState('');
+  const reduceMotion = useReducedMotion();
 
   const handleListPropertyClick = useCallback(() => {
     if (isAuthenticated) {
       navigate('/owner/dashboard?openCreate=1');
       return;
     }
-    setIsLoginDialogOpen(true);
+    navigate('/owner/register');
   }, [isAuthenticated, navigate]);
 
-  const handleInlineLogin = useCallback(async (e) => {
-    e.preventDefault();
-    setLoginError('');
-    setLoginLoading(true);
-    try {
-      await login(loginEmail, loginPassword);
-      setIsLoginDialogOpen(false);
-      navigate('/owner/dashboard?openCreate=1');
-    } catch (error) {
-      const message = error?.response?.data?.detail || 'Unable to login. Please try again.';
-      setLoginError(message);
-    } finally {
-      setLoginLoading(false);
-    }
-  }, [login, loginEmail, loginPassword, navigate]);
-
   return (
-    <section className="section-padding bg-stone-900" data-testid="cta-section">
-      <div className="container-main text-center">
-        <h2 className="font-heading text-3xl md:text-5xl font-bold text-white mb-6">
-          Ready to List Your Property?
-        </h2>
-        <p className="text-stone-400 text-lg mb-8 max-w-2xl mx-auto">
-          Join thousands of verified property owners and reach millions of potential buyers and renters across Gujarat.
-        </p>
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-          <Button 
-            onClick={handleListPropertyClick}
-            className="btn-primary text-lg px-10 py-6" 
-            data-testid="list-property-cta"
-          >
-            List Your Property Free
-          </Button>
-          <Link to="/contact">
-            <Button variant="outline" className="border-white text-white hover:bg-white/10 text-lg px-10 py-6 rounded-full">
-              Contact Us
-            </Button>
-          </Link>
-        </div>
+    <section className="py-10 md:py-14 bg-stone-950 relative overflow-hidden" data-testid="cta-section">
+      <motion.div
+        animate={reduceMotion ? undefined : { y: [0, -8, 0], opacity: [0.12, 0.2, 0.12] }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 6, repeat: Infinity }}
+        className="absolute -top-16 -left-16 w-72 h-72 bg-emerald-500/15 blur-3xl rounded-full"
+        aria-hidden="true"
+      />
+      <motion.div
+        animate={reduceMotion ? undefined : { y: [0, 10, 0], opacity: [0.08, 0.14, 0.08] }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 7, repeat: Infinity, delay: 0.2 }}
+        className="absolute -bottom-24 -right-12 w-80 h-80 bg-cyan-500/10 blur-3xl rounded-full"
+        aria-hidden="true"
+      />
 
-        <Dialog open={isLoginDialogOpen} onOpenChange={setIsLoginDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Login To Continue</DialogTitle>
-              <DialogDescription>
-                Login first to create and manage your property listings.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleInlineLogin} className="space-y-3" data-testid="cta-login-modal-form">
-              <Input
-                type="email"
-                placeholder="Email"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                required
-              />
-              <Input
-                type="password"
-                placeholder="Password"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                required
-              />
-              {loginError ? <p className="text-sm text-red-500">{loginError}</p> : null}
-              <Button type="submit" className="w-full" disabled={loginLoading}>
-                {loginLoading ? 'Logging in...' : 'Login'}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+      <div className="container-main relative">
+        <motion.div
+          {...revealUp(reduceMotion, 0.04, 20)}
+          className="max-w-4xl mx-auto rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-sm px-5 py-8 md:px-10 md:py-10 text-center"
+        >
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
+              <CheckCircle className="w-3.5 h-3.5" /> Verified Owners
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-200 border border-white/20">
+              <Users className="w-3.5 h-3.5" /> High Intent Buyers
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-200 border border-white/20">
+              <Shield className="w-3.5 h-3.5" /> Trusted Platform
+            </span>
+          </div>
+
+          <h2 className="font-heading text-2xl md:text-4xl lg:text-5xl font-bold text-white leading-tight">
+            Ready To Scale
+            <span className="block bg-gradient-to-r from-emerald-300 to-cyan-300 bg-clip-text text-transparent">
+              Your Property Business?
+            </span>
+          </h2>
+
+          <p className="text-stone-300 text-sm md:text-lg mt-4 mb-7 max-w-2xl mx-auto leading-relaxed">
+            Join thousands of verified owners, publish listings in minutes, and connect with serious buyers and renters across Gujarat.
+          </p>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button
+              onClick={handleListPropertyClick}
+              className="h-12 rounded-full px-7 text-sm md:text-base font-semibold bg-emerald-500 hover:bg-emerald-400 text-stone-950"
+              data-testid="list-property-cta"
+            >
+              List Your Property Free
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button asChild variant="outline" className="h-12 rounded-full border-white/30 text-white hover:bg-white/10 text-sm md:text-base px-7" data-testid="cta-contact-link">
+              <Link to="/about-us">
+                Contact Us
+              </Link>
+            </Button>
+          </div>
+        </motion.div>
       </div>
     </section>
   );

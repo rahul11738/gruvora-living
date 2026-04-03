@@ -22,9 +22,9 @@ ALLOWED_CATEGORIES_BY_ROLE = {
 }
 
 
-def _owner_register_payload(role: str) -> dict:
+def _owner_register_payload(role: str, coupon: str | None = None) -> dict:
     suffix = str(uuid.uuid4())[:8]
-    return {
+    payload = {
         "name": f"Owner {role} {suffix}",
         "email": f"owner_{role}_{suffix}@test.com",
         "phone": "9876543210",
@@ -38,6 +38,9 @@ def _owner_register_payload(role: str) -> dict:
         "aadhar_name": f"Owner {suffix}",
         "business_name": f"Biz {suffix}",
     }
+    if coupon:
+        payload["coupon"] = coupon
+    return payload
 
 
 def _listing_payload(category: str) -> dict:
@@ -62,10 +65,10 @@ def _listing_payload(category: str) -> dict:
     }
 
 
-def _register_owner_and_get_auth(role: str) -> tuple[str, dict]:
+def _register_owner_and_get_auth(role: str, coupon: str | None = None) -> tuple[str, dict]:
     response = requests.post(
         f"{BASE_URL}/api/auth/register/owner",
-        json=_owner_register_payload(role),
+        json=_owner_register_payload(role, coupon=coupon),
         timeout=REQUEST_TIMEOUT_SECONDS,
     )
     assert response.status_code == 200, response.text
@@ -166,7 +169,7 @@ class TestRoleCategoryAndOwnershipEnforcement:
         assert response.json().get("listing_id")
 
     def test_event_owner_rejects_home_listing(self) -> None:
-        _, headers = _register_owner_and_get_auth("event_owner")
+        _, headers = _register_owner_and_get_auth("event_owner", coupon="GRUVORA5M")
 
         response = requests.post(
             f"{BASE_URL}/api/listings",

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header, Response, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header, Response, Request, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -7,7 +7,8 @@ import os
 import logging
 import re
 from pathlib import Path
-from pydantic import BaseModel, Field, EmailStr
+import calendar
+from pydantic import BaseModel, Field, EmailStr, ValidationError
 from typing import List, Optional, Dict, Any, Set
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -24,6 +25,8 @@ import socketio
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from search_engine import normalize_search_query, smart_search_listings, suggest_search_terms
+from models.listing_base import ListingBaseCreate
+from validators.listing_factory import validate_specific_fields
 try:
     import redis.asyncio as redis_asyncio
 except ImportError:
@@ -143,6 +146,7 @@ class OwnerRegister(UserRegister):
     aadhar_number: str
     aadhar_name: str
     business_name: Optional[str] = None
+    coupon: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -562,6 +566,215 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
+
+SUBSCRIPTION_ROLES = {
+    UserRole.STAY_OWNER.value,
+    UserRole.SERVICE_PROVIDER.value,
+    UserRole.EVENT_OWNER.value,
+}
+COMMISSION_ROLES = {UserRole.PROPERTY_OWNER.value}
+VALID_COUPONS = {
+    "GRUVORA5M": {"free_months": 5, "description": "First 5 months free"},
+}
+SUBSCRIPTION_AMOUNT_PAISE = 25100
+COMMISSION_RATE = 0.05
+BILLING_GRACE_DAYS = 5
+BLOCK_DURATION_DAYS = 7
+
+
+def _add_months(source_date: datetime, months: int) -> datetime:
+    month_index = source_date.month - 1 + months
+    year = source_date.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(source_date.day, calendar.monthrange(year, month)[1])
+    return source_date.replace(year=year, month=month, day=day)
+
+
+def compute_next_billing_date(from_date: datetime) -> datetime:
+    next_month = _add_months(from_date.replace(day=1), 1)
+    return next_month.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def build_subscription_init_doc(role: str, coupon: Optional[str] = None) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc)
+
+    if role in COMMISSION_ROLES:
+        return {
+            "subscription_model": "commission",
+            "subscription_status": None,
+            "commission_rate": COMMISSION_RATE,
+            "total_commission_owed": 0.0,
+            "total_commission_paid": 0.0,
+            "block_status": None,
+            "block_until": None,
+        }
+
+    validated_coupon = None
+    free_months = 0
+    if coupon:
+        coupon_upper = coupon.strip().upper()
+        if coupon_upper in VALID_COUPONS:
+            validated_coupon = coupon_upper
+            free_months = VALID_COUPONS[coupon_upper]["free_months"]
+
+    if free_months > 0:
+        trial_end = _add_months(now, free_months)
+        next_billing = trial_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return {
+            "subscription_model": "subscription",
+            "subscription_status": "trial",
+            "trial_months_remaining": free_months,
+            "trial_end_date": trial_end.isoformat(),
+            "subscription_start_date": None,
+            "next_billing_date": next_billing.isoformat(),
+            "last_payment_date": None,
+            "auto_renew": True,
+            "coupon_used": validated_coupon,
+            "block_status": None,
+            "block_until": None,
+            "subscription_amount_paise": SUBSCRIPTION_AMOUNT_PAISE,
+        }
+
+    return {
+        "subscription_model": "subscription",
+        "subscription_status": "pending",
+        "trial_months_remaining": 0,
+        "trial_end_date": None,
+        "subscription_start_date": None,
+        "next_billing_date": now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat(),
+        "last_payment_date": None,
+        "auto_renew": True,
+        "coupon_used": None,
+        "block_status": None,
+        "block_until": None,
+        "subscription_amount_paise": SUBSCRIPTION_AMOUNT_PAISE,
+    }
+
+
+def generate_invoice_number(billing_month: str, sequence: int) -> str:
+    return f"INV-{billing_month}-{sequence:04d}"
+
+
+def compute_commission(deal_amount: float) -> float:
+    return round(deal_amount * COMMISSION_RATE, 2)
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    return None
+
+
+async def check_and_resolve_block(user: Dict[str, Any], database) -> Dict[str, Any]:
+    role = str(user.get("role") or "")
+    if role not in SUBSCRIPTION_ROLES:
+        return user
+
+    now = datetime.now(timezone.utc)
+    status = str(user.get("subscription_status") or "")
+
+    if status == "trial":
+        trial_end = _parse_iso_datetime(user.get("trial_end_date"))
+        if trial_end and trial_end <= now:
+            await database.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"subscription_status": "expired", "trial_months_remaining": 0}},
+            )
+            user["subscription_status"] = "expired"
+            user["trial_months_remaining"] = 0
+
+    block_until = _parse_iso_datetime(user.get("block_until"))
+    if user.get("block_status") == "subscription_overdue" and block_until:
+        if block_until <= now:
+            await database.users.update_one(
+                {"id": user["id"]},
+                {
+                    "$set": {"subscription_status": "expired"},
+                    "$unset": {"block_status": "", "block_until": ""},
+                },
+            )
+            user["subscription_status"] = "expired"
+            user.pop("block_status", None)
+            user.pop("block_until", None)
+        else:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "SUBSCRIPTION_BLOCKED",
+                    "message": "Your account is temporarily suspended for unpaid subscription.",
+                    "action_required": "pay_subscription",
+                    "block_until": block_until.isoformat(),
+                },
+            )
+
+    return user
+
+
+def enforce_subscription(user: Dict[str, Any]) -> None:
+    role = str(user.get("role") or "")
+    if role == UserRole.ADMIN.value:
+        return
+    if role in COMMISSION_ROLES:
+        return
+    if role not in SUBSCRIPTION_ROLES:
+        return
+
+    status = str(user.get("subscription_status") or "")
+    now = datetime.now(timezone.utc)
+
+    if status == "trial":
+        trial_end = _parse_iso_datetime(user.get("trial_end_date"))
+        if trial_end and trial_end <= now:
+            raise HTTPException(
+                status_code=403,
+                detail={
+                    "code": "TRIAL_EXPIRED",
+                    "message": "Your free trial has ended. Please subscribe to continue.",
+                    "action_required": "subscribe",
+                },
+            )
+        return
+
+    if status == "active":
+        return
+
+    if status in {"blocked", "expired"}:
+        detail = {
+            "code": "SUBSCRIPTION_BLOCKED",
+            "message": "Your account is suspended due to an unpaid subscription.",
+            "action_required": "pay_subscription",
+        }
+        if user.get("block_until"):
+            detail["block_until"] = user.get("block_until")
+        raise HTTPException(status_code=403, detail=detail)
+
+    if status == "pending" or not status:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "SUBSCRIPTION_PENDING",
+                "message": "Please activate your subscription to use this feature.",
+                "action_required": "subscribe",
+            },
+        )
+
+    raise HTTPException(
+        status_code=403,
+        detail={
+            "code": "SUBSCRIPTION_REQUIRED",
+            "message": "Please activate your subscription to continue.",
+            "action_required": "subscribe",
+        },
+    )
+
 def create_token(user_id: str, role: str) -> str:
     now = datetime.now(timezone.utc)
     payload = {
@@ -654,6 +867,7 @@ async def get_admin_user(credentials: HTTPAuthorizationCredentials = Depends(sec
 
 async def get_owner_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     user = await get_current_user(credentials)
+    user = await check_and_resolve_block(user, db)
     owner_roles = [
         UserRole.PROPERTY_OWNER,
         UserRole.STAY_OWNER,
@@ -755,6 +969,7 @@ async def register_owner(owner: OwnerRegister):
     
     user_id = str(uuid.uuid4())
     verification_token = str(uuid.uuid4())
+    subscription_fields = build_subscription_init_doc(role=owner.role.value, coupon=owner.coupon)
     
     user_doc = {
         "id": user_id,
@@ -775,8 +990,9 @@ async def register_owner(owner: OwnerRegister):
         "aadhar_number": owner.aadhar_number,
         "aadhar_name": owner.aadhar_name,
         "aadhar_status": VerificationStatus.PENDING,
-        "subscription": None,
-        "subscription_expires": None,
+        "subscription": subscription_fields.get("subscription_status"),
+        "subscription_expires": subscription_fields.get("trial_end_date") or subscription_fields.get("next_billing_date"),
+        **subscription_fields,
         "listings": [],
         "total_views": 0,
         "total_bookings": 0,
@@ -800,7 +1016,10 @@ async def register_owner(owner: OwnerRegister):
             "email": owner.email,
             "role": owner.role,
             "is_verified": False,
-            "aadhar_status": VerificationStatus.PENDING
+            "aadhar_status": VerificationStatus.PENDING,
+            "subscription_status": subscription_fields.get("subscription_status"),
+            "subscription_model": subscription_fields.get("subscription_model"),
+            "coupon_used": subscription_fields.get("coupon_used"),
         },
         "verification_token": verification_token
     }
@@ -950,25 +1169,163 @@ async def change_password(payload: Dict[str, Any], user: dict = Depends(get_curr
 
 # ============ LISTINGS ROUTES ============
 @api_router.post("/listings")
-async def create_listing(listing: ListingCreate, user: dict = Depends(get_owner_user)):
+async def create_listing(payload: Dict[str, Any] = Body(...), user: dict = Depends(get_owner_user)):
+    enforce_subscription(user)
+
     if not user.get("id"):
         raise HTTPException(status_code=401, detail="Invalid authenticated user")
-    ensure_category_allowed_for_role(user.get("role"), listing.category, detail_prefix="Listing category")
+
+    role = str(user.get("role") or "").strip()
+    category = str(payload.get("category") or "").strip()
+    if not category:
+        raise HTTPException(status_code=422, detail="category is required")
+
+    # Backward compatibility: old clients send flat fields instead of nested pricing/media blocks.
+    if "price" in payload and "pricing" not in payload:
+        raw_price = payload.get("price", 0)
+        try:
+            raw_price = float(raw_price) if raw_price not in ("", None) else 0.0
+        except (ValueError, TypeError):
+            raw_price = 0.0
+        payload["pricing"] = {
+            "type": payload.get("listing_type") or "fixed",
+            "amount": raw_price,
+            "negotiable": payload.get("negotiable", False),
+            "security_deposit": payload.get("security_deposit"),
+        }
+
+    if "images" in payload and "media" not in payload:
+        payload["media"] = {
+            "images": payload.get("images", []),
+            "videos": payload.get("videos", []),
+            "virtual_tour_url": payload.get("virtual_tour_url"),
+            "floor_plan_url": payload.get("floor_plan_url"),
+        }
+
+    pricing_block = payload.get("pricing", {})
+    if isinstance(pricing_block, dict):
+        try:
+            pricing_block["amount"] = float(pricing_block.get("amount") or 0)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=422, detail="pricing.amount must be a valid number")
+        payload["pricing"] = pricing_block
+
+    try:
+        base = ListingBaseCreate(**payload)
+    except Exception as exc:
+        errors = []
+        if hasattr(exc, "errors"):
+            errors = [
+                {"field": ".".join(str(loc) for loc in item["loc"]), "msg": item["msg"]}
+                for item in exc.errors()
+            ]
+        raise HTTPException(status_code=422, detail=errors or str(exc))
+
+    raw_specific = payload.get("category_specific_fields") or {}
+    if not isinstance(raw_specific, dict):
+        raw_specific = {}
+
+    if not raw_specific and "sub_category" in payload:
+        raw_specific = {
+            "listing_type": payload.get("listing_type", "rent"),
+            "area_sqft": float(payload.get("area_sqft", 0) or 0),
+        }
+
+        if role in ("property_owner",):
+            raw_specific.update(
+                {
+                    "property_type": payload.get("sub_category") or "flat",
+                    "furnishing": payload.get("furnishing") or "unfurnished",
+                }
+            )
+        elif role in ("stay_owner", "hotel_owner"):
+            raw_specific.update(
+                {
+                    "stay_type": payload.get("sub_category") or "hotel",
+                    "total_rooms": int(payload.get("total_rooms", 1) or 1),
+                    "available_rooms": int(payload.get("available_rooms", 1) or 1),
+                    "room_configs": payload.get("room_configs") or [],
+                    "check_in_time": "14:00",
+                    "check_out_time": "11:00",
+                    "cancellation_policy": "moderate",
+                }
+            )
+        elif role == "service_provider":
+            raw_specific.update(
+                {
+                    "service_type": payload.get("sub_category") or "plumber",
+                    "pricing_type": "fixed",
+                    "experience_years": 0,
+                    "skills": [],
+                    "service_radius_km": 10.0,
+                    "availability_slots": [{"day": "mon", "start": "09:00", "end": "18:00"}],
+                }
+            )
+        elif role == "event_owner":
+            raw_specific.update(
+                {
+                    "venue_type": payload.get("sub_category") or "party_plot",
+                    "indoor_capacity": int(payload.get("indoor_capacity", 100) or 100),
+                    "price_per_day": float(base.pricing.amount),
+                }
+            )
+
+    try:
+        specific = validate_specific_fields(role, category, raw_specific)
+        specific_fields = specific.model_dump()
+    except HTTPException:
+        specific_fields = raw_specific
 
     listing_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    base_data = base.model_dump(exclude={"pricing", "media"})
+    pricing_data = base.pricing.model_dump()
+    media_data = base.media.model_dump()
+
+    listing_type = str(
+        specific_fields.get("listing_type")
+        or payload.get("listing_type")
+        or pricing_data.get("type")
+        or "fixed"
+    )
+    sub_category = (
+        specific_fields.get("property_type")
+        or specific_fields.get("stay_type")
+        or specific_fields.get("service_type")
+        or specific_fields.get("venue_type")
+        or payload.get("sub_category")
+        or category
+    )
+    amenities = specific_fields.get("amenities") or payload.get("amenities") or []
     
     listing_doc = {
         "id": listing_id,
         "owner_id": user["id"],
         "owner_name": user["name"],
         "owner_phone": user.get("phone", ""),
-        "owner_verified": user.get("aadhar_status") == VerificationStatus.VERIFIED,
-        **listing.model_dump(),
-        "title_en": listing.title,
-        "title_gu": listing.title,
-        "title_hi": listing.title,
+        "owner_role": role,
+        "owner_verified": str(user.get("aadhar_status") or "").strip() == VerificationStatus.VERIFIED.value,
+        "category": category,
+        **base_data,
+        "pricing": pricing_data,
+        "media": media_data,
+        "category_specific_fields": specific_fields,
+        "price": pricing_data.get("amount"),
+        "listing_type": listing_type,
+        "sub_category": sub_category,
+        "amenities": amenities if isinstance(amenities, list) else [],
+        "images": media_data.get("images", []),
+        "videos": media_data.get("videos", []),
+        "virtual_tour_url": media_data.get("virtual_tour_url"),
+        "floor_plan_url": media_data.get("floor_plan_url"),
+        "specifications": payload.get("specifications", {}),
+        "nearby_facilities": payload.get("nearby_facilities", {}),
+        "title_en": base.title,
+        "title_gu": base.title,
+        "title_hi": base.title,
         "status": ListingStatus.PENDING,
         "is_available": True,
+        "is_draft": base.is_draft,
         "views": 0,
         "likes": 0,
         "saves": 0,
@@ -978,27 +1335,27 @@ async def create_listing(listing: ListingCreate, user: dict = Depends(get_owner_
         "locked_by": None,
         "locked_at": None,
         "contact_unlocked_user_ids": [],
-        "price_history": [{"price": listing.price, "date": datetime.now(timezone.utc).isoformat()}],
+        "price_history": [{"price": pricing_data.get("amount"), "date": now}],
         "boost_expires": None,
         "featured": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
+        "created_at": now,
+        "updated_at": now,
     }
     
     await db.listings.insert_one(listing_doc)
     await db.users.update_one({"id": user["id"]}, {"$push": {"listings": listing_id}})
     
-    return {"message": "Listing created successfully", "listing_id": listing_id}
+    return {"message": "Listing created", "listing_id": listing_id, "status": "pending"}
 
 @api_router.get("/listings")
 async def get_listings(
-    category: Optional[ListingCategory] = None,
+    category: Optional[str] = None,
     owner_id: Optional[str] = None,
-    listing_type: Optional[ListingType] = None,
+    listing_type: Optional[str] = None,
     sub_category: Optional[str] = None,
     city: Optional[str] = None,
-    min_price: Optional[float] = None,
-    max_price: Optional[float] = None,
+    min_price: Optional[str] = None,
+    max_price: Optional[str] = None,
     search: Optional[str] = None,
     q: Optional[str] = None,
     amenities: Optional[str] = None,
@@ -1007,25 +1364,64 @@ async def get_listings(
     radius: Optional[float] = 10,
     sort_by: str = "created_at",
     sort_order: str = "desc",
-    page: int = 1,
-    limit: int = 20
+    page: Optional[str] = "1",
+    limit: Optional[str] = "20"
 ):
+    valid_categories = {item.value for item in ListingCategory}
+    valid_listing_types = {item.value for item in ListingType}
+
+    normalized_category = (category or "").strip().lower()
+    if normalized_category in {"", "all", "any", "*"}:
+        normalized_category = ""
+    if normalized_category == "hotel":
+        normalized_category = "stay"
+
+    normalized_listing_type = (listing_type or "").strip().lower()
+    if normalized_listing_type in {"", "all", "any", "*"}:
+        normalized_listing_type = ""
+
+    parsed_min_price: Optional[float] = None
+    if min_price not in (None, ""):
+        try:
+            parsed_min_price = float(min_price)
+        except (TypeError, ValueError):
+            parsed_min_price = None
+
+    parsed_max_price: Optional[float] = None
+    if max_price not in (None, ""):
+        try:
+            parsed_max_price = float(max_price)
+        except (TypeError, ValueError):
+            parsed_max_price = None
+
+    try:
+        parsed_page = int(page or "1")
+    except (TypeError, ValueError):
+        parsed_page = 1
+    parsed_page = max(1, parsed_page)
+
+    try:
+        parsed_limit = int(limit or "20")
+    except (TypeError, ValueError):
+        parsed_limit = 20
+    parsed_limit = min(100, max(1, parsed_limit))
+
     query = {"status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]}, "is_available": True}
     
-    if category:
-        query["category"] = category
+    if normalized_category in valid_categories:
+        query["category"] = normalized_category
     if owner_id:
         query["owner_id"] = owner_id
-    if listing_type:
-        query["listing_type"] = listing_type
+    if normalized_listing_type in valid_listing_types:
+        query["listing_type"] = normalized_listing_type
     if sub_category:
         query["sub_category"] = sub_category
     if city:
         query["city"] = {"$regex": city, "$options": "i"}
-    if min_price:
-        query["price"] = {"$gte": min_price}
-    if max_price:
-        query["price"] = {**query.get("price", {}), "$lte": max_price}
+    if parsed_min_price is not None:
+        query["price"] = {"$gte": parsed_min_price}
+    if parsed_max_price is not None:
+        query["price"] = {**query.get("price", {}), "$lte": parsed_max_price}
     effective_search = search or q
     if effective_search:
         normalized = normalize_search_query(effective_search)
@@ -1048,7 +1444,7 @@ async def get_listings(
     
     # Sort boosted listings first
     sort_direction = -1 if sort_order == "desc" else 1
-    skip = (page - 1) * limit
+    skip = (parsed_page - 1) * parsed_limit
     
     # Get boosted listings first
     boosted = await db.listings.find(
@@ -1056,7 +1452,8 @@ async def get_listings(
     , {"_id": 0}).limit(5).to_list(5)
     
     # Then regular listings
-    regular = await db.listings.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(limit - len(boosted)).to_list(limit)
+    regular_limit = max(1, parsed_limit - len(boosted))
+    regular = await db.listings.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(regular_limit).to_list(parsed_limit)
     
     listings = boosted + regular
     total = await db.listings.count_documents(query)
@@ -1064,8 +1461,8 @@ async def get_listings(
     return {
         "listings": listings,
         "total": total,
-        "page": page,
-        "pages": (total + limit - 1) // limit
+        "page": parsed_page,
+        "pages": (total + parsed_limit - 1) // parsed_limit
     }
 
 @api_router.get("/listings/trending")
@@ -1451,6 +1848,43 @@ async def update_booking_status(booking_id: str, status: BookingStatus, user: di
         raise HTTPException(status_code=403, detail="Not authorized")
     
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": status}})
+
+    if status == BookingStatus.CONFIRMED and str(user.get("role") or "") == UserRole.PROPERTY_OWNER.value:
+        listing = await db.listings.find_one({"id": booking["listing_id"]}, {"_id": 0, "price": 1})
+        if listing and listing.get("price") is not None:
+            deal_amount = float(listing["price"])
+            commission_amount = compute_commission(deal_amount)
+            commission_doc = {
+                "id": str(uuid.uuid4()),
+                "owner_id": user["id"],
+                "listing_id": booking["listing_id"],
+                "booking_id": booking_id,
+                "deal_amount": deal_amount,
+                "commission_rate": COMMISSION_RATE,
+                "commission_amount": commission_amount,
+                "status": "pending",
+                "paid_at": None,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.commissions.insert_one(commission_doc)
+            await db.users.update_one(
+                {"id": user["id"]},
+                {
+                    "$inc": {"total_commission_owed": commission_amount},
+                    "$set": {"subscription_model": "commission"},
+                },
+            )
+            await db.notifications.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": user["id"],
+                    "type": "commission",
+                    "title": "Commission due",
+                    "message": f"A 5% platform commission of ₹{commission_amount:,.2f} is due on your confirmed deal.",
+                    "read": False,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
     
     # Send notification to user
     notification = {
@@ -4567,6 +5001,29 @@ async def get_admin_stats(user: dict = Depends(get_admin_user)):
     rev_result = await db.payments.aggregate(total_revenue_pipeline).to_list(1)
     total_revenue = (rev_result[0].get("total", 0) / 100) if rev_result else 0
 
+    subscription_revenue = await db.subscriptions.aggregate([
+        {"$match": {"status": "active"}},
+        {"$group": {"_id": "$billing_month", "revenue_paise": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        {"$sort": {"_id": -1}},
+        {"$limit": 12},
+    ]).to_list(12)
+
+    commission_revenue = await db.commissions.aggregate([
+        {"$group": {"_id": "$status", "total_amount": {"$sum": "$commission_amount"}, "count": {"$sum": 1}}},
+    ]).to_list(10)
+    commission_map = {row["_id"]: row for row in commission_revenue}
+
+    active_subscription_owners = await db.users.count_documents({
+        "role": {"$in": list(SUBSCRIPTION_ROLES)},
+        "subscription_status": {"$in": ["active", "trial"]},
+        "deleted": {"$ne": True},
+    })
+    blocked_subscription_owners = await db.users.count_documents({
+        "role": {"$in": list(SUBSCRIPTION_ROLES)},
+        "subscription_status": "blocked",
+        "deleted": {"$ne": True},
+    })
+
     response_payload = {
         "total_users": total_users,
         "total_owners": total_owners,
@@ -4589,6 +5046,23 @@ async def get_admin_stats(user: dict = Depends(get_admin_user)):
         "total_reviews": total_reviews,
         "total_messages": total_messages,
         "total_revenue": total_revenue,
+        "subscription_revenue_by_month": [
+            {
+                "month": row["_id"],
+                "revenue": row["revenue_paise"] / 100,
+                "subscribers": row["count"],
+            }
+            for row in subscription_revenue
+        ],
+        "commission": {
+            "pending": commission_map.get("pending", {}).get("total_amount", 0),
+            "paid": commission_map.get("paid", {}).get("total_amount", 0),
+            "pending_count": commission_map.get("pending", {}).get("count", 0),
+        },
+        "subscriber_counts": {
+            "active_or_trial": active_subscription_owners,
+            "blocked": blocked_subscription_owners,
+        },
         "new_users_7d": new_users_7d,
         "new_owners_7d": new_owners_7d,
         "new_listings_7d": new_listings_7d,
@@ -5625,17 +6099,20 @@ SUBSCRIPTION_AMOUNT = 25100  # ₹251 in paise
 class SubscriptionRequest(BaseModel):
     plan: str = Field("monthly", description="Subscription plan: monthly")
 
+
+class CouponValidateRequest(BaseModel):
+    coupon: str
+
 @api_router.post("/subscriptions/create-order")
 async def create_subscription_order(
     request: SubscriptionRequest,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Create Razorpay order for service provider subscription (₹251/month)"""
+    """Create Razorpay order for subscription-based owner roles (₹251/month)"""
     user = await get_current_user(credentials)
     
-    # Only service providers can subscribe
-    if user.get("role") != "service_provider":
-        raise HTTPException(status_code=403, detail="Only service providers can subscribe")
+    if str(user.get("role") or "") not in SUBSCRIPTION_ROLES:
+        raise HTTPException(status_code=403, detail="Only service providers, stay owners, and event owners can subscribe")
     
     if not razorpay_client:
         raise HTTPException(status_code=500, detail="Payment gateway not configured")
@@ -5689,6 +6166,20 @@ async def create_subscription_order(
         logger.error(f"Subscription order creation failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@api_router.post("/subscriptions/coupon/validate")
+async def validate_subscription_coupon(body: CouponValidateRequest):
+    code = body.coupon.strip().upper()
+    coupon = VALID_COUPONS.get(code)
+    if not coupon:
+        raise HTTPException(status_code=400, detail="Invalid coupon code")
+    return {
+        "valid": True,
+        "code": code,
+        "benefit": f"First {coupon['free_months']} months FREE",
+        "free_months": coupon["free_months"],
+    }
+
 @api_router.post("/subscriptions/verify")
 async def verify_subscription_payment(
     request: PaymentVerifyRequest,
@@ -5713,15 +6204,15 @@ async def verify_subscription_payment(
         if not subscription:
             raise HTTPException(status_code=404, detail="Subscription not found")
         
-        # Calculate expiry (30 days from now)
-        expiry_date = datetime.now(timezone.utc) + timedelta(days=30)
+        now = datetime.now(timezone.utc)
+        expiry_date = compute_next_billing_date(now)
         
         await db.subscriptions.update_one(
             {'id': subscription['id']},
             {'$set': {
                 'status': 'active',
                 'razorpay_payment_id': request.razorpay_payment_id,
-                'activated_at': datetime.now(timezone.utc).isoformat(),
+                'activated_at': now.isoformat(),
                 'expires_at': expiry_date.isoformat()
             }}
         )
@@ -5731,7 +6222,13 @@ async def verify_subscription_payment(
             {'id': user["id"]},
             {'$set': {
                 'subscription': 'active',
-                'subscription_expires': expiry_date.isoformat()
+                'subscription_status': 'active',
+                'subscription_expires': expiry_date.isoformat(),
+                'next_billing_date': expiry_date.isoformat(),
+                'last_payment_date': now.isoformat(),
+                'subscription_start_date': user.get('subscription_start_date') or now.isoformat(),
+                'block_status': None,
+                'block_until': None,
             }}
         )
         
@@ -5751,35 +6248,88 @@ async def verify_subscription_payment(
         logger.error(f"Subscription verification failed: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.put("/subscriptions/auto-renew")
+async def toggle_subscription_auto_renew(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user = await get_current_user(credentials)
+
+    if str(user.get("role") or "") not in SUBSCRIPTION_ROLES:
+        raise HTTPException(status_code=403, detail="Subscription not applicable to your role")
+
+    current = bool(user.get("auto_renew", True))
+    await db.users.update_one(
+        {"id": user["id"]},
+        {"$set": {"auto_renew": not current}},
+    )
+    return {"auto_renew": not current}
+
+@api_router.get("/subscriptions/invoices")
+async def get_subscription_invoices(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user = await get_current_user(credentials)
+
+    invoices = await db.subscriptions.find(
+        {"user_id": user["id"], "status": "active"},
+        {"_id": 0},
+    ).sort("paid_at", -1).to_list(24)
+
+    return {"invoices": invoices}
+
 @api_router.get("/subscriptions/status")
 async def get_subscription_status(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Get current user's subscription status"""
     user = await get_current_user(credentials)
-    
-    if user.get("role") != "service_provider":
-        return {'has_subscription': False, 'message': 'Not a service provider'}
-    
-    subscription = await db.subscriptions.find_one(
-        {'user_id': user["id"], 'status': 'active'},
-        {'_id': 0}
-    )
-    
-    if subscription:
-        expires_at = datetime.fromisoformat(subscription['expires_at'].replace('Z', '+00:00'))
-        is_active = expires_at > datetime.now(timezone.utc)
-        
+
+    role = str(user.get("role") or "")
+    if role in COMMISSION_ROLES:
+        pending_commission = await db.commissions.aggregate([
+            {"$match": {"owner_id": user["id"], "status": "pending"}},
+            {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}},
+        ]).to_list(1)
+
+        pending_total = pending_commission[0]["total"] if pending_commission else 0
         return {
-            'has_subscription': is_active,
-            'subscription': subscription if is_active else None,
-            'message': 'Active subscription' if is_active else 'Subscription expired'
+            "model": "commission",
+            "commission_rate": f"{int(COMMISSION_RATE * 100)}%",
+            "pending_commission_amount": pending_total,
+            "message": "You pay 5% commission per confirmed deal. No monthly fee.",
         }
-    
+
+    if role not in SUBSCRIPTION_ROLES:
+        return {'has_subscription': False, 'message': 'Not a service provider'}
+
+    status = str(user.get("subscription_status") or "pending")
+    trial_end = user.get("trial_end_date")
+    next_billing = user.get("next_billing_date")
+    now = datetime.now(timezone.utc)
+
+    trial_days_remaining = None
+    if status == "trial" and trial_end:
+        trial_end_dt = _parse_iso_datetime(trial_end)
+        if trial_end_dt:
+            trial_days_remaining = max(0, (trial_end_dt - now).days)
+
+    last_payment = await db.subscriptions.find_one(
+        {"user_id": user["id"], "status": "active"},
+        {"_id": 0, "paid_at": 1, "invoice_number": 1, "billing_month": 1},
+        sort=[("paid_at", -1)],
+    )
+
     return {
-        'has_subscription': False,
-        'subscription': None,
-        'message': 'No active subscription',
-        'price': '₹251/month',
-        'features': [
+        "model": "subscription",
+        "status": status,
+        "has_subscription": status in {"active", "trial"},
+        "amount_monthly": f"₹{SUBSCRIPTION_AMOUNT // 100}",
+        "coupon_used": user.get("coupon_used"),
+        "trial_end_date": trial_end,
+        "trial_days_remaining": trial_days_remaining,
+        "next_billing_date": next_billing,
+        "last_payment_date": user.get("last_payment_date"),
+        "last_invoice": last_payment,
+        "auto_renew": user.get("auto_renew", True),
+        "block_until": user.get("block_until"),
+        "subscription_start_date": user.get("subscription_start_date"),
+        "message": "Active subscription" if status in {"active", "trial"} else "No active subscription",
+        "price": '₹251/month',
+        "features": [
             'List unlimited services',
             'Priority in search results',
             'Verified badge',
@@ -6085,6 +6635,15 @@ async def startup_services():
     await db.users.create_index("id", unique=True)
     await db.users.create_index([("role", 1), ("created_at", -1)])
     await db.users.create_index([("aadhar_status", 1), ("role", 1)])
+    await db.subscriptions.create_index("id", unique=True)
+    await db.subscriptions.create_index([("user_id", 1), ("billing_month", 1), ("status", 1)])
+    await db.subscriptions.create_index([("razorpay_order_id", 1)], unique=True, sparse=True)
+    await db.commissions.create_index("id", unique=True)
+    await db.commissions.create_index([("owner_id", 1), ("status", 1), ("created_at", -1)])
+    await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+
+    from cron.billing_cron import setup_billing_scheduler
+    setup_billing_scheduler()
     await db.users.create_index([("block_status", 1)])
     await db.users.create_index([("is_email_verified", 1), ("role", 1)])
     await db.users.create_index([("deleted", 1)])
@@ -6119,6 +6678,25 @@ async def startup_services():
     await db.listings.create_index([("title_gu", 1)], sparse=True)
     await db.listings.create_index([("title_hi", 1)], sparse=True)
     await db.listings.create_index([("is_locked", 1), ("locked_by", 1), ("updated_at", -1)])
+    await db.listings.create_index([("category", 1), ("status", 1), ("category_specific_fields.property_type", 1)])
+    await db.listings.create_index([
+        ("category", 1),
+        ("status", 1),
+        ("category_specific_fields.stay_type", 1),
+        ("category_specific_fields.available_rooms", -1),
+    ])
+    await db.listings.create_index([
+        ("category", 1),
+        ("category_specific_fields.service_type", 1),
+        ("category_specific_fields.service_radius_km", 1),
+    ])
+    await db.listings.create_index([
+        ("category", 1),
+        ("category_specific_fields.venue_type", 1),
+        ("category_specific_fields.indoor_capacity", -1),
+    ])
+    await db.listings.create_index([("pricing.amount", 1)])
+    await db.listings.create_index([("pricing.type", 1)])
     await db.admin_audit_logs.create_index([("actor_id", 1), ("created_at", -1)])
     await db.admin_audit_logs.create_index([("target_id", 1), ("created_at", -1)])
     try:

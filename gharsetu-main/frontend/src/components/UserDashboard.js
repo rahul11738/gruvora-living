@@ -2,18 +2,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
-import { wishlistAPI, bookingsAPI, chatAPI, videosAPI } from '../lib/api';
+import { wishlistAPI, bookingsAPI, videosAPI } from '../lib/api';
 import { prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import {
   Heart,
   Calendar,
-  MessageCircle,
   User,
   Settings,
   LogOut,
@@ -21,8 +19,6 @@ import {
   MapPin,
   Clock,
   X,
-  Send,
-  Bot,
   Loader2,
   Menu,
   Eye,
@@ -32,7 +28,6 @@ import {
   Film,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
-import { ScrollArea } from './ui/scroll-area';
 
 export const UserDashboard = () => {
   const { user, logout } = useAuth();
@@ -166,15 +161,6 @@ export const UserDashboard = () => {
                       <Badge className="ml-auto">{savedReels.length}</Badge>
                     )}
                   </button>
-                  <button
-                    onClick={() => setActiveTab('chatbot')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      activeTab === 'chatbot' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                    }`}
-                  >
-                    <MessageCircle className="w-5 h-5" />
-                    Chat Assistant
-                  </button>
                 </nav>
 
                 <div className="mt-6 pt-6 border-t">
@@ -285,7 +271,6 @@ export const UserDashboard = () => {
               </div>
             )}
 
-            {activeTab === 'chatbot' && <ChatbotSection />}
           </main>
         </div>
       </div>
@@ -456,99 +441,6 @@ const SavedReelCard = ({ video, onRemove }) => {
             </span>
           </div>
         </div>
-      </div>
-    </Card>
-  );
-};
-
-const ChatbotSection = () => {
-  const [messages, setMessages] = useState([
-    {
-      role: 'assistant',
-      content: 'નમસ્તે! 👋 હું GharSetu Assistant છું. હું તમને properties, stays, events, અને services શોધવામાં મદદ કરી શકું છું. તમને શું જોઈએ છે?',
-    },
-  ]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
-
-    const userMessage = { role: 'user', content: input };
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setLoading(true);
-
-    try {
-      const response = await chatAPI.send(input);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: response.data.response },
-      ]);
-    } catch (error) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: 'માફ કરશો, કંઈક ખોટું થયું. કૃપયા ફરીથી પ્રયાસ કરો.' },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Card className="h-[600px] flex flex-col" data-testid="chatbot-section">
-      <CardHeader className="border-b">
-        <CardTitle className="flex items-center gap-2">
-          <Bot className="w-5 h-5 text-primary" />
-          Your Assistant
-        </CardTitle>
-      </CardHeader>
-      <ScrollArea className="flex-1 p-4">
-        <div className="space-y-4">
-          {messages.map((msg, i) => (
-            <div
-              key={i}
-              className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-white rounded-br-sm'
-                    : 'bg-stone-100 text-stone-900 rounded-bl-sm'
-                }`}
-              >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start">
-              <div className="bg-stone-100 rounded-2xl rounded-bl-sm px-4 py-3">
-                <Loader2 className="w-5 h-5 animate-spin" />
-              </div>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-      <div className="p-4 border-t">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleSend();
-          }}
-          className="flex gap-2"
-        >
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
-            disabled={loading}
-            data-testid="chat-input"
-          />
-          <Button type="submit" className="btn-primary px-4" disabled={loading} data-testid="chat-send-btn">
-            <Send className="w-5 h-5" />
-          </Button>
-        </form>
       </div>
     </Card>
   );

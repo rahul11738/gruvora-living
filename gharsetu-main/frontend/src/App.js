@@ -1,8 +1,9 @@
-import React, { lazy, Suspense, useEffect, useState } from "react";
+import React, { lazy, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { InteractionProvider } from "./context/InteractionContext";
 import { NotificationProvider } from "./components/Notifications";
 
@@ -32,48 +33,19 @@ const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const ChatPage = lazy(() => import("./components/ChatPage"));
 const NotificationsPage = lazy(() => import("./components/NotificationsPage"));
 const AdminDashboard = lazy(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
-const ChatBot = lazy(() => import("./components/ChatBot").then((m) => ({ default: m.ChatBot })));
+const TermsConditionsPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.TermsConditionsPage })));
+const PrivacyPolicyPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.PrivacyPolicyPage })));
+const RefundCancellationPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.RefundCancellationPage })));
+const DisclaimerPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.DisclaimerPage })));
+const AboutUsPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.AboutUsPage })));
+const UserVerificationPolicyPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.UserVerificationPolicyPage })));
+const CommunityGuidelinesPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.CommunityGuidelinesPage })));
 
 const RouteLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-stone-50">
     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
   </div>
 );
-
-const DeferredChatBot = () => {
-  const [shouldRender, setShouldRender] = useState(false);
-
-  useEffect(() => {
-    let timeoutId = null;
-    let idleId = null;
-    const start = () => setShouldRender(true);
-
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      idleId = window.requestIdleCallback(start, { timeout: 2500 });
-    } else {
-      timeoutId = window.setTimeout(start, 1200);
-    }
-
-    return () => {
-      if (idleId !== null && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, []);
-
-  if (!shouldRender) {
-    return null;
-  }
-
-  return (
-    <Suspense fallback={null}>
-      <ChatBot />
-    </Suspense>
-  );
-};
 
 // Protected Route Component
 const ProtectedRoute = ({ children, requireOwner = false, requireAdmin = false }) => {
@@ -136,6 +108,16 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/verify-email" element={<VerifyEmailPage />} />
+        <Route path="/terms-conditions" element={<TermsConditionsPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+        <Route path="/refund-cancellation-policy" element={<RefundCancellationPage />} />
+        <Route path="/disclaimer" element={<DisclaimerPage />} />
+        <Route path="/about-us" element={<AboutUsPage />} />
+        <Route path="/user-verification-policy" element={<UserVerificationPolicyPage />} />
+        <Route path="/community-guidelines" element={<CommunityGuidelinesPage />} />
+        <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
+        <Route path="/terms" element={<Navigate to="/terms-conditions" replace />} />
+        <Route path="/about" element={<Navigate to="/about-us" replace />} />
 
         {/* Category & Search */}
         <Route path="/category/:category" element={<CategoryPage />} />
@@ -225,14 +207,15 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <InteractionProvider>
-          <NotificationProvider>
-            <AppRoutes />
-            <MobileBottomNav />
-            <DeferredChatBot />
-            <Toaster position="top-right" richColors />
-          </NotificationProvider>
-        </InteractionProvider>
+        <SubscriptionProvider>
+          <InteractionProvider>
+            <NotificationProvider>
+              <AppRoutes />
+              <MobileBottomNav />
+              <Toaster position="top-right" richColors />
+            </NotificationProvider>
+          </InteractionProvider>
+        </SubscriptionProvider>
       </AuthProvider>
     </BrowserRouter>
   );

@@ -154,8 +154,62 @@ export const authAPI = {
 };
 
 // Listings APIs
+const sanitizeListingsParams = (params = {}) => {
+  const next = { ...(params || {}) };
+
+  const normalizeOptional = (value) => {
+    if (value === null || value === undefined) return undefined;
+    const text = String(value).trim();
+    return text.length ? text : undefined;
+  };
+
+  next.category = normalizeOptional(next.category);
+  if (next.category) {
+    const normalizedCategory = next.category.toLowerCase();
+    if (['all', 'any', '*'].includes(normalizedCategory)) {
+      next.category = undefined;
+    } else if (normalizedCategory === 'hotel') {
+      next.category = 'stay';
+    } else {
+      next.category = normalizedCategory;
+    }
+  }
+
+  next.listing_type = normalizeOptional(next.listing_type);
+  if (next.listing_type) {
+    const normalizedListingType = next.listing_type.toLowerCase();
+    next.listing_type = ['all', 'any', '*'].includes(normalizedListingType)
+      ? undefined
+      : normalizedListingType;
+  }
+
+  ['min_price', 'max_price', 'page', 'limit', 'lat', 'lng', 'radius'].forEach((key) => {
+    const value = normalizeOptional(next[key]);
+    if (value === undefined) {
+      next[key] = undefined;
+      return;
+    }
+
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      next[key] = undefined;
+      return;
+    }
+
+    next[key] = key === 'page' || key === 'limit' ? Math.floor(numeric) : numeric;
+  });
+
+  const cleaned = {};
+  Object.entries(next).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      cleaned[key] = value;
+    }
+  });
+  return cleaned;
+};
+
 export const listingsAPI = {
-  getAll: (params) => api.get('/listings', { params }),
+  getAll: (params) => api.get('/listings', { params: sanitizeListingsParams(params) }),
   smartSearch: (query, params = {}) => api.get('/search/smart', { params: { query, ...params } }),
   suggestSearch: (query, params = {}) => api.get('/search/suggest', { params: { query, ...params } }),
   getTrending: (limit = 10, category) => api.get('/listings/trending', { params: { limit, category } }),
@@ -385,6 +439,9 @@ export const subscriptionAPI = {
   createOrder: (plan = 'monthly') => api.post('/subscriptions/create-order', { plan }),
   verify: (data) => api.post('/subscriptions/verify', data),
   getStatus: () => api.get('/subscriptions/status'),
+  validateCoupon: (data) => api.post('/subscriptions/coupon/validate', data),
+  toggleAutoRenew: () => api.put('/subscriptions/auto-renew'),
+  getInvoices: () => api.get('/subscriptions/invoices'),
 };
 
 export default api;

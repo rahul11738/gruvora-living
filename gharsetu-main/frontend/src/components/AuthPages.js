@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import {
   Select,
   SelectContent,
@@ -26,20 +27,42 @@ import {
   Eye,
   EyeOff,
   ArrowRight,
-  CheckCircle2,
   Shield,
-  Building2,
   Hotel,
   Wrench,
   PartyPopper,
   Sparkles,
+  CheckCircle2,
+  Zap,
+  Crown,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 
-const ownerTypes = [
-  { value: 'property_owner', label: 'Property Owner', labelGu: 'પ્રોપર્ટી માલિક', icon: Home, description: 'List residential & commercial properties' },
-  { value: 'service_provider', label: 'Service Provider', labelGu: 'સેવા પ્રદાતા', icon: Wrench, description: 'Offer home services like plumber, electrician' },
-  { value: 'hotel_owner', label: 'Hotel Owner', labelGu: 'હોટેલ માલિક', icon: Hotel, description: 'List hotels, rooms, guest houses' },
-  { value: 'event_owner', label: 'Event Venue Owner', labelGu: 'ઇવેન્ટ માલિક', icon: PartyPopper, description: 'List party plots, marriage halls' },
+const SUBSCRIPTION_ROLES = new Set(['stay_owner', 'service_provider', 'event_owner']);
+const COMMISSION_ROLES = new Set(['property_owner', 'hotel_owner']);
+
+const OWNER_TYPES = [
+  {
+    value: 'property_owner', label: 'Property Owner', labelGu: 'પ્રોપર્ટી માલિક',
+    icon: Home, model: 'commission',
+    hint: '5% commission per deal. No monthly fee.',
+  },
+  {
+    value: 'service_provider', label: 'Service Provider', labelGu: 'સેવા પ્રદાતા',
+    icon: Wrench, model: 'subscription',
+    hint: '₹251/month after free trial.',
+  },
+  {
+    value: 'hotel_owner', label: 'Hotel Owner', labelGu: 'હોટેલ માલિક',
+    icon: Hotel, model: 'commission',
+    hint: '5% commission per booking. No monthly fee.',
+  },
+  {
+    value: 'event_owner', label: 'Event Venue Owner', labelGu: 'ઇવેન્ટ માલિક',
+    icon: PartyPopper, model: 'subscription',
+    hint: '₹251/month after free trial.',
+  },
 ];
 
 export const LoginPage = () => {
@@ -193,9 +216,15 @@ export const LoginPage = () => {
 export const RegisterPage = () => {
   const navigate = useNavigate();
   const { register, registerOwner } = useAuth();
+
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('user');
+
+  const [couponInput, setCouponInput] = useState('');
+  const [couponState, setCouponState] = useState(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -211,17 +240,66 @@ export const RegisterPage = () => {
     business_name: '',
   });
 
+  const selectedOwnerType = OWNER_TYPES.find(t => t.value === formData.role);
+  const isSubscriptionRole = SUBSCRIPTION_ROLES.has(formData.role);
+  const isCommissionRole = COMMISSION_ROLES.has(formData.role);
+  const canRegisterOwner = !isSubscriptionRole || (isSubscriptionRole && couponState?.valid);
+
+  const handleRoleChange = (role) => {
+    setFormData(p => ({ ...p, role }));
+    setCouponInput('');
+    setCouponState(null);
+  };
+
+  const handleApplyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code) {
+      return;
+    }
+
+    setCouponChecking(true);
+    try {
+      const res = await api.post('/subscriptions/coupon/validate', { coupon: code });
+      setCouponState({
+        valid: true,
+        free_months: res.data.free_months,
+        message: res.data.benefit,
+        code,
+      });
+      toast.success('Coupon applied!');
+    } catch {
+      setCouponState({ valid: false, message: 'Invalid coupon code. Please try again.' });
+    } finally {
+      setCouponChecking(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (activeTab === 'owner' && isSubscriptionRole && !couponState?.valid) {
+      toast.error('Please enter coupon code GRUVORA5M to get 5 months free subscription.');
+      return;
+    }
+
     setLoading(true);
 
     try {
+      const payload = {
+        ...formData,
+        ...(couponState?.valid ? { coupon: couponState.code } : {}),
+      };
+
       if (activeTab === 'owner') {
-        await registerOwner(formData);
-        toast.success('Owner registration successful! Your account is pending Aadhar verification.');
+        await registerOwner(payload);
+        if (isSubscriptionRole && couponState?.valid) {
+          toast.success(`🎉 Registered! You have ${couponState.free_months} months free subscription.`);
+        } else {
+          toast.success('Registration successful!');
+        }
         navigate('/owner/dashboard');
       } else {
-        await register(formData);
+        await register(payload);
         toast.success('Registration successful!');
         navigate('/dashboard');
       }
@@ -231,8 +309,6 @@ export const RegisterPage = () => {
       setLoading(false);
     }
   };
-
-  const selectedOwnerType = ownerTypes.find(t => t.value === formData.role);
 
   return (
     <div className="min-h-screen flex" data-testid="register-page">
@@ -289,7 +365,7 @@ export const RegisterPage = () => {
           </Tabs>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name</Label>
                 <div className="relative">
@@ -298,7 +374,7 @@ export const RegisterPage = () => {
                     id="name"
                     placeholder="Enter full name"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
                     className="pl-12 h-12"
                     required
                     data-testid="register-name-input"
@@ -307,14 +383,14 @@ export const RegisterPage = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number</Label>
+                <Label htmlFor="phone">Phone</Label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
                     id="phone"
-                    placeholder="Enter phone number"
+                    placeholder="+91 XXXXXXXXXX"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))}
                     className="pl-12 h-12"
                     required
                     data-testid="register-phone-input"
@@ -332,7 +408,7 @@ export const RegisterPage = () => {
                   type="email"
                   placeholder="Enter your email"
                   value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
                   className="pl-12 h-12"
                   required
                   data-testid="register-email-input"
@@ -347,16 +423,16 @@ export const RegisterPage = () => {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Create a password"
+                  placeholder="Min 8 chars, 1 uppercase, 1 number"
                   value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onChange={e => setFormData(p => ({ ...p, password: e.target.value }))}
                   className="pl-12 pr-12 h-12"
                   required
                   data-testid="register-password-input"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => setShowPassword(v => !v)}
                   className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -368,39 +444,29 @@ export const RegisterPage = () => {
               <Label>Gender</Label>
               <RadioGroup
                 value={formData.gender}
-                onValueChange={(value) => setFormData({ ...formData, gender: value })}
+                onValueChange={value => setFormData(p => ({ ...p, gender: value }))}
                 className="flex gap-4"
               >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="male" id="male" />
-                  <Label htmlFor="male" className="font-normal">Male</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="female" id="female" />
-                  <Label htmlFor="female" className="font-normal">Female</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="other" id="other" />
-                  <Label htmlFor="other" className="font-normal">Other</Label>
-                </div>
+                {['male', 'female', 'other'].map((g) => (
+                  <div key={g} className="flex items-center space-x-2">
+                    <RadioGroupItem value={g} id={g} />
+                    <Label htmlFor={g} className="font-normal capitalize">{g}</Label>
+                  </div>
+                ))}
               </RadioGroup>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="city">City</Label>
-                <Select value={formData.city} onValueChange={(value) => setFormData({ ...formData, city: value })}>
+                <Select value={formData.city} onValueChange={value => setFormData(p => ({ ...p, city: value }))}>
                   <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Select city" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Surat">Surat</SelectItem>
-                    <SelectItem value="Ahmedabad">Ahmedabad</SelectItem>
-                    <SelectItem value="Vadodara">Vadodara</SelectItem>
-                    <SelectItem value="Rajkot">Rajkot</SelectItem>
-                    <SelectItem value="Gandhinagar">Gandhinagar</SelectItem>
-                    <SelectItem value="Bhavnagar">Bhavnagar</SelectItem>
-                    <SelectItem value="Jamnagar">Jamnagar</SelectItem>
+                    {['Surat', 'Ahmedabad', 'Vadodara', 'Rajkot', 'Gandhinagar', 'Bhavnagar', 'Jamnagar'].map((city) => (
+                      <SelectItem key={city} value={city}>{city}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -413,7 +479,7 @@ export const RegisterPage = () => {
                     id="address"
                     placeholder="Area, Landmark"
                     value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    onChange={e => setFormData(p => ({ ...p, address: e.target.value }))}
                     className="pl-12 h-12"
                     required
                     data-testid="register-address-input"
@@ -431,14 +497,14 @@ export const RegisterPage = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 gap-3">
-                      {ownerTypes.map((type) => {
+                      {OWNER_TYPES.map((type) => {
                         const Icon = type.icon;
                         const isSelected = formData.role === type.value;
                         return (
                           <button
                             key={type.value}
                             type="button"
-                            onClick={() => setFormData({ ...formData, role: type.value })}
+                            onClick={() => handleRoleChange(type.value)}
                             className={`p-4 rounded-xl border-2 text-left transition-all ${
                               isSelected
                                 ? 'border-secondary bg-secondary/10'
@@ -463,7 +529,6 @@ export const RegisterPage = () => {
                       <Shield className="w-5 h-5 text-primary" />
                       Aadhar Verification
                     </CardTitle>
-                    <CardDescription>Required for trust & verification badge</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
@@ -474,7 +539,7 @@ export const RegisterPage = () => {
                           id="aadhar_number"
                           placeholder="XXXX XXXX XXXX"
                           value={formData.aadhar_number}
-                          onChange={(e) => setFormData({ ...formData, aadhar_number: e.target.value })}
+                          onChange={e => setFormData(p => ({ ...p, aadhar_number: e.target.value }))}
                           className="pl-12 h-12"
                           maxLength={12}
                           required={activeTab === 'owner'}
@@ -488,7 +553,7 @@ export const RegisterPage = () => {
                         id="aadhar_name"
                         placeholder="Name as per Aadhar card"
                         value={formData.aadhar_name}
-                        onChange={(e) => setFormData({ ...formData, aadhar_name: e.target.value })}
+                        onChange={e => setFormData(p => ({ ...p, aadhar_name: e.target.value }))}
                         className="h-12"
                         required={activeTab === 'owner'}
                         data-testid="register-aadhar-name-input"
@@ -500,19 +565,151 @@ export const RegisterPage = () => {
                         id="business_name"
                         placeholder="Your business or brand name"
                         value={formData.business_name}
-                        onChange={(e) => setFormData({ ...formData, business_name: e.target.value })}
+                        onChange={e => setFormData(p => ({ ...p, business_name: e.target.value }))}
                         className="h-12"
                       />
                     </div>
+
+                    {isSubscriptionRole && (
+                      <div className="space-y-3">
+                        <Card className={`border-2 transition-all ${
+                          couponState?.valid
+                            ? 'border-green-400 bg-green-50'
+                            : 'border-orange-300 bg-orange-50'
+                        }`}>
+                          <CardContent className="pt-5 space-y-4">
+                            <div className="flex items-start gap-3">
+                              {couponState?.valid ? (
+                                <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                              ) : (
+                                <Zap className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                              )}
+                              <div>
+                                <p className="font-semibold text-sm">
+                                  {couponState?.valid
+                                    ? `🎉 Coupon Applied — ${couponState.free_months} Months FREE!`
+                                    : 'Subscription: ₹251/month'}
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {couponState?.valid
+                                    ? `Enjoy ${couponState.free_months} months free. After that, ₹251/month.`
+                                    : 'Enter coupon code GRUVORA5M to get first 5 months absolutely FREE.'}
+                                </p>
+                              </div>
+                            </div>
+
+                            {!couponState?.valid && (
+                              <div className="flex gap-2">
+                                <Input
+                                  placeholder="COUPON CODE"
+                                  value={couponInput}
+                                  onChange={e => {
+                                    setCouponInput(e.target.value.toUpperCase());
+                                    if (couponState) {
+                                      setCouponState(null);
+                                    }
+                                  }}
+                                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleApplyCoupon())}
+                                  className="font-mono uppercase tracking-wider h-11 flex-1"
+                                />
+                                <Button
+                                  type="button"
+                                  onClick={handleApplyCoupon}
+                                  disabled={!couponInput.trim() || couponChecking}
+                                  className="h-11 px-5 bg-orange-500 hover:bg-orange-600 text-white"
+                                >
+                                  {couponChecking
+                                    ? <Loader2 className="w-4 h-4 animate-spin" />
+                                    : 'Apply'}
+                                </Button>
+                              </div>
+                            )}
+
+                            {couponState && !couponState.valid && (
+                              <div className="flex items-center gap-2 text-red-600 text-sm">
+                                <AlertCircle className="w-4 h-4" />
+                                {couponState.message}
+                              </div>
+                            )}
+
+                            {couponState?.valid && (
+                              <div className="rounded-lg bg-green-100 border border-green-300 p-3 text-center">
+                                <p className="text-2xl mb-1">🎉</p>
+                                <p className="font-bold text-green-800 text-base">Congratulations!</p>
+                                <p className="text-green-700 text-sm mt-1">
+                                  You get <span className="font-bold">{couponState.free_months} months FREE</span> subscription.
+                                </p>
+                                <p className="text-green-600 text-xs mt-1">
+                                  After {couponState.free_months} months → ₹251/month
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCouponState(null);
+                                    setCouponInput('');
+                                  }}
+                                  className="text-xs text-green-500 hover:text-green-700 mt-2 underline"
+                                >
+                                  Remove coupon
+                                </button>
+                              </div>
+                            )}
+
+                            {!couponState?.valid && (
+                              <div className="flex items-start gap-2 text-xs text-orange-700 bg-orange-100 rounded-lg p-3">
+                                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                <span>
+                                  Coupon code is <strong>required</strong> to complete registration.
+                                  Enter <span className="font-mono font-bold">GRUVORA5M</span> for 5 months free.
+                                </span>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+
+                    {isCommissionRole && (
+                      <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-sm">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Crown className="w-4 h-4 text-blue-600" />
+                          <p className="font-semibold text-blue-800">No monthly fee</p>
+                        </div>
+                        <p className="text-blue-700">
+                          We take a <strong>5% commission</strong> on each confirmed deal (rent/sell).
+                          No upfront cost — you only pay when you earn.
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </>
             )}
 
-            <Button type="submit" className="w-full btn-primary h-12" disabled={loading} data-testid="register-submit-btn">
-              {loading ? 'Creating Account...' : activeTab === 'owner' ? 'Register as Owner' : 'Create Account'}
-              <ArrowRight className="w-5 h-5 ml-2" />
+            <Button
+              type="submit"
+              className={`w-full h-12 ${
+                activeTab === 'owner' && !canRegisterOwner
+                  ? 'opacity-50 cursor-not-allowed bg-stone-400'
+                  : 'btn-primary'
+              }`}
+              disabled={loading || (activeTab === 'owner' && !canRegisterOwner)}
+              data-testid="register-submit-btn"
+            >
+              {loading ? (
+                <><Loader2 className="w-5 h-5 mr-2 animate-spin" />Creating Account...</>
+              ) : activeTab === 'owner' && isSubscriptionRole && !couponState?.valid ? (
+                <><Lock className="w-5 h-5 mr-2" />Enter Coupon to Register</>
+              ) : (
+                <>{activeTab === 'owner' ? 'Register as Owner' : 'Create Account'} <ArrowRight className="w-5 h-5 ml-2" /></>
+              )}
             </Button>
+
+            {activeTab === 'owner' && isSubscriptionRole && !couponState?.valid && (
+              <p className="text-center text-xs text-muted-foreground">
+                Enter coupon code <span className="font-mono font-bold text-primary">GRUVORA5M</span> above to unlock registration
+              </p>
+            )}
           </form>
 
           <p className="text-center text-muted-foreground mt-6">

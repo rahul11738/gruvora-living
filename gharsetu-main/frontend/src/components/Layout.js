@@ -30,6 +30,11 @@ import {
   X,
   Map as MapIcon,
   Bell,
+  Youtube,
+  Instagram,
+  Facebook,
+  Mail,
+  ArrowRight,
 } from 'lucide-react';
 
 const categories = [
@@ -66,7 +71,7 @@ export const Header = () => {
             <img
               src="/GruvoraLogo.jpeg"
               alt="Gruvora"
-              className="w-10 h-10 rounded-xl object-cover"
+              className="w-10 h-10 rounded-xl object-cover shadow-sm"
             />
             <span className="font-heading font-bold text-xl md:text-2xl text-primary">Gruvora</span>
           </Link>
@@ -80,10 +85,10 @@ export const Header = () => {
                 <Link
                   key={cat.id}
                   to={cat.href}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                  className={`relative flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
                     isActive
-                      ? 'bg-primary/10 text-primary'
-                      : 'text-stone-600 hover:bg-stone-100'
+                      ? 'bg-primary/10 text-primary shadow-[0_8px_20px_rgba(5,150,105,0.12)] border border-primary/25'
+                      : 'text-stone-600'
                   }`}
                   data-testid={`nav-${cat.id}`}
                 >
@@ -102,7 +107,7 @@ export const Header = () => {
               onMouseEnter={prefetchMapRoute}
               onFocus={prefetchMapRoute}
               onClick={() => markRouteNavigation('/map', 'header-map-btn')}
-              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-blue-50 text-blue-600 shadow-[0_6px_18px_rgba(37,99,235,0.12)]"
               data-testid="map-btn"
             >
               <MapIcon className="w-4 h-4" />
@@ -115,7 +120,7 @@ export const Header = () => {
               onMouseEnter={prefetchReelsRoute}
               onFocus={prefetchReelsRoute}
               onClick={() => markRouteNavigation('/reels', 'header-reels-btn')}
-              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary hover:bg-secondary/20 transition-colors"
+              className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full bg-secondary/10 text-secondary shadow-[0_6px_18px_rgba(249,115,22,0.16)]"
               data-testid="reels-btn"
             >
               <Play className="w-4 h-4" />
@@ -127,7 +132,7 @@ export const Header = () => {
                 {/* Wishlist - Hidden on mobile, shown in bottom nav */}
                 <Link
                   to="/wishlist"
-                  className="hidden md:flex w-10 h-10 items-center justify-center rounded-full bg-stone-100 hover:bg-stone-200 transition-colors"
+                  className="hidden md:flex w-10 h-10 items-center justify-center rounded-full bg-stone-100 shadow-sm"
                   data-testid="wishlist-btn"
                 >
                   <Heart className="w-5 h-5 text-stone-600" />
@@ -140,7 +145,7 @@ export const Header = () => {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
+                      className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1.5 md:py-2 rounded-full bg-primary/10"
                       data-testid="user-menu-btn"
                     >
                       <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center">
@@ -215,7 +220,7 @@ export const Header = () => {
                           key={cat.id}
                           to={cat.href}
                           onClick={() => setMobileOpen(false)}
-                          className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-stone-100 transition-colors"
+                          className="flex items-center gap-3 px-4 py-3 rounded-xl"
                         >
                           <Icon className="w-5 h-5 text-primary" />
                           <div>
@@ -266,101 +271,138 @@ export const Header = () => {
 };
 
 export const Footer = () => {
+  const policyLinks = [
+    { label: 'Terms & Conditions', href: '/terms-conditions' },
+    { label: 'Privacy Policy', href: '/privacy-policy' },
+    { label: 'Refund & Cancellation', href: '/refund-cancellation-policy' },
+    { label: 'Disclaimer', href: '/disclaimer' },
+    { label: 'About Us', href: '/about-us' },
+    { label: 'User Verification Policy', href: '/user-verification-policy' },
+    { label: 'Community Guidelines', href: '/community-guidelines' },
+  ];
+
+  const socialLinks = [
+    {
+      label: 'YouTube',
+      href: 'https://youtube.com/@gruvora-channel?si=6s_wuVXVRfYp9K-M',
+      icon: Youtube,
+    },
+    {
+      label: 'Instagram',
+      href: 'https://www.instagram.com/gruvora.com_?igsh=MTl5aHVxMTFscTgwZA==',
+      icon: Instagram,
+    },
+    {
+      label: 'Facebook',
+      href: 'https://www.facebook.com/share/1BMsgoo66V/',
+      icon: Facebook,
+    },
+    {
+      label: 'Email',
+      href: 'mailto:gruvora@gmail.com',
+      icon: Mail,
+    },
+  ];
+
   return (
-    <footer className="bg-stone-900 text-white" data-testid="footer">
-      <div className="container-main py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
-          {/* Brand */}
+    <footer className="relative overflow-hidden bg-stone-950 text-white" data-testid="footer">
+      <div className="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/30 via-transparent to-transparent" />
+
+      <div className="container-main relative py-12 md:py-16">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-5 md:p-7 mb-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <img
-                src="/GruvoraLogo.jpeg"
-                alt="Gruvora"
-                className="w-10 h-10 rounded-xl object-cover"
-              />
-              <span className="font-heading font-bold text-2xl">GRUVORA LIVING</span>
+            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">GRUVORA LIVING</p>
+            <h3 className="font-heading text-xl md:text-2xl font-semibold mt-1">Your Home Bridge for Properties, Stays, Events and Services</h3>
+            <p className="text-stone-300 mt-2 text-sm">Trusted marketplace to list and discover in one platform.</p>
+          </div>
+          <Link to="/owner/register" className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-stone-950 hover:bg-emerald-400 transition-colors">
+            Start Listing
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <img src="/GruvoraLogo.jpeg" alt="Gruvora" className="w-10 h-10 rounded-xl object-cover" />
+              <span className="font-heading font-bold text-xl">GRUVORA LIVING</span>
             </div>
-            <p className="text-stone-400 mb-4">
-              Connecting you to your perfect space. Find homes, businesses, stays, event venues, and services all in one place.
+            <p className="text-stone-300 text-sm leading-relaxed">
+              Smart digital platform to connect users with homes, businesses, stay options, event spaces, and local services.
             </p>
-            <p className="text-stone-400 text-sm">
-              તમારી સંપૂર્ણ જગ્યા સાથે જોડાણ
-            </p>
+            <div className="mt-5 flex items-center gap-2">
+              {socialLinks.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <a
+                    key={item.label}
+                    href={item.href}
+                    target={item.href.startsWith('mailto:') ? undefined : '_blank'}
+                    rel={item.href.startsWith('mailto:') ? undefined : 'noreferrer'}
+                    aria-label={item.label}
+                    className="w-9 h-9 rounded-full border border-white/20 bg-white/5 hover:bg-white/15 transition-colors flex items-center justify-center"
+                  >
+                    <Icon className="w-4 h-4" />
+                  </a>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Categories */}
           <div>
-            <h3 className="font-heading font-semibold text-lg mb-4">Categories</h3>
-            <ul className="space-y-2">
+            <h3 className="font-heading font-semibold text-lg mb-4">Explore</h3>
+            <ul className="space-y-2.5">
               {categories.map((cat) => (
                 <li key={cat.id}>
-                  <Link
-                    to={cat.href}
-                    className="text-stone-400 hover:text-white transition-colors"
-                  >
-                    {cat.name} - {cat.nameGu}
+                  <Link to={cat.href} className="text-stone-300 hover:text-white transition-colors text-sm">
+                    {cat.name}
                   </Link>
                 </li>
               ))}
-            </ul>
-          </div>
-
-          {/* Quick Links */}
-          <div>
-            <h3 className="font-heading font-semibold text-lg mb-4">Quick Links</h3>
-            <ul className="space-y-2">
-              <li>
-                <Link to="/about" className="text-stone-400 hover:text-white transition-colors">
-                  About Us
-                </Link>
-              </li>
-              <li>
-                <Link to="/contact" className="text-stone-400 hover:text-white transition-colors">
-                  Contact
-                </Link>
-              </li>
-              <li>
-                <Link to="/owner/register" className="text-stone-400 hover:text-white transition-colors">
-                  List Your Property
-                </Link>
-              </li>
               <li>
                 <Link
                   to="/reels"
                   onMouseEnter={prefetchReelsRoute}
                   onFocus={prefetchReelsRoute}
                   onClick={() => markRouteNavigation('/reels', 'footer-reels-link')}
-                  className="text-stone-400 hover:text-white transition-colors"
+                  className="text-stone-300 hover:text-white transition-colors text-sm"
                 >
-                  GUVORA LIVING Reels
+                  Gruvora Reels
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* Contact */}
+          <div>
+            <h3 className="font-heading font-semibold text-lg mb-4">Policies</h3>
+            <ul className="space-y-2.5">
+              {policyLinks.map((item) => (
+                <li key={item.href}>
+                  <Link to={item.href} className="text-stone-300 hover:text-white transition-colors text-sm">
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <div>
             <h3 className="font-heading font-semibold text-lg mb-4">Contact</h3>
-            <ul className="space-y-2 text-stone-400">
+            <ul className="space-y-2 text-stone-300 text-sm">
               <li>Surat, Gujarat, India</li>
-              <li>gruvora@gmail.com</li>
+              <li>
+                <a href="mailto:gruvora@gmail.com" className="hover:text-white transition-colors">
+                  gruvora@gmail.com
+                </a>
+              </li>
               <li>+91 9875231321</li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-stone-800 mt-12 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-stone-400 text-sm">
-             2026 GRUVORA LIVING. All rights reserved.
-          </p>
-          <div className="flex items-center gap-6">
-            <Link to="/privacy" className="text-stone-400 hover:text-white text-sm transition-colors">
-              Privacy Policy
-            </Link>
-            <Link to="/terms" className="text-stone-400 hover:text-white text-sm transition-colors">
-              Terms of Service
-            </Link>
-          </div>
+        <div className="border-t border-white/10 mt-10 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+          <p className="text-stone-400 text-xs md:text-sm">2026 GRUVORA LIVING. All rights reserved.</p>
+          <p className="text-stone-500 text-xs">GRUVORA LIVING is a digital marketplace and does not guarantee transactions between users.</p>
         </div>
       </div>
     </footer>
@@ -422,7 +464,7 @@ export const MobileBottomNav = () => {
               className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
                 isActive 
                   ? 'text-primary' 
-                  : 'text-stone-500 hover:text-stone-900'
+                  : 'text-stone-500'
               }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'fill-primary/20' : ''}`} />

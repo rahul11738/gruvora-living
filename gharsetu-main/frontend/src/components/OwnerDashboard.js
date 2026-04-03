@@ -1,19 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ownerAPI, listingsAPI, bookingsAPI, categoriesAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
+import { useSubscription } from '../context/SubscriptionContext';
+import { ownerAPI, listingsAPI, bookingsAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
-import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select';
 import {
   Dialog,
   DialogContent,
@@ -64,7 +57,8 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Header } from './Layout';
-import { ImageUploader } from './FileUpload';
+import ListingFormRouter from './listings/ListingFormRouter';
+import SubscriptionCard from './subscription/SubscriptionCard';
 
 const categoryIcons = {
   home: Home,
@@ -74,30 +68,14 @@ const categoryIcons = {
   services: Wrench,
 };
 
-const roleAllowedCategoryIds = {
-  property_owner: ['home', 'business'],
-  stay_owner: ['stay'],
-  hotel_owner: ['stay'],
-  service_provider: ['services'],
-  event_owner: ['event'],
-  admin: ['home', 'business', 'stay', 'event', 'services'],
-};
-
-const getAllowedCategoryIdsByRole = (role) => {
-  if (!role) {
-    return ['home', 'business', 'stay', 'event', 'services'];
-  }
-  return roleAllowedCategoryIds[role] || [];
-};
-
 export const OwnerDashboard = () => {
   const { user, logout } = useAuth();
+  const { subData, loading: subscriptionStatusLoading, isBlocked, needsPayment } = useSubscription();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState(null);
   const [listings, setListings] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [subscription, setSubscription] = useState(null);
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
@@ -105,7 +83,20 @@ export const OwnerDashboard = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
-  const isServiceProvider = user?.role === 'service_provider';
+  const showSubscriptionTab = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(user?.role);
+
+  const handleOpenCreateDialog = useCallback(() => {
+    if (showSubscriptionTab && (subscriptionStatusLoading || !subData)) {
+      toast.info('Checking subscription status...');
+      return;
+    }
+    if (isBlocked || needsPayment) {
+      toast.error('Activate your subscription to create listings');
+      setActiveTab('subscription');
+      return;
+    }
+    setShowCreateDialog(true);
+  }, [isBlocked, needsPayment, subscriptionStatusLoading, showSubscriptionTab, subData]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -118,16 +109,6 @@ export const OwnerDashboard = () => {
       const ownerListings = (listingsRes.data.listings || []).filter((item) => item.owner_id === user?.id);
       setListings(ownerListings);
       setBookings(bookingsRes.data.bookings);
-      
-      // Fetch subscription status for service providers
-      if (user?.role === 'service_provider') {
-        try {
-          const subRes = await subscriptionAPI.getStatus();
-          setSubscription(subRes.data);
-        } catch (e) {
-          console.log('Subscription fetch skipped');
-        }
-      }
       
       // Generate mock leads from bookings for demo
       const mockLeads = bookingsRes.data.bookings?.slice(0, 5).map((b, idx) => ({
@@ -156,11 +137,11 @@ export const OwnerDashboard = () => {
 
   useEffect(() => {
     if (searchParams.get('openCreate') !== '1') return;
-    setShowCreateDialog(true);
+    handleOpenCreateDialog();
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete('openCreate');
     setSearchParams(nextParams, { replace: true });
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, handleOpenCreateDialog]);
 
   const handleDeleteListing = useCallback(async (listingId) => {
     if (!window.confirm('Are you sure you want to delete this listing?')) return;
@@ -286,7 +267,7 @@ export const OwnerDashboard = () => {
                   <Badge className="ml-auto bg-blue-500">{leads.length}</Badge>
                 )}
               </button>
-              {isServiceProvider && (
+              {showSubscriptionTab && (
                 <button
                   onClick={() => { setActiveTab('subscription'); setSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
@@ -295,9 +276,11 @@ export const OwnerDashboard = () => {
                 >
                   <Crown className="w-5 h-5" />
                   Subscription
-                  {subscription?.has_subscription && (
+                  {subData?.model === 'commission' || subData?.has_subscription ? (
                     <Badge className="ml-auto bg-green-500">Active</Badge>
-                  )}
+                  ) : needsPayment ? (
+                    <Badge className="ml-auto bg-red-500">Due</Badge>
+                  ) : null}
                 </button>
               )}
             </nav>
@@ -334,12 +317,10 @@ export const OwnerDashboard = () => {
               <p className="text-muted-foreground">Welcome back, {user?.name?.split(' ')[0]}</p>
             </div>
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-              <DialogTrigger asChild>
-                <Button className="btn-primary" data-testid="add-listing-btn">
-                  <Plus className="w-5 h-5 mr-2" />
-                  Add Listing
-                </Button>
-              </DialogTrigger>
+                <Button className="btn-primary" data-testid="add-listing-btn" onClick={handleOpenCreateDialog} disabled={subscriptionStatusLoading}>
+                <Plus className="w-5 h-5 mr-2" />
+                Add Listing
+              </Button>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create New Listing</DialogTitle>
@@ -347,7 +328,13 @@ export const OwnerDashboard = () => {
                     Add a new property or service listing
                   </DialogDescription>
                 </DialogHeader>
-                <CreateListingForm onSuccess={() => { setShowCreateDialog(false); fetchDashboardData(); }} />
+                <ListingFormRouter
+                  onSuccess={() => {
+                    setShowCreateDialog(false);
+                    fetchDashboardData();
+                  }}
+                  onClose={() => setShowCreateDialog(false)}
+                />
               </DialogContent>
             </Dialog>
           </div>
@@ -421,7 +408,7 @@ export const OwnerDashboard = () => {
                     <div className="text-center py-8">
                       <FileText className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                       <p className="text-muted-foreground">No listings yet</p>
-                      <Button onClick={() => setShowCreateDialog(true)} className="mt-4" variant="outline">
+                      <Button onClick={handleOpenCreateDialog} className="mt-4" variant="outline">
                         Create your first listing
                       </Button>
                     </div>
@@ -467,7 +454,7 @@ export const OwnerDashboard = () => {
                     <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                     <h3 className="font-heading text-xl font-semibold mb-2">No Listings Yet</h3>
                     <p className="text-muted-foreground mb-6">Start by creating your first property listing</p>
-                    <Button onClick={() => setShowCreateDialog(true)} className="btn-primary">
+                    <Button onClick={handleOpenCreateDialog} className="btn-primary">
                       <Plus className="w-5 h-5 mr-2" />
                       Create Listing
                     </Button>
@@ -507,60 +494,14 @@ export const OwnerDashboard = () => {
 
           {/* Leads Tab */}
           {activeTab === 'leads' && (
-            <LeadsSection leads={leads} subscription={subscription} />
+            <LeadsSection leads={leads} subscription={subData} />
           )}
 
           {/* Subscription Tab */}
-          {activeTab === 'subscription' && isServiceProvider && (
-            <SubscriptionSection 
-              subscription={subscription} 
-              onSubscribe={async () => {
-                setSubscriptionLoading(true);
-                try {
-                  const orderRes = await subscriptionAPI.createOrder('monthly');
-                  const { order_id, amount, key_id } = orderRes.data;
-                  
-                  // Open Razorpay checkout
-                  const options = {
-                    key: key_id,
-                    amount: amount,
-                    currency: 'INR',
-                    name: 'GharSetu',
-                    description: 'Monthly Subscription - ₹251',
-                    order_id: order_id,
-                    handler: async (response) => {
-                      try {
-                        await subscriptionAPI.verify({
-                          razorpay_order_id: response.razorpay_order_id,
-                          razorpay_payment_id: response.razorpay_payment_id,
-                          razorpay_signature: response.razorpay_signature
-                        });
-                        toast.success('Subscription activated! 🎉');
-                        fetchDashboardData();
-                      } catch (e) {
-                        toast.error('Payment verification failed');
-                      }
-                    },
-                    prefill: {
-                      name: user?.name,
-                      email: user?.email,
-                      contact: user?.phone
-                    },
-                    theme: {
-                      color: '#10b981'
-                    }
-                  };
-                  
-                  const razorpay = new window.Razorpay(options);
-                  razorpay.open();
-                } catch (error) {
-                  toast.error('Failed to create subscription order');
-                } finally {
-                  setSubscriptionLoading(false);
-                }
-              }}
-              loading={subscriptionLoading}
-            />
+          {activeTab === 'subscription' && showSubscriptionTab && (
+            <div className="max-w-lg">
+              <SubscriptionCard />
+            </div>
           )}
         </main>
       </div>
@@ -703,259 +644,6 @@ const BookingRow = memo(({ booking, onStatusChange, showDetails }) => {
     </Card>
   );
 });
-
-const CreateListingForm = ({ onSuccess }) => {
-  const { user } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [categories, setCategories] = useState([]);
-  const [uploadedImages, setUploadedImages] = useState([]);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: '',
-    sub_category: '',
-    listing_type: 'rent',
-    price: '',
-    location: '',
-    city: '',
-    state: 'Gujarat',
-    contact_phone: '',
-    contact_email: '',
-    amenities: '',
-  });
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await categoriesAPI.getAll();
-        setCategories(response.data.categories);
-      } catch (error) {
-        console.error('Failed to fetch categories:', error);
-      }
-    };
-    fetchCategories();
-  }, []);
-
-  const allowedCategoryIds = useMemo(() => getAllowedCategoryIdsByRole(user?.role), [user?.role]);
-
-  const filteredCategories = useMemo(
-    () => categories.filter((c) => allowedCategoryIds.includes(c.id)),
-    [allowedCategoryIds, categories],
-  );
-
-  useEffect(() => {
-    if (!formData.category && filteredCategories.length > 0) {
-      setFormData((prev) => ({ ...prev, category: filteredCategories[0].id, sub_category: '' }));
-      return;
-    }
-    if (formData.category && !allowedCategoryIds.includes(formData.category)) {
-      setFormData((prev) => ({
-        ...prev,
-        category: filteredCategories[0]?.id || '',
-        sub_category: '',
-      }));
-    }
-  }, [allowedCategoryIds, filteredCategories, formData.category]);
-
-  const selectedCategory = useMemo(
-    () => filteredCategories.find((c) => c.id === formData.category),
-    [filteredCategories, formData.category],
-  );
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const payload = {
-        ...formData,
-        price: parseFloat(formData.price),
-        amenities: formData.amenities.split(',').map((a) => a.trim()).filter(Boolean),
-        images: uploadedImages.map(img => img.url),
-        videos: [],
-        specifications: {},
-      };
-
-      await listingsAPI.create(payload);
-      toast.success('Listing created successfully!');
-      onSuccess();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to create listing');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4" data-testid="create-listing-form">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <Label>Title</Label>
-          <Input
-            value={formData.title}
-            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-            placeholder="e.g., 3 BHK Luxury Apartment"
-            required
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label>Category</Label>
-          <Select
-            value={formData.category}
-            onValueChange={(value) => setFormData({ ...formData, category: value, sub_category: '' })}
-            disabled={filteredCategories.length === 0}
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder={filteredCategories.length === 0 ? 'No category allowed' : 'Select category'} />
-            </SelectTrigger>
-            <SelectContent>
-              {filteredCategories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {filteredCategories.length === 0 && (
-            <p className="mt-1 text-xs text-red-600">Your role does not have listing category access.</p>
-          )}
-        </div>
-
-        <div>
-          <Label>Sub Category</Label>
-          <Select
-            value={formData.sub_category}
-            onValueChange={(value) => setFormData({ ...formData, sub_category: value })}
-            disabled={!selectedCategory}
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue placeholder="Select sub category" />
-            </SelectTrigger>
-            <SelectContent>
-              {selectedCategory?.sub_categories?.map((sub) => (
-                <SelectItem key={sub.id} value={sub.id}>
-                  {sub.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label>Listing Type</Label>
-          <Select
-            value={formData.listing_type}
-            onValueChange={(value) => setFormData({ ...formData, listing_type: value })}
-          >
-            <SelectTrigger className="mt-1">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="rent">For Rent</SelectItem>
-              <SelectItem value="sell">For Sale</SelectItem>
-              <SelectItem value="both">Both</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label>Price (₹)</Label>
-          <Input
-            type="number"
-            value={formData.price}
-            onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-            placeholder="e.g., 25000"
-            required
-            className="mt-1"
-          />
-        </div>
-
-        <div className="col-span-2">
-          <Label>Description</Label>
-          <Textarea
-            value={formData.description}
-            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            placeholder="Describe your property..."
-            required
-            className="mt-1"
-            rows={4}
-          />
-        </div>
-
-        <div>
-          <Label>Location/Address</Label>
-          <Input
-            value={formData.location}
-            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-            placeholder="e.g., Vesu Main Road"
-            required
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label>City</Label>
-          <Input
-            value={formData.city}
-            onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-            placeholder="e.g., Surat"
-            required
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label>Contact Phone</Label>
-          <Input
-            value={formData.contact_phone}
-            onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-            placeholder="Your phone number"
-            required
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <Label>Contact Email</Label>
-          <Input
-            type="email"
-            value={formData.contact_email}
-            onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-            placeholder="Your email"
-            required
-            className="mt-1"
-          />
-        </div>
-
-        <div className="col-span-2">
-          <Label>Amenities (comma separated)</Label>
-          <Input
-            value={formData.amenities}
-            onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
-            placeholder="e.g., Parking, Security, Garden, Gym"
-            className="mt-1"
-          />
-        </div>
-
-        <div className="col-span-2">
-          <Label className="mb-2 block">Property Images</Label>
-          <ImageUploader
-            images={uploadedImages}
-            onImagesChange={setUploadedImages}
-            maxImages={10}
-            folder="listings"
-          />
-        </div>
-      </div>
-
-      <Button type="submit" className="w-full btn-primary" disabled={loading}>
-        {loading ? 'Creating...' : 'Create Listing'}
-      </Button>
-    </form>
-  );
-};
 
 // Analytics Section Component
 const AnalyticsSection = ({ stats, listings }) => {
@@ -1119,7 +807,7 @@ const AnalyticsSection = ({ stats, listings }) => {
 
 // Leads Section Component
 const LeadsSection = ({ leads, subscription }) => {
-  const hasSubscription = subscription?.has_subscription;
+  const hasSubscription = subscription?.model === 'commission' || subscription?.has_subscription;
 
   return (
     <div className="space-y-6" data-testid="leads-section">
