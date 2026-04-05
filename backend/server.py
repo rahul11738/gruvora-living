@@ -81,10 +81,7 @@ app = FastAPI(title="GharSetu API", version="2.0.0", description="Full-scale rea
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://gruvora.com",
-        "https://www.gruvora.com"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
