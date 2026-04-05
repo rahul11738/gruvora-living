@@ -6704,6 +6704,8 @@ app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 # Include the router in the main app
 def _parse_allowed_origins() -> List[str]:
     default_origins = [
+        'https://www.gruvora.com',
+        'https://gruvora.com',
         'http://localhost:3000',
         'http://localhost:3001',
         'http://127.0.0.1:3000',
