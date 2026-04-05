@@ -1,7 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header, Response, Request, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -6701,31 +6701,18 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
-# Include the router in the main app
-def _parse_allowed_origins() -> List[str]:
-    default_origins = [
-        'https://www.gruvora.com',
-        'https://gruvora.com',
-        'http://localhost:3000',
-        'http://localhost:3001',
-        'http://127.0.0.1:3000',
-        'http://127.0.0.1:3001',
-    ]
-    raw = os.environ.get('CORS_ORIGINS', ','.join(default_origins))
-    parsed = [origin.strip() for origin in raw.split(',') if origin.strip()]
-    return parsed or default_origins
-
-
-ALLOWED_ORIGINS = _parse_allowed_origins()
-
 app.add_middleware(
     CORSMiddleware,
+    allow_origins=[
+        "https://gruvora.com",
+        "https://www.gruvora.com"
+    ],
     allow_credentials=True,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\\d+)?$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include the router in the main app
 
 # ============ SECURITY HEADERS MIDDLEWARE ============
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
