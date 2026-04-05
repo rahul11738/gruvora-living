@@ -1465,7 +1465,6 @@ async def get_listings(
         amenity_list = amenities.split(",")
         query["amenities"] = {"$all": amenity_list}
     
-    sort_direction = -1 if sort_order == "desc" else 1
     skip = (parsed_page - 1) * parsed_limit
     now_iso = datetime.now(timezone.utc).isoformat()
 
@@ -1494,7 +1493,7 @@ async def get_listings(
         regular_query["id"] = {"$nin": priority_ids}
 
     regular_limit = max(1, parsed_limit - len(boosted_or_fresh))
-    regular = await db.listings.find(regular_query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(regular_limit).to_list(parsed_limit)
+    regular = await db.listings.find(regular_query, {"_id": 0}).sort("created_at", -1).skip(skip).limit(regular_limit).to_list(parsed_limit)
 
     listings = boosted_or_fresh + regular
     total = await db.listings.count_documents(query)
