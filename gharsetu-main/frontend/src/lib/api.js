@@ -340,7 +340,10 @@ export const debugAPI = {
 
 // Messages APIs
 export const messagesAPI = {
-  send: (data) => api.post('/messages', data),
+  send: (data) => api.post('/messages', {
+    ...data,
+    message: data?.message ?? data?.content,
+  }),
   getConversations: () => api.get('/messages/conversations'),
   getMessages: (conversationId, page = 1) => api.get(`/messages/conversation/${conversationId}`, { params: { page } }),
 };
@@ -353,7 +356,8 @@ export const paymentsAPI = {
 
 // Notifications APIs
 export const notificationsAPI = {
-  getAll: (page = 1) => api.get('/notifications', { params: { page } }),
+  getAll: (page = 1, limit = 50) => api.get('/notifications', { params: { page, limit } }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
   markRead: (id) => api.put(`/notifications/${id}/read`),
   markAllRead: () => api.put('/notifications/read-all'),
 };

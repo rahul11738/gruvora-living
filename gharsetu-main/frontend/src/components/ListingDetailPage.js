@@ -76,6 +76,7 @@ export const ListingDetailPage = () => {
   const [bookingNotes, setBookingNotes] = useState('');
   const [bookingGuests, setBookingGuests] = useState(1);
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [userBookings, setUserBookings] = useState([]);
 
   const fetchListing = useCallback(async () => {
     try {
@@ -93,6 +94,29 @@ export const ListingDetailPage = () => {
   useEffect(() => {
     fetchListing();
   }, [fetchListing]);
+
+  const fetchUserBookings = useCallback(async () => {
+    if (!isAuthenticated) {
+      setUserBookings([]);
+      return;
+    }
+    try {
+      const response = await bookingsAPI.getUserBookings();
+      setUserBookings(response?.data?.bookings || []);
+    } catch {
+      setUserBookings([]);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchUserBookings();
+  }, [fetchUserBookings]);
+
+  const isBooked = userBookings.some(
+    (b) =>
+      b.listing_id === id &&
+      ['pending', 'confirmed'].includes(String(b.status || '').toLowerCase())
+  );
 
   const handleWishlist = async () => {
     if (!isAuthenticated) {
@@ -117,6 +141,10 @@ export const ListingDetailPage = () => {
       toast.error('Please login to book');
       return;
     }
+    if (isBooked) {
+      toast.error('Already in process');
+      return;
+    }
     if (!bookingDate) {
       toast.error('Please select a date');
       return;
@@ -136,6 +164,7 @@ export const ListingDetailPage = () => {
       setBookingDate(null);
       setBookingNotes('');
       fetchListing();
+      fetchUserBookings();
     } catch (error) {
       const detail = error?.response?.data?.detail || '';
       if (error?.response?.status === 409 || detail.toLowerCase().includes('already in process')) {
@@ -436,42 +465,47 @@ export const ListingDetailPage = () => {
               <CardContent className="pt-6 space-y-3">
                 {/* Instant Payment for Stay/Event/Services */}
                 {(listing.category === 'stay' || listing.category === 'event' || listing.category === 'services') && (
-                  <PaymentButton
-                    listing={listing}
-                    bookingDetails={{ date: bookingDate, guests: bookingGuests, notes: bookingNotes }}
-                    className="w-full btn-primary text-base md:text-lg py-5 md:py-6"
-                    onSuccess={() => {
-                      toast.success('Booking confirmed! Check your email.');
-                      fetchListing();
-                    }}
-                  >
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    Proceed to booking
-                  </PaymentButton>
+                  isBooked ? (
+                    <Button className="w-full" disabled>
+                      Booking in progress
+                    </Button>
+                  ) : (
+                    <PaymentButton
+                      listing={listing}
+                      bookingDetails={{ date: bookingDate, guests: bookingGuests, notes: bookingNotes }}
+                      className="w-full btn-primary text-base md:text-lg py-5 md:py-6"
+                      onSuccess={() => {
+                        toast.success('Booking confirmed! Check your email.');
+                        fetchListing();
+                        fetchUserBookings();
+                      }}
+                    >
+                      <CreditCard className="w-5 h-5 mr-2" />
+                      Proceed to booking
+                    </PaymentButton>
+                  )
                 )}
 
-                {/* Chat with Owner Button */}
-                {listing.is_locked ? (
-                  <Button className="w-full" disabled>
-                    Already in process
-                  </Button>
-                ) : (
-                  <ChatWithOwnerButton
-                    ownerId={listing.owner_id}
-                    ownerName={listing.owner_name}
-                    listingId={listing.id}
-                    listingTitle={listing.title}
-                    className="w-full btn-secondary text-base py-5"
-                  />
-                )}
+                {/* Chat should always be available */}
+                <ChatWithOwnerButton
+                  ownerId={listing.owner_id}
+                  ownerName={listing.owner_name}
+                  listingId={listing.id}
+                  listingTitle={listing.title}
+                  className="w-full btn-secondary text-base py-5"
+                />
 
                 {/* Inquiry/Schedule Visit for Home/Business */}
                 {(listing.category === 'home' || listing.category === 'business') && (
                   <Dialog open={showBookingDialog} onOpenChange={setShowBookingDialog}>
                     <DialogTrigger asChild>
-                      <Button className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-5" data-testid="book-now-btn">
+                      <Button
+                        className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-5"
+                        data-testid="book-now-btn"
+                        disabled={isBooked}
+                      >
                         <CalendarIcon className="w-5 h-5 mr-2" />
-                        Schedule Visit
+                        {isBooked ? 'Booking in progress' : 'Schedule Visit'}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-md">

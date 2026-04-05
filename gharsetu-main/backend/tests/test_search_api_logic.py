@@ -47,10 +47,30 @@ class _FakeUsersCollection:
         return None
 
 
+class _FakeSearchHistoryCollection:
+    def __init__(self):
+        self.inserted: List[Dict[str, Any]] = []
+
+    async def insert_one(self, document):
+        self.inserted.append(document)
+        return None
+
+
+class _FakeInteractionsCollection:
+    def __init__(self):
+        self.inserted: List[Dict[str, Any]] = []
+
+    async def insert_one(self, document):
+        self.inserted.append(document)
+        return None
+
+
 class _FakeDb:
     def __init__(self):
         self.listings = _FakeListingsCollection()
         self.users = _FakeUsersCollection()
+        self.search_history = _FakeSearchHistoryCollection()
+        self.interactions = _FakeInteractionsCollection()
 
 
 @pytest.mark.anyio
@@ -151,9 +171,16 @@ async def test_get_listings_supports_q_alias_and_multilingual_or(monkeypatch):
     assert fake_db.listings.queries, "expected find() calls"
 
     first_query = fake_db.listings.queries[0]
-    assert "$or" in first_query
-    fields = [list(cond.keys())[0] for cond in first_query["$or"]]
+    if "$and" in first_query:
+        clause = first_query["$and"][0]
+    else:
+        clause = first_query
+
+    assert "$or" in clause
+    fields = [list(cond.keys())[0] for cond in clause["$or"]]
     assert "title" in fields
     assert "title_en" in fields
-    assert "title_gu" in fields
-    assert "title_hi" in fields
+    assert "description" in fields
+    assert "location" in fields
+    assert "city" in fields
+    assert "sub_category" in fields

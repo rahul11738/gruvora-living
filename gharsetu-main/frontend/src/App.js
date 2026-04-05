@@ -2,10 +2,11 @@ import React, { lazy, Suspense } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
+import AppErrorBoundary from "./components/ui/AppErrorBoundary.jsx";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { InteractionProvider } from "./context/InteractionContext";
-import { NotificationProvider } from "./components/Notifications";
+import { NotificationProvider } from "./components/Notifications.jsx";
 
 // Pages
 import { Header, Footer, MobileBottomNav } from "./components/Layout";
@@ -30,8 +31,8 @@ const OwnerDashboard = lazy(() => import("./components/OwnerDashboard").then((m)
 const OwnerProfilePage = lazy(() => import("./components/OwnerProfilePage").then((m) => ({ default: m.OwnerProfilePage })));
 const MapSearchPage = lazy(() => import("./components/MapSearchPage").then((m) => ({ default: m.MapSearchPage })));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
-const ChatPage = lazy(() => import("./components/ChatPage"));
-const NotificationsPage = lazy(() => import("./components/NotificationsPage"));
+const ChatPage = lazy(() => import("./components/ChatPage.jsx"));
+const NotificationsPage = lazy(() => import("./components/NotificationsPage.jsx"));
 const AdminDashboard = lazy(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
 const TermsConditionsPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.TermsConditionsPage })));
 const PrivacyPolicyPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.PrivacyPolicyPage })));
@@ -209,11 +210,13 @@ function App() {
       <AuthProvider>
         <SubscriptionProvider>
           <InteractionProvider>
-            <NotificationProvider>
-              <AppRoutes />
-              <MobileBottomNav />
-              <Toaster position="top-right" richColors />
-            </NotificationProvider>
+            <AppErrorBoundary>
+              <NotificationProvider>
+                <AppRoutes />
+                <MobileBottomNav />
+                <Toaster position="top-right" richColors />
+              </NotificationProvider>
+            </AppErrorBoundary>
           </InteractionProvider>
         </SubscriptionProvider>
       </AuthProvider>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
-import { listingsAPI, categoriesAPI, recommendationsAPI } from '../lib/api';
+import { listingsAPI, categoriesAPI, recommendationsAPI, chatAPI } from '../lib/api';
 import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { useAuth } from '../context/AuthContext';
@@ -116,9 +116,30 @@ export const HeroSection = () => {
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
     
-    recognition.onresult = (event) => {
+    recognition.onresult = async (event) => {
       const transcript = event.results[0][0].transcript;
-      setSearchQuery(transcript);
+      const cleanedTranscript = transcript.trim();
+      setSearchQuery(cleanedTranscript);
+
+      try {
+        const response = await chatAPI.voiceSearch(cleanedTranscript);
+        const data = response?.data || {};
+        const normalizedQuery = (data.normalized_query || cleanedTranscript).trim();
+        const detectedCategory = data?.parsed?.category || category;
+        const detectedCity = data?.parsed?.location || location;
+
+        const params = new URLSearchParams();
+        if (normalizedQuery) params.set('q', normalizedQuery);
+        if (detectedCity) params.set('city', detectedCity);
+
+        navigate(`/category/${detectedCategory}?${params.toString()}`);
+      } catch (error) {
+        console.error('Voice search normalization failed:', error);
+        const params = new URLSearchParams();
+        if (cleanedTranscript) params.set('q', cleanedTranscript);
+        if (location) params.set('city', location);
+        navigate(`/category/${category}?${params.toString()}`);
+      }
     };
     
     recognition.start();

@@ -25,6 +25,7 @@ import socketio
 from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 from search_engine import normalize_search_query, smart_search_listings, suggest_search_terms
+from listing_priority import build_fresh_priority_until, listing_boost_score, listing_freshness_score
 from models.listing_base import ListingBaseCreate
 from validators.listing_factory import validate_specific_fields
 try:
@@ -313,13 +314,18 @@ def ensure_category_allowed_for_role(role: Any, category: Any, *, detail_prefix:
 async def enforce_upload_rate_limit(user_id: str, action: str, max_requests: int = 30, window_seconds: int = 60) -> None:
     """Redis-backed rate limit guard with in-memory fallback."""
     if redis_client:
-        key = f"rl:{action}:{user_id}"
-        current_count = await redis_client.incr(key)
-        if current_count == 1:
-            await redis_client.expire(key, window_seconds)
-        if current_count > max_requests:
-            raise HTTPException(status_code=429, detail="Too many upload requests. Please retry shortly.")
-        return
+        try:
+            key = f"rl:{action}:{user_id}"
+            current_count = await redis_client.incr(key)
+            if current_count == 1:
+                await redis_client.expire(key, window_seconds)
+            if current_count > max_requests:
+                raise HTTPException(status_code=429, detail="Too many upload requests. Please retry shortly.")
+            return
+        except HTTPException:
+            raise
+        except Exception as redis_error:
+            logger.warning("Redis upload rate-limit fallback for %s: %s", user_id, redis_error)
 
     # Fallback for local/dev if Redis is unavailable.
     now = datetime.now(timezone.utc)
@@ -339,13 +345,18 @@ async def enforce_upload_rate_limit(user_id: str, action: str, max_requests: int
 async def enforce_message_rate_limit(user_id: str, max_requests: int = 1, window_seconds: int = 1) -> None:
     """Anti-spam guard for chat sends (Redis-backed with in-memory fallback)."""
     if redis_client:
-        key = f"rl:message:{user_id}"
-        current_count = await redis_client.incr(key)
-        if current_count == 1:
-            await redis_client.expire(key, window_seconds)
-        if current_count > max_requests:
-            raise HTTPException(status_code=429, detail="Too many messages. Please slow down.")
-        return
+        try:
+            key = f"rl:message:{user_id}"
+            current_count = await redis_client.incr(key)
+            if current_count == 1:
+                await redis_client.expire(key, window_seconds)
+            if current_count > max_requests:
+                raise HTTPException(status_code=429, detail="Too many messages. Please slow down.")
+            return
+        except HTTPException:
+            raise
+        except Exception as redis_error:
+            logger.warning("Redis message rate-limit fallback for %s: %s", user_id, redis_error)
 
     now = datetime.now(timezone.utc)
     key = f"message:{user_id}"
@@ -506,8 +517,9 @@ async def media_delete_retry_worker():
         logger.error(f"Media delete retry worker crashed: {e}")
 
 class MessageCreate(BaseModel):
-    receiver_id: str
-    content: str
+    receiver_id: Optional[str] = None
+    content: Optional[str] = None
+    message: Optional[str] = None
     listing_id: Optional[str] = None
     media_url: Optional[str] = None
 
@@ -1337,6 +1349,7 @@ async def create_listing(payload: Dict[str, Any] = Body(...), user: dict = Depen
         "contact_unlocked_user_ids": [],
         "price_history": [{"price": pricing_data.get("amount"), "date": now}],
         "boost_expires": None,
+        "fresh_priority_until": build_fresh_priority_until(datetime.now(timezone.utc)),
         "featured": False,
         "created_at": now,
         "updated_at": now,
@@ -1424,38 +1437,57 @@ async def get_listings(
         query["price"] = {**query.get("price", {}), "$lte": parsed_max_price}
     effective_search = search or q
     if effective_search:
+        from search_engine import _extract_proper_nouns
+        proper = _extract_proper_nouns(effective_search)
         normalized = normalize_search_query(effective_search)
         terms = normalized.get("expanded_terms", [])[:20]
-        regex_pattern = "|".join(re.escape(term) for term in terms if term)
-        regex_pattern = regex_pattern or re.escape(effective_search)
-        query["$or"] = [
-            {"title": {"$regex": regex_pattern, "$options": "i"}},
-            {"title_en": {"$regex": regex_pattern, "$options": "i"}},
-            {"title_gu": {"$regex": regex_pattern, "$options": "i"}},
-            {"title_hi": {"$regex": regex_pattern, "$options": "i"}},
-            {"description": {"$regex": regex_pattern, "$options": "i"}},
-            {"location": {"$regex": regex_pattern, "$options": "i"}},
-            {"city": {"$regex": regex_pattern, "$options": "i"}},
-            {"sub_category": {"$regex": regex_pattern, "$options": "i"}},
-        ]
+        or_clauses = []
+        if proper:
+            pn = re.escape(proper)
+            for field in ["title", "title_en", "description", "location"]:
+                or_clauses.append({field: {"$regex": pn, "$options": "i"}})
+        if terms:
+            rp = "|".join(re.escape(t) for t in terms)
+            for field in ["title", "title_en", "description", "location", "city", "sub_category"]:
+                or_clauses.append({field: {"$regex": rp, "$options": "i"}})
+        if or_clauses:
+            query["$or"] = or_clauses
     if amenities:
         amenity_list = amenities.split(",")
         query["amenities"] = {"$all": amenity_list}
     
-    # Sort boosted listings first
     sort_direction = -1 if sort_order == "desc" else 1
     skip = (parsed_page - 1) * parsed_limit
-    
-    # Get boosted listings first
-    boosted = await db.listings.find(
-        {**query, "status": ListingStatus.BOOSTED, "boost_expires": {"$gt": datetime.now(timezone.utc).isoformat()}}
-    , {"_id": 0}).limit(5).to_list(5)
-    
-    # Then regular listings
-    regular_limit = max(1, parsed_limit - len(boosted))
-    regular = await db.listings.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(regular_limit).to_list(parsed_limit)
-    
-    listings = boosted + regular
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    base_query = dict(query)
+    search_or_clauses = base_query.pop("$or", None)
+    priority_conditions = [
+        {"status": ListingStatus.BOOSTED.value, "boost_expires": {"$gt": now_iso}},
+        {"fresh_priority_until": {"$gt": now_iso}},
+    ]
+
+    priority_query: Dict[str, Any] = dict(base_query)
+    if search_or_clauses:
+        priority_query["$and"] = [{"$or": search_or_clauses}, {"$or": priority_conditions}]
+    else:
+        priority_query["$or"] = priority_conditions
+
+    boosted_or_fresh = await db.listings.find(priority_query, {"_id": 0}).sort(
+        [("fresh_priority_until", -1), ("boost_expires", -1), ("created_at", -1)]
+    ).limit(parsed_limit).to_list(parsed_limit)
+    priority_ids = [item.get("id") for item in boosted_or_fresh if item.get("id")]
+
+    regular_query = dict(base_query)
+    if search_or_clauses:
+        regular_query["$or"] = search_or_clauses
+    if priority_ids:
+        regular_query["id"] = {"$nin": priority_ids}
+
+    regular_limit = max(1, parsed_limit - len(boosted_or_fresh))
+    regular = await db.listings.find(regular_query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(regular_limit).to_list(parsed_limit)
+
+    listings = boosted_or_fresh + regular
     total = await db.listings.count_documents(query)
     
     return {
@@ -1471,7 +1503,17 @@ async def get_trending_listings(limit: int = 10, category: Optional[ListingCateg
     if category:
         query["category"] = category
     
-    listings = await db.listings.find(query, {"_id": 0}).sort([("views", -1), ("likes", -1)]).limit(limit).to_list(limit)
+    candidates = await db.listings.find(query, {"_id": 0}).limit(max(limit * 5, 50)).to_list(max(limit * 5, 50))
+    candidates.sort(
+        key=lambda listing: (
+            listing_boost_score(listing),
+            listing_freshness_score(listing),
+            float(listing.get("views") or 0),
+            float(listing.get("likes") or 0),
+        ),
+        reverse=True,
+    )
+    listings = candidates[:limit]
     return {"listings": listings}
 
 @api_router.get("/listings/recommended")
@@ -1479,7 +1521,12 @@ async def get_recommended_listings(user: dict = Depends(get_current_user), limit
     # AI-based recommendations based on user history
     preferences = user.get("preferences", {})
     search_history = user.get("search_history", [])
-    wishlist = user.get("wishlist", [])
+    wishlist_docs = await db.wishlists.find(
+        {"user_id": user["id"]},
+        {"_id": 0, "listing_id": 1},
+    ).to_list(500)
+    wishlist_ids = {doc.get("listing_id") for doc in wishlist_docs if doc.get("listing_id")}
+    wishlist_ids.update(str(item) for item in (user.get("wishlist", []) or []) if item)
     
     query = {"status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]}, "is_available": True}
     
@@ -1757,25 +1804,68 @@ async def add_to_wishlist(listing_id: str, user: dict = Depends(get_current_user
     listing = await db.listings.find_one({"id": listing_id})
     if not listing:
         raise HTTPException(status_code=404, detail="Listing not found")
-    
+
+    existing = await db.wishlists.find_one({"user_id": user["id"], "listing_id": listing_id})
+    if not existing:
+        wishlisted_at = datetime.now(timezone.utc).isoformat()
+        await db.wishlists.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "listing_id": listing_id,
+            "created_at": wishlisted_at,
+            "updated_at": wishlisted_at,
+        })
+        await db.listings.update_one({"id": listing_id}, {"$inc": {"saves": 1}})
     await db.users.update_one({"id": user["id"]}, {"$addToSet": {"wishlist": listing_id}})
-    await db.listings.update_one({"id": listing_id}, {"$inc": {"saves": 1}})
-    
-    return {"message": "Added to wishlist"}
+
+    return {"message": "Added to wishlist", "wishlisted": True}
 
 @api_router.delete("/wishlist/{listing_id}")
 async def remove_from_wishlist(listing_id: str, user: dict = Depends(get_current_user)):
+    result = await db.wishlists.delete_one({"user_id": user["id"], "listing_id": listing_id})
+    if result.deleted_count:
+        await db.listings.update_one(
+            {"id": listing_id, "saves": {"$gt": 0}},
+            {"$inc": {"saves": -1}},
+        )
     await db.users.update_one({"id": user["id"]}, {"$pull": {"wishlist": listing_id}})
-    return {"message": "Removed from wishlist"}
+    return {"message": "Removed from wishlist", "wishlisted": False}
 
 @api_router.get("/wishlist")
 async def get_wishlist(user: dict = Depends(get_current_user)):
-    wishlist_ids = user.get("wishlist", [])
-    if not wishlist_ids:
-        return {"listings": []}
-    
-    listings = await db.listings.find({"id": {"$in": wishlist_ids}}, {"_id": 0}).to_list(100)
-    return {"listings": listings}
+    wishlist_docs = await db.wishlists.find(
+        {"user_id": user["id"]},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(200)
+
+    if not wishlist_docs:
+        wishlist_ids = [str(item) for item in (user.get("wishlist", []) or []) if item]
+        if not wishlist_ids:
+            return {"listings": [], "count": 0}
+        listings = await db.listings.find({"id": {"$in": wishlist_ids}}, {"_id": 0}).to_list(200)
+        listing_map = {listing.get("id"): listing for listing in listings if listing.get("id")}
+        ordered_listings = []
+        for listing_id in wishlist_ids:
+            listing = listing_map.get(listing_id)
+            if listing:
+                listing["wishlisted_at"] = None
+                ordered_listings.append(listing)
+        return {"listings": ordered_listings, "count": len(ordered_listings)}
+
+    listing_ids = [doc.get("listing_id") for doc in wishlist_docs if doc.get("listing_id")]
+    listings = await db.listings.find({"id": {"$in": listing_ids}}, {"_id": 0}).to_list(200)
+    listing_map = {listing.get("id"): listing for listing in listings if listing.get("id")}
+
+    ordered_listings = []
+    for doc in wishlist_docs:
+        listing_id = doc.get("listing_id")
+        listing = listing_map.get(listing_id)
+        if not listing:
+          continue
+        listing["wishlisted_at"] = doc.get("created_at") or doc.get("updated_at")
+        ordered_listings.append(listing)
+
+    return {"listings": ordered_listings, "count": len(ordered_listings)}
 
 # ============ BOOKING ROUTES ============
 @api_router.post("/bookings")
@@ -1830,7 +1920,13 @@ async def create_booking(booking: BookingCreate, user: dict = Depends(get_curren
 
 @api_router.get("/bookings")
 async def get_user_bookings(user: dict = Depends(get_current_user)):
-    bookings = await db.bookings.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    bookings = await db.bookings.find(
+        {
+            "user_id": user["id"],
+            "status": {"$in": [BookingStatus.PENDING.value, BookingStatus.CONFIRMED.value]},
+        },
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(100)
     return {"bookings": bookings}
 
 @api_router.get("/bookings/owner")
@@ -3596,17 +3692,19 @@ def detect_blocked_chat_content(content: str) -> Optional[str]:
 
 @api_router.post("/messages")
 async def send_message(message: MessageCreate, user: dict = Depends(get_current_user)):
+    message_persisted = False
+    message_id = None
+    conversation_id = None
     try:
         await enforce_message_rate_limit(user["id"], max_requests=1, window_seconds=1)
 
         normalized_receiver_id = str(message.receiver_id or "").strip()
         normalized_listing_id = str(message.listing_id or "").strip() or None
-        normalized_content = str(message.content or "").strip()
+        raw_content = message.content if message.content is not None else message.message
+        normalized_content = str(raw_content or "").strip()
 
-        if not normalized_receiver_id:
-            raise HTTPException(status_code=400, detail="Receiver required")
-        if not normalized_content:
-            raise HTTPException(status_code=400, detail="Message content required")
+        if not normalized_receiver_id or not normalized_content:
+            raise HTTPException(status_code=400, detail="Invalid message data")
         if normalized_receiver_id == user["id"]:
             raise HTTPException(status_code=400, detail="Cannot send message to yourself")
 
@@ -3618,39 +3716,80 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
         if not receiver:
             raise HTTPException(status_code=404, detail="Receiver not found")
 
+        # Fetch listing info for notification context
+        listing_info = None
         listing_owner_id = None
         if normalized_listing_id:
-            listing_ref = await db.listings.find_one(
+            listing_info = await db.listings.find_one(
                 {"id": normalized_listing_id},
-                {"_id": 0, "id": 1, "owner_id": 1},
+                {"_id": 0, "id": 1, "owner_id": 1, "title": 1},
             )
-            if listing_ref:
-                listing_owner_id = listing_ref.get("owner_id")
+            if listing_info:
+                listing_owner_id = listing_info.get("owner_id")
 
-        message_id = str(uuid.uuid4())
+        # Find or create conversation
+        participants_query = {
+            "$or": [
+                {"participants": {"$all": [user["id"], normalized_receiver_id], "$size": 2}},
+                {"users": {"$all": [user["id"], normalized_receiver_id], "$size": 2}},
+            ]
+        }
 
-        # Keep conversations scoped by participants + listing to ensure property-specific routing.
-        listing_scope_query = (
-            [{"listing_id": normalized_listing_id}]
-            if normalized_listing_id
-            else [{"listing_id": None}, {"listing_id": ""}, {"listing_id": {"$exists": False}}]
-        )
-
-        conversation = await db.conversations.find_one({
-            "participants": {"$all": [user["id"], normalized_receiver_id], "$size": 2},
-            "$or": listing_scope_query,
-        })
+        if normalized_listing_id:
+            conversation = await db.conversations.find_one({
+                **participants_query,
+                "listing_id": normalized_listing_id,
+            })
+            if not conversation:
+                # Fallback: same participants, any listing
+                conversation = await db.conversations.find_one(participants_query)
+        else:
+            conversation = await db.conversations.find_one(participants_query)
 
         if not conversation:
             conversation_id = str(uuid.uuid4())
-            await db.conversations.insert_one({
-                "id": conversation_id,
-                "participants": [user["id"], normalized_receiver_id],
-                "listing_id": normalized_listing_id,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            })
+            listing_title = listing_info.get("title") if listing_info else None
+            try:
+                upsert_filter = (
+                    {**participants_query, "listing_id": normalized_listing_id}
+                    if normalized_listing_id
+                    else participants_query
+                )
+                await db.conversations.update_one(
+                    upsert_filter,
+                    {
+                        "$setOnInsert": {
+                            "id": conversation_id,
+                            "participants": [user["id"], normalized_receiver_id],
+                            "users": [user["id"], normalized_receiver_id],
+                            "listing_id": normalized_listing_id,
+                            "listing_title": listing_title,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                    upsert=True,
+                )
+            except Exception:
+                # Another request may have inserted the same conversation concurrently.
+                logger.warning("Conversation upsert raced for sender=%s receiver=%s", user.get("id"), normalized_receiver_id, exc_info=True)
+
+            if normalized_listing_id:
+                conversation = await db.conversations.find_one({
+                    **participants_query,
+                    "listing_id": normalized_listing_id,
+                })
+                if not conversation:
+                    conversation = await db.conversations.find_one(participants_query)
+            else:
+                conversation = await db.conversations.find_one(participants_query)
+            if conversation:
+                conversation_id = conversation.get("id") or conversation_id
         else:
             conversation_id = conversation["id"]
+
+        # Save message
+        message_id = str(uuid.uuid4())
+        now_iso = datetime.now(timezone.utc).isoformat()
 
         message_doc = {
             "id": message_id,
@@ -3666,106 +3805,294 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
             "listing_id": normalized_listing_id,
             "read": False,
             "is_read": False,
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "seen": False,
+            "created_at": now_iso,
         }
 
         await db.messages.insert_one(message_doc)
-        await sio.emit('new_message', message_doc, room=f"conversation_{conversation_id}")
+        message_doc.pop("_id", None)
+        message_persisted = True
 
-        await db.conversations.update_one(
-            {"id": conversation_id},
-            {
-                "$set": {
-                    "last_message": normalized_content,
-                    "last_message_at": datetime.now(timezone.utc).isoformat(),
+        try:
+            await sio.emit("new_message", message_doc, room=f"conversation_{conversation_id}")
+        except Exception:
+            logger.warning("Failed to emit new_message for conversation %s", conversation_id, exc_info=True)
+
+        # Update conversation sidebar
+        listing_title = listing_info.get("title") if listing_info else None
+        try:
+            await db.conversations.update_one(
+                {"id": conversation_id},
+                {
+                    "$set": {
+                        "last_message": normalized_content,
+                        "last_message_at": now_iso,
+                        "listing_id": normalized_listing_id,
+                        "listing_title": listing_title,
+                    }
+                },
+            )
+        except Exception:
+            logger.warning("Failed to update conversation summary %s", conversation_id, exc_info=True)
+
+        # Build rich notification for receiver
+        listing_title_str = listing_info.get("title", "") if listing_info else ""
+        notif_title = f"New message from {user.get('name', 'User')}"
+        notif_body = normalized_content[:100] + ("..." if len(normalized_content) > 100 else "")
+        if listing_title_str:
+            notif_title = f"{user.get('name', 'User')} about: {listing_title_str[:40]}"
+
+        try:
+            await send_notification(
+                normalized_receiver_id,
+                "chat",
+                notif_title,
+                notif_body,
+                {
+                    "message_id": message_id,
+                    "conversation_id": conversation_id,
                     "listing_id": normalized_listing_id,
-                }
-            },
-        )
+                    "sender_id": user["id"],
+                    "receiver_id": normalized_receiver_id,
+                    "listing_title": listing_title_str,
+                },
+            )
+        except Exception:
+            logger.warning("Chat notification pipeline failed for receiver %s", normalized_receiver_id, exc_info=True)
 
-        notification = {
-            "id": str(uuid.uuid4()),
-            "user_id": normalized_receiver_id,
-            "type": "chat",
-            "title": f"New message from {user.get('name', 'User')}",
-            "message": "New message received",
-            "listing_id": normalized_listing_id,
-            "sender_id": user["id"],
-            "conversation_id": conversation_id,
-            "data": {
-                "conversation_id": conversation_id,
-                "listing_id": normalized_listing_id,
-                "sender_id": user["id"],
-                "receiver_id": normalized_receiver_id,
-            },
-            "read": False,
-            "is_read": False,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.notifications.insert_one(notification)
+        # Legacy websocket compat is best-effort only.
+        try:
+            await manager.send_personal_message(
+                {"type": "new_message", "message": message_doc},
+                normalized_receiver_id,
+            )
+        except Exception:
+            logger.warning("Failed legacy websocket fanout for %s", normalized_receiver_id, exc_info=True)
 
-        receiver_sid = connected_users.get(normalized_receiver_id)
-        if receiver_sid:
-            await sio.emit('notification', notification, to=receiver_sid)
-
+        # Auto-reply
         if receiver.get("auto_reply_enabled") and receiver.get("auto_reply_message"):
-            auto_reply_id = str(uuid.uuid4())
-            auto_reply_doc = {
-                "id": auto_reply_id,
-                "conversation_id": conversation_id,
-                "sender_id": normalized_receiver_id,
-                "sender_name": receiver.get("name", "Owner"),
-                "receiver_id": user["id"],
-                "content": receiver["auto_reply_message"],
-                "is_auto_reply": True,
-                "read": False,
-                "created_at": datetime.now(timezone.utc).isoformat()
-            }
-            await db.messages.insert_one(auto_reply_doc)
-            await sio.emit('new_message', auto_reply_doc, room=f"conversation_{conversation_id}")
+            try:
+                auto_id = str(uuid.uuid4())
+                auto_doc = {
+                    "id": auto_id,
+                    "conversation_id": conversation_id,
+                    "sender_id": normalized_receiver_id,
+                    "sender_name": receiver.get("name", "Owner"),
+                    "receiver_id": user["id"],
+                    "content": receiver["auto_reply_message"],
+                    "message": receiver["auto_reply_message"],
+                    "is_auto_reply": True,
+                    "listing_id": normalized_listing_id,
+                    "read": False,
+                    "seen": False,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                await db.messages.insert_one(auto_doc)
 
-        await manager.send_personal_message({
-            "type": "new_message",
-            "message": message_doc
-        }, normalized_receiver_id)
+                try:
+                    await sio.emit("new_message", auto_doc, room=f"conversation_{conversation_id}")
+                except Exception:
+                    logger.warning("Failed to emit auto-reply new_message for %s", conversation_id, exc_info=True)
 
-        return {"message": "Message sent", "message_id": message_id}
+                # Notify sender about auto-reply
+                try:
+                    await send_notification(
+                        user["id"],
+                        "chat",
+                        f"Auto-reply from {receiver.get('name', 'Owner')}",
+                        receiver["auto_reply_message"][:100],
+                        {
+                            "conversation_id": conversation_id,
+                            "listing_id": normalized_listing_id,
+                            "sender_id": normalized_receiver_id,
+                        },
+                    )
+                except Exception:
+                    logger.warning("Failed to send auto-reply notification for %s", user["id"], exc_info=True)
+            except Exception:
+                logger.warning("Auto-reply pipeline failed for conversation %s", conversation_id, exc_info=True)
+
+        return {
+            "message": "Message sent",
+            "message_id": message_id,
+            "conversation_id": conversation_id,
+        }
+
     except HTTPException:
         raise
     except Exception as e:
-        logger.exception(f"send_message failed for sender={user.get('id')} receiver={getattr(message, 'receiver_id', None)}: {e}")
+        if message_persisted:
+            logger.error(
+                "MESSAGE DEGRADED SUCCESS sender=%s receiver=%s listing=%s conversation=%s message_id=%s err=%s",
+                user.get("id"),
+                getattr(message, "receiver_id", None),
+                getattr(message, "listing_id", None),
+                conversation_id,
+                message_id,
+                str(e),
+            )
+            return {
+                "message": "Message sent",
+                "message_id": message_id,
+                "conversation_id": conversation_id,
+                "degraded": True,
+            }
+
+        # Final fallback: attempt a minimal durable write path when primary
+        # flow fails before persistence (for production resilience).
+        sender_id = str(user.get("id") or "").strip()
+        fallback_receiver_id = str(getattr(message, "receiver_id", "") or "").strip()
+        fallback_raw_content = getattr(message, "content", None)
+        if fallback_raw_content is None:
+            fallback_raw_content = getattr(message, "message", None)
+        fallback_content = str(fallback_raw_content or "").strip()
+        fallback_listing_id = str(getattr(message, "listing_id", "") or "").strip() or None
+
+        if sender_id and fallback_receiver_id and fallback_content and fallback_receiver_id != sender_id:
+            try:
+                fallback_participants_query = {
+                    "$or": [
+                        {"participants": {"$all": [sender_id, fallback_receiver_id], "$size": 2}},
+                        {"users": {"$all": [sender_id, fallback_receiver_id], "$size": 2}},
+                    ]
+                }
+
+                if fallback_listing_id:
+                    fallback_conv = await db.conversations.find_one({
+                        **fallback_participants_query,
+                        "listing_id": fallback_listing_id,
+                    })
+                    if not fallback_conv:
+                        fallback_conv = await db.conversations.find_one(fallback_participants_query)
+                else:
+                    fallback_conv = await db.conversations.find_one(fallback_participants_query)
+
+                fallback_conversation_id = None
+                if fallback_conv:
+                    fallback_conversation_id = str(fallback_conv.get("id") or "").strip() or str(uuid.uuid4())
+                else:
+                    fallback_conversation_id = str(uuid.uuid4())
+                    await db.conversations.insert_one({
+                        "id": fallback_conversation_id,
+                        "participants": [sender_id, fallback_receiver_id],
+                        "users": [sender_id, fallback_receiver_id],
+                        "listing_id": fallback_listing_id,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+
+                fallback_message_id = str(uuid.uuid4())
+                fallback_now_iso = datetime.now(timezone.utc).isoformat()
+                await db.messages.insert_one({
+                    "id": fallback_message_id,
+                    "conversation_id": fallback_conversation_id,
+                    "sender_id": sender_id,
+                    "user_id": sender_id,
+                    "receiver_id": fallback_receiver_id,
+                    "owner_id": fallback_receiver_id,
+                    "content": fallback_content,
+                    "message": fallback_content,
+                    "listing_id": fallback_listing_id,
+                    "read": False,
+                    "is_read": False,
+                    "seen": False,
+                    "created_at": fallback_now_iso,
+                })
+
+                logger.error(
+                    "MESSAGE FALLBACK SUCCESS sender=%s receiver=%s listing=%s conversation=%s message_id=%s primary_err=%s",
+                    sender_id,
+                    fallback_receiver_id,
+                    fallback_listing_id,
+                    fallback_conversation_id,
+                    fallback_message_id,
+                    str(e),
+                )
+                return {
+                    "message": "Message sent",
+                    "message_id": fallback_message_id,
+                    "conversation_id": fallback_conversation_id,
+                    "degraded": True,
+                    "fallback_mode": "minimal",
+                }
+            except Exception as fallback_error:
+                logger.exception(
+                    "MESSAGE FALLBACK FAILED sender=%s receiver=%s listing=%s primary_err=%s fallback_err=%s",
+                    sender_id,
+                    fallback_receiver_id,
+                    fallback_listing_id,
+                    str(e),
+                    str(fallback_error),
+                )
+
+        logger.error(
+            "MESSAGE ERROR sender=%s receiver=%s listing=%s err=%s",
+            user.get("id"),
+            getattr(message, "receiver_id", None),
+            getattr(message, "listing_id", None),
+            str(e),
+        )
+        logger.exception(
+            f"send_message failed sender={user.get('id')} receiver={getattr(message, 'receiver_id', None)}: {e}"
+        )
         raise HTTPException(status_code=500, detail="Failed to send message")
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_count(user: dict = Depends(get_current_user)):
+    """Lightweight endpoint — just the unread count. No body. Suitable for 10-second polling."""
+    count = await db.notifications.count_documents({
+        "user_id": user["id"],
+        "$or": [{"read": False}, {"is_read": False}],
+    })
+    return {"unread_count": count}
+
 
 @api_router.get("/messages/conversations")
 async def get_conversations(user: dict = Depends(get_current_user)):
     conversations = await db.conversations.find(
-        {"participants": user["id"]},
+        {"$or": [{"participants": user["id"]}, {"users": user["id"]}]},
         {"_id": 0}
-    ).sort("last_message_at", -1).to_list(50)
-    
-    # Add other participant info
+    ).sort("last_message_at", -1).to_list(100)
+
+    enriched = []
     for conv in conversations:
-        others = [p for p in conv["participants"] if p != user["id"]]
+        members = conv.get("participants") or conv.get("users") or []
+        others = [p for p in members if p != user["id"]]
         other_id = others[0] if others else None
         if not other_id:
+            enriched.append(conv)
             continue
-        other_user = await db.users.find_one({"id": other_id}, {"_id": 0, "name": 1, "id": 1})
+
+        other_user = await db.users.find_one(
+            {"id": other_id},
+            {"_id": 0, "name": 1, "id": 1, "profile_image": 1}
+        )
         conv["other_user"] = other_user
-        
-        # Get unread count
+
+        # Unread count scoped to this conversation
         unread = await db.messages.count_documents({
             "conversation_id": conv["id"],
             "receiver_id": user["id"],
-            "read": False
+            "read": False,
         })
         conv["unread_count"] = unread
-    
-    return {"conversations": conversations}
+
+        # Fetch listing title if not stored
+        if conv.get("listing_id") and not conv.get("listing_title"):
+            listing_ref = await db.listings.find_one(
+                {"id": conv["listing_id"]},
+                {"_id": 0, "title": 1}
+            )
+            conv["listing_title"] = (listing_ref or {}).get("title")
+
+        enriched.append(conv)
+
+    return {"conversations": enriched}
 
 @api_router.get("/messages/conversation/{conversation_id}")
 async def get_conversation_messages(conversation_id: str, user: dict = Depends(get_current_user), page: int = 1, limit: int = 50):
     conversation = await db.conversations.find_one({"id": conversation_id})
-    if not conversation or user["id"] not in conversation["participants"]:
+    members = [] if not conversation else (conversation.get("participants") or conversation.get("users") or [])
+    if not conversation or user["id"] not in members:
         raise HTTPException(status_code=403, detail="Not authorized")
     
     skip = (page - 1) * limit
@@ -3777,7 +4104,7 @@ async def get_conversation_messages(conversation_id: str, user: dict = Depends(g
     # Mark as read
     read_result = await db.messages.update_many(
         {"conversation_id": conversation_id, "receiver_id": user["id"], "read": False},
-        {"$set": {"read": True}}
+        {"$set": {"read": True, "seen": True}}
     )
 
     if read_result.modified_count:
@@ -5747,6 +6074,8 @@ async def _build_recommendation_payload(user_id: str, limit: int) -> Dict[str, A
 
         score += min(float(listing.get("views") or 0) / 3000.0, 2.5)
         score += min(float(listing.get("likes") or 0) / 700.0, 2.0)
+        score += listing_boost_score(listing) * 0.75
+        score += listing_freshness_score(listing) * 1.25
 
         if category and category_counter.get(category):
             score += min(category_counter[category], 8.0)
@@ -6448,6 +6777,7 @@ async def authenticate(sid, data):
         
         if user_id:
             connected_users[user_id] = sid
+            await sio.enter_room(sid, f"user_{user_id}")
             if redis_client:
                 try:
                     await redis_client.set(f"active_user:{user_id}", "online", ex=300)
@@ -6565,7 +6895,7 @@ async def send_message(sid, data):
 
 # Helper function to send notifications
 async def send_notification(user_id: str, notification_type: str, title: str, message: str, data: dict = None):
-    """Send notification to user via Socket.IO and save to DB"""
+    """Persist notification to DB then push it to the owner's socket room."""
     payload = data or {}
     notification = {
         'id': str(uuid.uuid4()),
@@ -6574,22 +6904,30 @@ async def send_notification(user_id: str, notification_type: str, title: str, me
         'title': title,
         'message': message,
         'listing_id': payload.get('listing_id'),
+        'listing_title': payload.get('listing_title', ''),
         'sender_id': payload.get('sender_id'),
+        'conversation_id': payload.get('conversation_id'),
         'data': payload,
         'read': False,
         'is_read': False,
-        'created_at': datetime.now(timezone.utc).isoformat()
+        'created_at': datetime.now(timezone.utc).isoformat(),
     }
-    
-    # Save to DB
+
     await db.notifications.insert_one(notification)
-    
-    # Send via Socket.IO if user is connected
-    if user_id in connected_users:
-        sid = connected_users[user_id]
-        await sio.emit('notification', notification, to=sid)
-    
-    return notification
+
+    emit_payload = {k: v for k, v in notification.items() if k != '_id'}
+
+    try:
+        await sio.emit('notification', emit_payload, room=f"user_{user_id}")
+        await sio.emit('new_notification', emit_payload, room=f"user_{user_id}")
+        if user_id in connected_users:
+            sid = connected_users[user_id]
+            await sio.emit('notification', emit_payload, to=sid)
+            await sio.emit('new_notification', emit_payload, to=sid)
+    except Exception as exc:
+        logger.warning("Socket emit failed for notification to %s: %s", user_id, exc)
+
+    return emit_payload
 
 # Mount Socket.IO on the app
 socket_app = socketio.ASGIApp(sio, app)
@@ -6649,6 +6987,7 @@ async def startup_services():
     await db.users.create_index([("deleted", 1)])
     await db.conversations.create_index("id", unique=True)
     await db.conversations.create_index([("participants", 1), ("last_message_at", -1)])
+    await db.conversations.create_index([("users", 1), ("last_message_at", -1)])
     await db.messages.create_index("id", unique=True)
     await db.messages.create_index([("conversation_id", 1), ("created_at", -1)])
     await db.messages.create_index([("receiver_id", 1), ("read", 1), ("created_at", -1)])

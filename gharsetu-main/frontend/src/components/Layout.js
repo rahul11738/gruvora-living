@@ -308,8 +308,8 @@ export const Footer = () => {
     <footer className="relative overflow-hidden bg-stone-950 text-white" data-testid="footer">
       <div className="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/30 via-transparent to-transparent" />
 
-      <div className="container-main relative py-12 md:py-16">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-5 md:p-7 mb-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+      <div className="container-main relative py-8 md:py-10">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-4 md:p-5 mb-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">GRUVORA LIVING</p>
             <h3 className="font-heading text-xl md:text-2xl font-semibold mt-1">Your Home Bridge for Properties, Stays, Events and Services</h3>
@@ -321,7 +321,7 @@ export const Footer = () => {
           </Link>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
           <div>
             <div className="flex items-center gap-3 mb-4">
               <img src="/GruvoraLogo.jpeg" alt="Gruvora" className="w-10 h-10 rounded-xl object-cover" />
@@ -339,6 +339,12 @@ export const Footer = () => {
                     href={item.href}
                     target={item.href.startsWith('mailto:') ? undefined : '_blank'}
                     rel={item.href.startsWith('mailto:') ? undefined : 'noreferrer'}
+                    onClick={(e) => {
+                      if (item.href.startsWith('mailto:')) {
+                        e.preventDefault();
+                        window.location.href = item.href;
+                      }
+                    }}
                     aria-label={item.label}
                     className="w-9 h-9 rounded-full border border-white/20 bg-white/5 hover:bg-white/15 transition-colors flex items-center justify-center"
                   >
@@ -400,9 +406,8 @@ export const Footer = () => {
           </div>
         </div>
 
-        <div className="border-t border-white/10 mt-10 pt-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="border-t border-white/10 mt-6 pt-4">
           <p className="text-stone-400 text-xs md:text-sm">2026 GRUVORA LIVING. All rights reserved.</p>
-          <p className="text-stone-500 text-xs">GRUVORA LIVING is a digital marketplace and does not guarantee transactions between users.</p>
         </div>
       </div>
     </footer>

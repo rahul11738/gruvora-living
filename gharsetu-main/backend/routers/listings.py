@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Body, Depends, HTTPException
 from pydantic import ValidationError
 
+from listing_priority import build_fresh_priority_until
 from models.listing_base import ListingBaseCreate
 from validators.listing_factory import validate_specific_fields
 
@@ -66,6 +67,7 @@ async def create_listing(
         "saves": 0,
         "inquiries": 0,
         "boost_expires": None,
+        "fresh_priority_until": build_fresh_priority_until(now=datetime.now(timezone.utc)),
         "contact_unlocked_user_ids": [],
         "created_at": now,
         "updated_at": now,
