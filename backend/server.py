@@ -78,6 +78,18 @@ def _get_interaction_lock(key: str) -> asyncio.Lock:
 
 # Create the main app
 app = FastAPI(title="GharSetu API", version="2.0.0", description="Full-scale real estate & services marketplace")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://gruvora.com",
+        "https://www.gruvora.com"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)
@@ -6701,16 +6713,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://gruvora.com",
-        "https://www.gruvora.com"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 # Include the router in the main app
 
