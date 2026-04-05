@@ -29,7 +29,7 @@ const UserDashboard = lazy(() => import("./components/UserDashboard").then((m) =
 const WishlistPage = lazy(() => import("./components/UserDashboard").then((m) => ({ default: m.WishlistPage })));
 const OwnerDashboard = lazy(() => import("./components/OwnerDashboard").then((m) => ({ default: m.OwnerDashboard })));
 const OwnerProfilePage = lazy(() => import("./components/OwnerProfilePage").then((m) => ({ default: m.OwnerProfilePage })));
-const MapSearchPage = lazy(() => import("./components/MapSearchPage").then((m) => ({ default: m.MapSearchPage })));
+const DiscoverSearchPage = lazy(() => import("./components/DiscoverSearchPage").then((m) => ({ default: m.DiscoverSearchPage })));
 const SettingsPage = lazy(() => import("./components/SettingsPage"));
 const ChatPage = lazy(() => import("./components/ChatPage.jsx"));
 const NotificationsPage = lazy(() => import("./components/NotificationsPage.jsx"));
@@ -123,7 +123,7 @@ function AppRoutes() {
         {/* Category & Search */}
         <Route path="/category/:category" element={<CategoryPage />} />
         <Route path="/search" element={<SearchPage />} />
-        <Route path="/map" element={<MapSearchPage />} />
+        <Route path="/discover" element={<DiscoverSearchPage />} />
 
         {/* Listing Detail */}
         <Route path="/listing/:id" element={<ListingDetailPage />} />

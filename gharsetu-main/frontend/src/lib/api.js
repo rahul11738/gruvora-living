@@ -215,7 +215,7 @@ export const listingsAPI = {
   getTrending: (limit = 10, category) => api.get('/listings/trending', { params: { limit, category } }),
   getRecommended: (limit = 10) => api.get('/listings/recommended', { params: { limit } }),
   getNearby: (lat, lng, radius = 5) => api.get('/listings/nearby', { params: { lat, lng, radius } }),
-  getMap: (bounds) => api.get('/listings/map', { params: bounds }),
+  getDiscoverData: (bounds) => api.get('/listings/map', { params: bounds }),
   getHeatmap: (city) => api.get('/listings/heatmap', { params: { city } }),
   getOne: (id) => api.get(`/listings/${id}`),
   getPriceHistory: (id) => api.get(`/listings/${id}/price-history`),

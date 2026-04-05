@@ -8,13 +8,6 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from './ui/select';
 import { toast } from 'sonner';
 import {
   Home,
@@ -22,7 +15,6 @@ import {
   Lock,
   User,
   Phone,
-  MapPin,
   CreditCard,
   Eye,
   EyeOff,
@@ -105,106 +97,96 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex" data-testid="login-page">
-      {/* Left Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 bg-stone-50">
-        <div className="w-full max-w-md">
-          <Link to="/" className="flex items-center gap-2 mb-8">
-            <img
-              src="/GruvoraLogo.jpeg"
-              alt="Gruvora"
-              className="w-10 h-10 rounded-xl object-cover"
-            />
-            <span className="font-heading font-bold text-2xl text-primary">Gruvora</span>
-          </Link>
-
-          <h1 className="font-heading text-3xl font-bold text-stone-900 mb-2">Welcome Back</h1>
-          <p className="text-muted-foreground mb-8">Enter your credentials to access your account</p>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="Enter your email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="pl-12 h-12"
-                  required
-                  data-testid="login-email-input"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="pl-12 pr-12 h-12"
-                  required
-                  data-testid="login-password-input"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-            </div>
-
-            <Button type="submit" className="w-full btn-primary h-12" disabled={loading} data-testid="login-submit-btn">
-              {loading ? 'Signing in...' : 'Sign In'}
-              <ArrowRight className="w-5 h-5 ml-2" />
-            </Button>
-          </form>
-
-          <p className="text-center text-muted-foreground mt-8">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-primary font-medium hover:underline">
-              Register
-            </Link>
-          </p>
-        </div>
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-b from-stone-50 via-white to-emerald-50/40" data-testid="login-page">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -top-20 left-0 h-72 w-72 rounded-full bg-emerald-200/30 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-cyan-200/20 blur-3xl" />
       </div>
 
-      {/* Right Side - Image */}
-      <div
-        className="hidden lg:flex flex-1 bg-cover bg-center items-center justify-center p-12"
-        style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800)',
-        }}
-      >
-        <div className="bg-primary/80 backdrop-blur-sm rounded-3xl p-10 text-white max-w-md">
-          <Sparkles className="w-12 h-12 mb-6" />
-          <h2 className="font-heading text-3xl font-bold mb-4">Find Your Perfect Space</h2>
-          <p className="text-emerald-100 text-lg">
-            Homes, Businesses, Hotels, Event Venues & Services - All in one platform
-          </p>
-          <div className="mt-8 flex items-center gap-4">
-            <div className="text-center">
-              <p className="text-3xl font-bold">10K+</p>
-              <p className="text-emerald-200 text-sm">Properties</p>
-            </div>
-            <div className="w-px h-12 bg-white/30" />
-            <div className="text-center">
-              <p className="text-3xl font-bold">5K+</p>
-              <p className="text-emerald-200 text-sm">Owners</p>
-            </div>
-            <div className="w-px h-12 bg-white/30" />
-            <div className="text-center">
-              <p className="text-3xl font-bold">4.8</p>
-              <p className="text-emerald-200 text-sm">Rating</p>
+      <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+        <div className="w-full max-w-md">
+          <div className="rounded-[1.75rem] border border-stone-200 bg-white/92 backdrop-blur-xl shadow-[0_24px_80px_rgba(15,23,42,0.10)] overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-cyan-400 to-secondary" />
+            <div className="p-5 sm:p-7 md:p-8">
+              <Link to="/" className="flex items-center gap-2.5 mb-6">
+                <img
+                  src="/GruvoraLogo.jpeg"
+                  alt="Gruvora"
+                  className="w-10 h-10 rounded-xl object-cover shadow-[0_8px_20px_rgba(15,23,42,0.12)] ring-1 ring-black/5"
+                />
+                <span className="font-heading font-bold text-2xl text-primary tracking-tight">Gruvora</span>
+              </Link>
+
+              <div className="mb-6">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
+                  <Shield className="w-3.5 h-3.5" />
+                  Secure Access
+                </span>
+                <h1 className="font-heading text-3xl sm:text-4xl font-bold text-stone-950 mt-3 mb-2 tracking-tight">Welcome Back</h1>
+                <p className="text-muted-foreground text-sm sm:text-base">Enter your credentials to access your account.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {['Private login', 'Fast access', 'Trusted accounts'].map((item) => (
+                    <span key={item} className="inline-flex items-center rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-600">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-4.5">
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-sm font-medium text-stone-700">Email</Label>
+                  <div className="relative">
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter your email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="pl-12 h-12 rounded-xl border-stone-200 bg-white shadow-sm focus-visible:ring-emerald-500/20"
+                      required
+                      data-testid="login-email-input"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password" className="text-sm font-medium text-stone-700">Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      placeholder="Enter your password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      className="pl-12 pr-12 h-12 rounded-xl border-stone-200 bg-white shadow-sm focus-visible:ring-emerald-500/20"
+                      required
+                      data-testid="login-password-input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-stone-900 transition-colors"
+                    >
+                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                <Button type="submit" className="w-full h-12 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_12px_24px_rgba(5,150,105,0.20)]" disabled={loading} data-testid="login-submit-btn">
+                  {loading ? 'Signing in...' : 'Sign In'}
+                  <ArrowRight className="w-5 h-5 ml-2" />
+                </Button>
+              </form>
+
+              <p className="text-center text-muted-foreground mt-8">
+                Don't have an account?{' '}
+                <Link to="/register" className="text-primary font-medium hover:underline">
+                  Register
+                </Link>
+              </p>
             </div>
           </div>
         </div>
@@ -241,6 +223,7 @@ export const RegisterPage = () => {
   });
 
   const selectedOwnerType = OWNER_TYPES.find(t => t.value === formData.role);
+  const SelectedOwnerIcon = selectedOwnerType?.icon;
   const isSubscriptionRole = SUBSCRIPTION_ROLES.has(formData.role);
   const isCommissionRole = COMMISSION_ROLES.has(formData.role);
   const canRegisterOwner = !isSubscriptionRole || (isSubscriptionRole && couponState?.valid);
@@ -287,6 +270,8 @@ export const RegisterPage = () => {
     try {
       const payload = {
         ...formData,
+        city: formData.city || 'Surat',
+        address: formData.address || 'Not provided',
         ...(couponState?.valid ? { coupon: couponState.code } : {}),
       };
 
@@ -311,63 +296,59 @@ export const RegisterPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex" data-testid="register-page">
-      {/* Left Side - Image */}
-      <div
-        className="hidden lg:flex w-2/5 bg-cover bg-center flex-col justify-end p-12"
-        style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800)',
-        }}
-      >
-        <div className="bg-stone-900/80 backdrop-blur-sm rounded-2xl p-8 text-white">
-          <h2 className="font-heading text-3xl font-bold mb-4">Join GharSetu</h2>
-          <p className="text-stone-300">
-            {activeTab === 'owner' 
-              ? 'List your properties, hotels, venues, or services and reach millions of users across Gujarat.'
-              : 'Find your perfect home, book stays, discover event venues, and hire trusted service providers.'}
-          </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            {['Verified Owners', 'Direct Chat', 'Easy Booking', 'Price Negotiation'].map((feature) => (
-              <span key={feature} className="px-3 py-1 bg-white/10 rounded-full text-sm">
-                {feature}
-              </span>
-            ))}
-          </div>
-        </div>
+    <div className="min-h-screen relative overflow-hidden bg-gradient-to-b from-stone-50 via-white to-emerald-50/40" data-testid="register-page">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -top-24 left-0 h-80 w-80 rounded-full bg-cyan-200/25 blur-3xl" />
+        <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-emerald-200/30 blur-3xl" />
       </div>
 
-      {/* Right Side - Form */}
-      <div className="flex-1 flex items-center justify-center p-8 overflow-y-auto">
-        <div className="w-full max-w-lg">
-          <Link to="/" className="flex items-center gap-2 mb-8">
-            <img
-              src="/GruvoraLogo.jpeg"
-              alt="Gruvora"
-              className="w-10 h-10 rounded-xl object-cover"
-            />
-            <span className="font-heading font-bold text-2xl text-primary">Gruvora</span>
-          </Link>
+      <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
+        <div className="w-full max-w-xl">
+          <div className="rounded-[1.75rem] border border-stone-200 bg-white/92 backdrop-blur-xl shadow-[0_24px_80px_rgba(15,23,42,0.10)] overflow-hidden">
+            <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-cyan-400 to-secondary" />
+            <div className="p-5 sm:p-7 md:p-8">
+              <Link to="/" className="flex items-center gap-2.5 mb-6">
+                <img
+                  src="/GruvoraLogo.jpeg"
+                  alt="Gruvora"
+                  className="w-10 h-10 rounded-xl object-cover shadow-[0_8px_20px_rgba(15,23,42,0.12)] ring-1 ring-black/5"
+                />
+                <span className="font-heading font-bold text-2xl text-primary tracking-tight">Gruvora</span>
+              </Link>
 
-          <h1 className="font-heading text-3xl font-bold text-stone-900 mb-2">Create Account</h1>
-          <p className="text-muted-foreground mb-6">Register to explore properties and services</p>
+              <div className="mb-5">
+                <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-emerald-700">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Join the Platform
+                </span>
+                <h1 className="font-heading text-3xl sm:text-4xl font-bold text-stone-950 mt-3 mb-2 tracking-tight">Create Account</h1>
+                <p className="text-muted-foreground text-sm sm:text-base">Register to explore properties and services.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {['Verified profiles', 'Smart onboarding', 'SaaS-ready flow'].map((item) => (
+                    <span key={item} className="inline-flex items-center rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-600">
+                      {item}
+                    </span>
+                  ))}
+                </div>
+              </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-            <TabsList className="grid w-full grid-cols-2 h-12">
-              <TabsTrigger value="user" className="data-[state=active]:bg-primary data-[state=active]:text-white" data-testid="tab-user">
-                <User className="w-4 h-4 mr-2" />
-                User
-              </TabsTrigger>
-              <TabsTrigger value="owner" className="data-[state=active]:bg-primary data-[state=active]:text-white" data-testid="tab-owner">
-                <Shield className="w-4 h-4 mr-2" />
-                Owner / Provider
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-5">
+                <TabsList className="grid w-full grid-cols-2 h-12 rounded-full bg-stone-100 p-1 shadow-inner">
+                  <TabsTrigger value="user" className="rounded-full data-[state=active]:bg-white data-[state=active]:text-stone-950 data-[state=active]:shadow-sm" data-testid="tab-user">
+                    <User className="w-4 h-4 mr-2" />
+                    User
+                  </TabsTrigger>
+                  <TabsTrigger value="owner" className="rounded-full data-[state=active]:bg-white data-[state=active]:text-stone-950 data-[state=active]:shadow-sm" data-testid="tab-owner">
+                    <Shield className="w-4 h-4 mr-2" />
+                    Owner / Provider
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
+              <form onSubmit={handleSubmit} className="space-y-4.5 sm:space-y-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="name" className="text-sm font-medium text-stone-700">Full Name</Label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
@@ -375,7 +356,7 @@ export const RegisterPage = () => {
                     placeholder="Enter full name"
                     value={formData.name}
                     onChange={e => setFormData(p => ({ ...p, name: e.target.value }))}
-                    className="pl-12 h-12"
+                    className="pl-12 h-12 rounded-xl border-stone-200 bg-white shadow-sm focus-visible:ring-emerald-500/20"
                     required
                     data-testid="register-name-input"
                   />
@@ -383,7 +364,7 @@ export const RegisterPage = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone" className="text-sm font-medium text-stone-700">Phone</Label>
                 <div className="relative">
                   <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
@@ -391,7 +372,7 @@ export const RegisterPage = () => {
                     placeholder="+91 XXXXXXXXXX"
                     value={formData.phone}
                     onChange={e => setFormData(p => ({ ...p, phone: e.target.value }))}
-                    className="pl-12 h-12"
+                    className="pl-12 h-12 rounded-xl border-stone-200 bg-white shadow-sm focus-visible:ring-emerald-500/20"
                     required
                     data-testid="register-phone-input"
                   />
@@ -400,7 +381,7 @@ export const RegisterPage = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium text-stone-700">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
@@ -409,7 +390,7 @@ export const RegisterPage = () => {
                   placeholder="Enter your email"
                   value={formData.email}
                   onChange={e => setFormData(p => ({ ...p, email: e.target.value }))}
-                  className="pl-12 h-12"
+                  className="pl-12 h-12 rounded-xl border-stone-200 bg-white shadow-sm focus-visible:ring-emerald-500/20"
                   required
                   data-testid="register-email-input"
                 />
@@ -417,7 +398,7 @@ export const RegisterPage = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-sm font-medium text-stone-700">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <Input
@@ -426,14 +407,14 @@ export const RegisterPage = () => {
                   placeholder="Min 8 chars, 1 uppercase, 1 number"
                   value={formData.password}
                   onChange={e => setFormData(p => ({ ...p, password: e.target.value }))}
-                  className="pl-12 pr-12 h-12"
+                  className="pl-12 pr-12 h-12 rounded-xl border-stone-200 bg-white shadow-sm focus-visible:ring-emerald-500/20"
                   required
                   data-testid="register-password-input"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(v => !v)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-stone-900 transition-colors"
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
@@ -441,7 +422,7 @@ export const RegisterPage = () => {
             </div>
 
             <div className="space-y-2">
-              <Label>Gender</Label>
+              <Label className="text-sm font-medium text-stone-700">Gender</Label>
               <RadioGroup
                 value={formData.gender}
                 onValueChange={value => setFormData(p => ({ ...p, gender: value }))}
@@ -456,47 +437,15 @@ export const RegisterPage = () => {
               </RadioGroup>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="city">City</Label>
-                <Select value={formData.city} onValueChange={value => setFormData(p => ({ ...p, city: value }))}>
-                  <SelectTrigger className="h-12">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {['Surat', 'Ahmedabad', 'Vadodara', 'Rajkot', 'Gandhinagar', 'Bhavnagar', 'Jamnagar'].map((city) => (
-                      <SelectItem key={city} value={city}>{city}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <div className="relative">
-                  <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="address"
-                    placeholder="Area, Landmark"
-                    value={formData.address}
-                    onChange={e => setFormData(p => ({ ...p, address: e.target.value }))}
-                    className="pl-12 h-12"
-                    required
-                    data-testid="register-address-input"
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* Owner-specific fields */}
             {activeTab === 'owner' && (
               <>
-                <Card className="border-secondary/30 bg-secondary/5">
+                  <Card className="border-secondary/20 bg-secondary/5 rounded-2xl shadow-none">
                   <CardHeader className="pb-4">
-                    <CardTitle className="text-base">Select Owner Type</CardTitle>
+                      <CardTitle className="text-base text-stone-900">Select Owner Type</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {OWNER_TYPES.map((type) => {
                         const Icon = type.icon;
                         const isSelected = formData.role === type.value;
@@ -505,9 +454,9 @@ export const RegisterPage = () => {
                             key={type.value}
                             type="button"
                             onClick={() => handleRoleChange(type.value)}
-                            className={`p-4 rounded-xl border-2 text-left transition-all ${
+                              className={`p-4 rounded-xl border-2 text-left transition-all bg-white ${
                               isSelected
-                                ? 'border-secondary bg-secondary/10'
+                                ? 'border-secondary bg-secondary/10 shadow-sm'
                                 : 'border-stone-200 hover:border-stone-300'
                             }`}
                           >
@@ -520,12 +469,21 @@ export const RegisterPage = () => {
                         );
                       })}
                     </div>
+                    {selectedOwnerType && (
+                      <div className="mt-4 rounded-2xl border border-stone-200 bg-white px-4 py-3 shadow-sm">
+                        <div className="flex items-center gap-2">
+                          {SelectedOwnerIcon && <SelectedOwnerIcon className="w-4 h-4 text-primary" />}
+                          <p className="font-medium text-sm text-stone-900">{selectedOwnerType.label}</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{selectedOwnerType.hint}</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
 
-                <Card className="border-primary/30 bg-primary/5">
+                    <Card className="border-primary/20 bg-primary/5 rounded-2xl shadow-none">
                   <CardHeader className="pb-4">
-                    <CardTitle className="text-base flex items-center gap-2">
+                      <CardTitle className="text-base flex items-center gap-2 text-stone-900">
                       <Shield className="w-5 h-5 text-primary" />
                       Aadhar Verification
                     </CardTitle>
@@ -599,7 +557,7 @@ export const RegisterPage = () => {
                             </div>
 
                             {!couponState?.valid && (
-                              <div className="flex gap-2">
+                              <div className="flex flex-col sm:flex-row gap-2">
                                 <Input
                                   placeholder="COUPON CODE"
                                   value={couponInput}
@@ -610,13 +568,13 @@ export const RegisterPage = () => {
                                     }
                                   }}
                                   onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleApplyCoupon())}
-                                  className="font-mono uppercase tracking-wider h-11 flex-1"
+                                  className="font-mono uppercase tracking-wider h-11 flex-1 rounded-xl border-stone-200 bg-white shadow-sm"
                                 />
                                 <Button
                                   type="button"
                                   onClick={handleApplyCoupon}
                                   disabled={!couponInput.trim() || couponChecking}
-                                  className="h-11 px-5 bg-orange-500 hover:bg-orange-600 text-white"
+                                  className="h-11 px-5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white shadow-sm"
                                 >
                                   {couponChecking
                                     ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -633,7 +591,7 @@ export const RegisterPage = () => {
                             )}
 
                             {couponState?.valid && (
-                              <div className="rounded-lg bg-green-100 border border-green-300 p-3 text-center">
+                              <div className="rounded-xl bg-green-100 border border-green-300 p-3 text-center">
                                 <p className="text-2xl mb-1">🎉</p>
                                 <p className="font-bold text-green-800 text-base">Congratulations!</p>
                                 <p className="text-green-700 text-sm mt-1">
@@ -688,10 +646,10 @@ export const RegisterPage = () => {
 
             <Button
               type="submit"
-              className={`w-full h-12 ${
+              className={`w-full h-12 rounded-full ${
                 activeTab === 'owner' && !canRegisterOwner
                   ? 'opacity-50 cursor-not-allowed bg-stone-400'
-                  : 'btn-primary'
+                  : 'btn-primary shadow-[0_12px_24px_rgba(5,150,105,0.18)]'
               }`}
               disabled={loading || (activeTab === 'owner' && !canRegisterOwner)}
               data-testid="register-submit-btn"
@@ -710,14 +668,16 @@ export const RegisterPage = () => {
                 Enter coupon code <span className="font-mono font-bold text-primary">GRUVORA5M</span> above to unlock registration
               </p>
             )}
-          </form>
+              </form>
 
-          <p className="text-center text-muted-foreground mt-6">
-            Already have an account?{' '}
-            <Link to="/login" className="text-primary font-medium hover:underline">
-              Sign In
-            </Link>
-          </p>
+              <p className="text-center text-muted-foreground mt-6">
+                Already have an account?{' '}
+                <Link to="/login" className="text-primary font-medium hover:underline">
+                  Sign In
+                </Link>
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

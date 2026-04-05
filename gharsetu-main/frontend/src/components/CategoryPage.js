@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { listingsAPI, categoriesAPI } from '../lib/api';
-import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
+import { prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
 import SmartSearchInput from './SmartSearchInput';
@@ -35,7 +35,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Video,
-  Map,
+  Compass,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
@@ -49,49 +49,61 @@ const categoryIcons = {
 };
 
 const categoryColors = {
-  home: 'bg-emerald-500',
-  business: 'bg-blue-500',
-  stay: 'bg-purple-500',
-  event: 'bg-pink-500',
-  services: 'bg-orange-500',
+  home: 'bg-sky-500',
+  business: 'bg-indigo-500',
+  stay: 'bg-violet-500',
+  event: 'bg-rose-500',
+  services: 'bg-amber-500',
 };
 
 const categoryThemes = {
   home: {
-    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
-    panel: 'border-white/20 bg-white/8',
-    icon: 'bg-white/12 ring-white/35',
-    chip: 'border-white/30 bg-white/12',
+    banner: 'bg-gradient-to-br from-sky-50 via-white to-slate-50',
+    panel: 'border-sky-100/80 bg-gradient-to-br from-white via-sky-50/45 to-white',
+    icon: 'bg-gradient-to-br from-sky-100 to-white ring-sky-200',
+    chip: 'border-sky-200/70 bg-sky-50/70',
+    blobOne: 'bg-sky-200/55',
+    blobTwo: 'bg-indigo-200/35',
   },
   business: {
-    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
-    panel: 'border-white/20 bg-white/8',
-    icon: 'bg-white/12 ring-white/35',
-    chip: 'border-white/30 bg-white/12',
+    banner: 'bg-gradient-to-br from-indigo-50 via-white to-slate-50',
+    panel: 'border-indigo-100/80 bg-gradient-to-br from-white via-indigo-50/45 to-white',
+    icon: 'bg-gradient-to-br from-indigo-100 to-white ring-indigo-200',
+    chip: 'border-indigo-200/70 bg-indigo-50/70',
+    blobOne: 'bg-indigo-200/50',
+    blobTwo: 'bg-sky-200/30',
   },
   stay: {
-    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
-    panel: 'border-white/20 bg-white/8',
-    icon: 'bg-white/12 ring-white/35',
-    chip: 'border-white/30 bg-white/12',
+    banner: 'bg-gradient-to-br from-violet-50 via-white to-slate-50',
+    panel: 'border-violet-100/80 bg-gradient-to-br from-white via-violet-50/45 to-white',
+    icon: 'bg-gradient-to-br from-violet-100 to-white ring-violet-200',
+    chip: 'border-violet-200/70 bg-violet-50/70',
+    blobOne: 'bg-violet-200/55',
+    blobTwo: 'bg-fuchsia-200/30',
   },
   event: {
-    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
-    panel: 'border-white/20 bg-white/8',
-    icon: 'bg-white/12 ring-white/35',
-    chip: 'border-white/30 bg-white/12',
+    banner: 'bg-gradient-to-br from-rose-50 via-white to-slate-50',
+    panel: 'border-rose-100/80 bg-gradient-to-br from-white via-rose-50/45 to-white',
+    icon: 'bg-gradient-to-br from-rose-100 to-white ring-rose-200',
+    chip: 'border-rose-200/70 bg-rose-50/70',
+    blobOne: 'bg-rose-200/55',
+    blobTwo: 'bg-orange-200/30',
   },
   services: {
-    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
-    panel: 'border-white/20 bg-white/8',
-    icon: 'bg-white/12 ring-white/35',
-    chip: 'border-white/30 bg-white/12',
+    banner: 'bg-gradient-to-br from-amber-50 via-white to-slate-50',
+    panel: 'border-amber-100/80 bg-gradient-to-br from-white via-amber-50/45 to-white',
+    icon: 'bg-gradient-to-br from-amber-100 to-white ring-amber-200',
+    chip: 'border-amber-200/70 bg-amber-50/70',
+    blobOne: 'bg-amber-200/55',
+    blobTwo: 'bg-yellow-200/30',
   },
   default: {
-    banner: 'bg-gradient-to-br from-emerald-950 via-green-900 to-teal-900',
-    panel: 'border-white/20 bg-white/8',
-    icon: 'bg-white/12 ring-white/35',
-    chip: 'border-white/30 bg-white/12',
+    banner: 'bg-gradient-to-br from-slate-50 via-white to-stone-50',
+    panel: 'border-slate-200/80 bg-gradient-to-br from-white via-slate-50/45 to-white',
+    icon: 'bg-gradient-to-br from-slate-100 to-white ring-slate-200',
+    chip: 'border-slate-200/70 bg-slate-50/70',
+    blobOne: 'bg-slate-200/45',
+    blobTwo: 'bg-sky-200/25',
   },
 };
 
@@ -291,24 +303,30 @@ export const CategoryPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50" data-testid={`category-page-${category}`}>
+    <div className="min-h-screen bg-gradient-to-b from-stone-50 via-white to-stone-100/60" data-testid={`category-page-${category}`}>
       <Header />
 
       {/* Hero Banner */}
-      <div className={`${theme.banner} text-white py-10 md:py-12`}>
+      <div className={`relative overflow-hidden ${theme.banner} py-10 md:py-12`}>
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          <div className={`absolute -top-24 left-8 h-64 w-64 rounded-full ${theme.blobOne} blur-3xl`} />
+          <div className={`absolute -bottom-20 right-8 h-72 w-72 rounded-full ${theme.blobTwo} blur-3xl`} />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.75),transparent_45%)]" />
+        </div>
         <div className="container-main">
-          <div className={`rounded-3xl border ${theme.panel} backdrop-blur-md p-6 md:p-8 shadow-[0_20px_80px_-32px_rgba(0,0,0,0.7)]`}>
+          <div className={`relative rounded-3xl border ${theme.panel} p-6 md:p-8 shadow-[0_24px_64px_-36px_rgba(15,23,42,0.28)] backdrop-blur-sm`}>
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-transparent via-stone-200/90 to-transparent" />
             <div className="flex items-center gap-4 mb-4">
               <div className={`w-16 h-16 ${theme.icon} rounded-2xl flex items-center justify-center ring-1`}>
-                <Icon className="w-8 h-8" />
+                <Icon className="w-8 h-8 text-stone-800" />
               </div>
               <div>
-                <h1 className="font-heading text-4xl md:text-5xl font-bold tracking-tight">{title.en}</h1>
-                <p className="text-white/80 text-lg">{title.gu}</p>
+                <h1 className="font-heading text-4xl md:text-5xl font-bold tracking-tight text-stone-900">{title.en}</h1>
+                <p className="text-stone-500 text-lg">{title.gu}</p>
               </div>
             </div>
-            <p className="text-white/90 text-base md:text-lg max-w-3xl leading-relaxed">{description}</p>
-            <div className={`mt-5 inline-flex items-center rounded-full border ${theme.chip} px-4 py-2 text-sm text-white/95`}>
+            <p className="text-stone-600 text-base md:text-lg max-w-3xl leading-relaxed">{description}</p>
+            <div className={`mt-5 inline-flex items-center rounded-full border ${theme.chip} px-4 py-2 text-sm text-stone-700`}>
               Verified listings and fast discovery
             </div>
           </div>
@@ -477,8 +495,8 @@ export const CategoryPage = () => {
           </div>
         ) : listings.length === 0 ? (
           <div className="text-center py-20">
-            <div className={`w-20 h-20 ${bgColor} rounded-full flex items-center justify-center mx-auto mb-6`}>
-              <Icon className="w-10 h-10 text-white" />
+            <div className="w-20 h-20 bg-stone-100 border border-stone-200 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Icon className="w-10 h-10 text-stone-700" />
             </div>
             <h3 className="font-heading text-2xl font-bold mb-2">No Listings Found</h3>
             <p className="text-muted-foreground mb-6">
@@ -559,16 +577,16 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
     navigate(`/reels?listingId=${encodeURIComponent(listing.id)}`);
   };
 
-  const handleOpenMap = (e) => {
+  const handleOpenDiscover = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    prefetchMapRoute();
-    markRouteNavigation('/map', 'category-listing-map-btn');
+    prefetchDiscoverRoute();
+    markRouteNavigation('/discover', 'category-listing-discover-btn');
     const params = new URLSearchParams();
     params.set('listingId', listing.id);
     if (listing.city) params.set('city', listing.city);
     if (listing.category) params.set('category', listing.category);
-    navigate(`/map?${params.toString()}`);
+    navigate(`/discover?${params.toString()}`);
   };
 
   const formatPrice = (price, type) => {
@@ -619,7 +637,7 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
           </div>
           <p className="text-muted-foreground text-sm line-clamp-2 mb-4">{listing.description}</p>
           <div className="flex items-center justify-between">
-            <p className="font-heading font-bold text-xl text-primary">
+            <p className="font-heading font-bold text-xl text-stone-900">
               {formatPrice(listing.price, listing.listing_type)}
             </p>
             <div className="flex items-center gap-3 text-muted-foreground text-sm">
@@ -630,26 +648,24 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
                 onMouseEnter={prefetchReelsRoute}
                 onFocus={prefetchReelsRoute}
                 onClick={handleOpenReels}
-                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 hover:text-primary flex items-center justify-center transition-all"
+                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-all"
               >
                 <Video className="w-4 h-4" />
               </button>
               <button
                 type="button"
-                title="View on Map"
-                aria-label="View on Map"
-                onMouseEnter={prefetchMapRoute}
-                onFocus={prefetchMapRoute}
-                onClick={handleOpenMap}
-                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 hover:text-primary flex items-center justify-center transition-all"
+                title="Open Discover"
+                aria-label="Open Discover"
+                onMouseEnter={prefetchDiscoverRoute}
+                onFocus={prefetchDiscoverRoute}
+                onClick={handleOpenDiscover}
+                className="w-8 h-8 rounded-full bg-stone-100 hover:bg-stone-200 text-stone-600 flex items-center justify-center transition-all"
               >
-                <Map className="w-4 h-4" />
+                <Compass className="w-4 h-4" />
               </button>
               <span className="flex items-center gap-1">
                 <Eye className="w-4 h-4" />
                 {listing.views}
-                onMouseEnter={prefetchReelsRoute}
-                onFocus={prefetchReelsRoute}
               </span>
               <span className="flex items-center gap-1">
                 <Heart className="w-4 h-4" />
@@ -696,8 +712,8 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
 
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <button
-            onMouseEnter={prefetchMapRoute}
-            onFocus={prefetchMapRoute}
+            onMouseEnter={prefetchDiscoverRoute}
+            onFocus={prefetchDiscoverRoute}
             type="button"
             title="Watch Video"
             aria-label="Watch Video"
@@ -708,17 +724,17 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
           </button>
           <button
             type="button"
-            title="View on Map"
-            aria-label="View on Map"
-            onClick={handleOpenMap}
+            title="Open Discover"
+            aria-label="Open Discover"
+            onClick={handleOpenDiscover}
             className="w-9 h-9 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white shadow-sm transition-all"
           >
-            <Map className="w-4 h-4 text-stone-600" />
+            <Compass className="w-4 h-4 text-stone-600" />
           </button>
         </div>
       </div>
       <div className="p-5">
-        <h3 className="font-heading font-semibold text-lg text-stone-900 line-clamp-1 group-hover:text-primary transition-colors">
+        <h3 className="font-heading font-semibold text-lg text-stone-900 line-clamp-1 group-hover:text-stone-900 transition-colors">
           {listing.title}
         </h3>
         <div className="flex items-center gap-1 mt-2 text-muted-foreground">
@@ -726,7 +742,7 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
           <span className="text-sm line-clamp-1">{listing.location}, {listing.city}</span>
         </div>
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-stone-100">
-          <p className="font-heading font-bold text-xl text-primary">
+          <p className="font-heading font-bold text-xl text-stone-900">
             {formatPrice(listing.price, listing.listing_type)}
           </p>
           <div className="flex items-center gap-3 text-muted-foreground text-sm">

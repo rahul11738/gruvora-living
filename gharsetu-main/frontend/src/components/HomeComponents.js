@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { listingsAPI, categoriesAPI, recommendationsAPI, chatAPI } from '../lib/api';
-import { prefetchMapRoute, prefetchReelsRoute } from '../lib/routePrefetch';
+import { prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
@@ -30,7 +30,7 @@ import {
   ChevronRight,
   Mic,
   MicOff,
-  Map,
+  Compass,
   Sparkles,
   Zap,
   Phone,
@@ -51,11 +51,44 @@ const categoryIcons = {
 };
 
 const categoryColors = {
-  home: 'from-emerald-500 to-emerald-600',
-  business: 'from-blue-500 to-blue-600',
-  stay: 'from-purple-500 to-purple-600',
-  event: 'from-pink-500 to-pink-600',
-  services: 'from-orange-500 to-orange-600',
+  home: 'from-emerald-500 to-teal-600',
+  business: 'from-blue-500 to-indigo-600',
+  stay: 'from-cyan-500 to-sky-600',
+  event: 'from-rose-500 to-pink-600',
+  services: 'from-orange-500 to-amber-600',
+};
+
+const categoryCardThemes = {
+  home: {
+    glow: 'bg-emerald-500/20',
+    soft: 'from-emerald-50 via-white to-teal-50',
+    ring: 'ring-emerald-200/80',
+    accent: 'text-emerald-700',
+  },
+  business: {
+    glow: 'bg-blue-500/20',
+    soft: 'from-blue-50 via-white to-indigo-50',
+    ring: 'ring-blue-200/80',
+    accent: 'text-blue-700',
+  },
+  stay: {
+    glow: 'bg-cyan-500/20',
+    soft: 'from-cyan-50 via-white to-sky-50',
+    ring: 'ring-cyan-200/80',
+    accent: 'text-cyan-700',
+  },
+  event: {
+    glow: 'bg-rose-500/20',
+    soft: 'from-rose-50 via-white to-pink-50',
+    ring: 'ring-rose-200/80',
+    accent: 'text-rose-700',
+  },
+  services: {
+    glow: 'bg-orange-500/20',
+    soft: 'from-orange-50 via-white to-amber-50',
+    ring: 'ring-orange-200/80',
+    accent: 'text-orange-700',
+  },
 };
 
 const categoryBgColors = {
@@ -273,15 +306,14 @@ export const HeroSection = () => {
             >
               <div className="hero-search-inner">
                 <div className="w-full overflow-x-auto hide-scrollbar pb-1">
-                  <div className="flex w-max mx-auto items-center gap-2 px-1">
+                  <div className="flex w-max mx-auto items-center gap-3 px-2 py-1">
                     {[
-                      { id: 'home', label: 'Home', labelGu: 'ઘર', icon: Home },
-                      { id: 'business', label: 'Business', labelGu: 'બિઝનેસ', icon: Building2 },
-                      { id: 'stay', label: 'Stay', labelGu: 'રહેવાનું', icon: Hotel },
-                      { id: 'event', label: 'Event', labelGu: 'ઇવેન્ટ', icon: PartyPopper },
-                      { id: 'services', label: 'Services', labelGu: 'સેવાઓ', icon: Wrench },
+                      { id: 'home', label: 'Home' },
+                      { id: 'business', label: 'Business' },
+                      { id: 'stay', label: 'Stay' },
+                      { id: 'event', label: 'Event' },
+                      { id: 'services', label: 'Services' },
                     ].map((cat, index) => {
-                      const Icon = cat.icon;
                       const isActive = category === cat.id;
                       return (
                         <motion.button
@@ -293,9 +325,7 @@ export const HeroSection = () => {
                           onClick={() => setCategory(cat.id)}
                           className={`hero-pill ${isActive ? 'hero-pill-active' : ''}`}
                         >
-                          <Icon className="w-4 h-4" />
-                          <span className="hidden md:inline">{cat.label}</span>
-                          <span className="md:hidden">{cat.labelGu}</span>
+                          <span>{cat.label}</span>
                         </motion.button>
                       );
                     })}
@@ -363,6 +393,7 @@ export const HeroSection = () => {
 
 export const CategoriesSection = () => {
   const reduceMotion = useReducedMotion();
+  const location = useLocation();
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
@@ -387,59 +418,102 @@ export const CategoriesSection = () => {
 
   const displayCategories = categories.length > 0 ? categories : defaultCategories;
 
+  const activeCategoryId = location.pathname.startsWith('/category/')
+    ? location.pathname.split('/')[2] || ''
+    : '';
+
   return (
-    <section className="section-padding bg-white" data-testid="categories-section">
+    <section className="section-padding relative overflow-hidden bg-gradient-to-b from-stone-50 via-white to-stone-50/70" data-testid="categories-section">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <motion.div
+          animate={reduceMotion ? { opacity: 0.24 } : { y: [0, -16, 0], opacity: [0.24, 0.32, 0.24] }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 7, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -top-24 right-4 md:right-20 h-72 w-72 rounded-full bg-emerald-200/45 blur-3xl"
+        />
+        <motion.div
+          animate={reduceMotion ? { opacity: 0.24 } : { y: [0, 18, 0], opacity: [0.24, 0.34, 0.24] }}
+          transition={reduceMotion ? { duration: 0 } : { duration: 8.2, repeat: Infinity, ease: 'easeInOut', delay: 0.7 }}
+          className="absolute -bottom-24 left-4 md:left-24 h-80 w-80 rounded-full bg-orange-200/40 blur-3xl"
+        />
+      </div>
       <div className="container-main">
         <motion.div 
           {...revealUp(reduceMotion, 0.02)}
           className="text-center mb-12"
         >
-          <span className="inline-flex items-center gap-2 text-secondary font-medium text-sm uppercase tracking-wider">
+          <span className="inline-flex items-center gap-2 text-secondary font-semibold text-sm uppercase tracking-[0.18em]">
             <Zap className="w-4 h-4" />
             Explore Categories
           </span>
-          <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 mt-3">
-            What are you looking for?
+          <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 mt-3 leading-tight">
+            Discover Your Perfect Space Faster
           </h2>
-          <p className="text-muted-foreground mt-4 max-w-2xl mx-auto">
-            Browse through our 5 comprehensive categories covering all your property and service needs
+          <p className="text-muted-foreground mt-4 max-w-3xl mx-auto text-base md:text-lg">
+            Premium categories with smarter discovery, cleaner browsing, and instant navigation from homes to on-demand services.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 relative z-10">
           {displayCategories.map((cat, index) => {
             const Icon = categoryIcons[cat.id] || Home;
             const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
+            const theme = categoryCardThemes[cat.id] || categoryCardThemes.home;
+            const isActive = activeCategoryId === cat.id;
+            const subCategoryCount = cat.sub_categories?.length || 0;
 
             return (
               <motion.div
                 key={cat.id}
                 {...revealUp(reduceMotion, index * 0.06, 24)}
+                whileHover={reduceMotion ? undefined : { y: -8 }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
               >
                 <Link
                   to={`/category/${cat.id}`}
-                  className="group relative overflow-hidden rounded-3xl p-8 hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 block bg-stone-50"
+                  className={`group relative overflow-hidden rounded-3xl p-6 md:p-7 block border border-stone-200/90 bg-gradient-to-b ${theme.soft} transition-all duration-500 hover:shadow-[0_24px_64px_-28px_rgba(20,20,20,0.45)] ${isActive ? `ring-2 ${theme.ring} shadow-[0_20px_52px_-26px_rgba(16,185,129,0.6)]` : 'hover:border-white'}`}
                   data-testid={`category-card-${cat.id}`}
                 >
-                  {/* Background Gradient */}
-                  <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} opacity-0 group-hover:opacity-100 transition-opacity duration-500`} />
+                  <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full ${theme.glow} blur-2xl transition-transform duration-500 group-hover:scale-125`} />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.75),transparent_45%)]" />
+                  <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} opacity-0 group-hover:opacity-95 transition-opacity duration-500`} />
                   
-                  {/* Content */}
                   <div className="relative z-10">
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="inline-flex items-center rounded-full border border-stone-200/80 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600 group-hover:border-white/35 group-hover:bg-white/15 group-hover:text-white/90">
+                        {subCategoryCount > 0 ? `${subCategoryCount} types` : 'Top picks'}
+                      </span>
+                      {isActive && (
+                        <span className="inline-flex items-center rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-stone-800">
+                          Active
+                        </span>
+                      )}
+                    </div>
+
                     <motion.div 
                       whileHover={reduceMotion ? undefined : { scale: 1.08, rotate: 4 }}
-                      className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-6 shadow-lg`}
+                      className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/40`}
                     >
                       <Icon className="w-8 h-8 text-white" />
                     </motion.div>
-                    <h3 className="font-heading font-bold text-xl text-stone-900 group-hover:text-white transition-colors">{cat.name}</h3>
-                    <p className="text-primary font-medium text-sm mt-1 group-hover:text-white/80 transition-colors">{cat.name_gu}</p>
-                    <p className="text-muted-foreground text-sm mt-3 line-clamp-2 group-hover:text-white/70 transition-colors">
+
+                    <h3 className="font-heading font-bold text-2xl text-stone-900 group-hover:text-white transition-colors">
+                      {cat.name}
+                    </h3>
+                    <p className={`font-semibold text-sm mt-1 transition-colors ${theme.accent} group-hover:text-white/90`}>
+                      {cat.name_gu}
+                    </p>
+                    <p className="text-muted-foreground text-sm mt-3 line-clamp-2 min-h-[2.6rem] group-hover:text-white/75 transition-colors">
                       {cat.description || cat.sub_categories?.slice(0, 4).map(s => s.name).join(', ')}
                     </p>
-                    <div className="mt-4 flex items-center gap-2 text-primary group-hover:text-white transition-colors">
-                      <span className="text-sm font-medium">Explore</span>
-                      <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" />
+
+                    <div className="mt-5 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-primary group-hover:text-white transition-colors">
+                        <span className="text-sm font-semibold">Explore</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" />
+                      </div>
+                      <span className="text-xs font-medium text-stone-500 group-hover:text-white/75 transition-colors">
+                        Instant view
+                      </span>
                     </div>
                   </div>
                 </Link>
@@ -631,16 +705,16 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
     }
   }, [isAuthenticated, listing.id, toggleWishlist]);
 
-  const handleMapClick = useCallback((e) => {
+  const handleDiscoverClick = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
-    prefetchMapRoute();
-    markRouteNavigation('/map', 'home-property-map-btn');
+    prefetchDiscoverRoute();
+    markRouteNavigation('/discover', 'home-property-discover-btn');
     const params = new URLSearchParams();
     params.set('listingId', listing.id);
     if (listing.city) params.set('city', listing.city);
     if (listing.category) params.set('category', listing.category);
-    navigate(`/map?${params.toString()}`);
+    navigate(`/discover?${params.toString()}`);
   }, [listing.id, listing.city, listing.category, navigate]);
 
   const formatPrice = (price, type) => {
@@ -704,14 +778,14 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
         <div className="absolute bottom-4 left-4 z-20 flex items-center gap-2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
           <button
             type="button"
-            title="View on Map"
-            aria-label="View on Map"
-            onMouseEnter={prefetchMapRoute}
-            onFocus={prefetchMapRoute}
-            onClick={handleMapClick}
+            title="Open Discover"
+            aria-label="Open Discover"
+            onMouseEnter={prefetchDiscoverRoute}
+            onFocus={prefetchDiscoverRoute}
+            onClick={handleDiscoverClick}
             className="w-9 h-9 bg-white/95 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white hover:-translate-y-0.5 shadow-sm transition-all"
           >
-            <Map className="w-4 h-4 text-stone-600" />
+            <Compass className="w-4 h-4 text-stone-600" />
           </button>
         </div>
       </div>
@@ -769,9 +843,9 @@ export const FeaturesSection = () => {
       color: 'bg-blue-500',
     },
     {
-      icon: Map,
-      title: 'Map Search',
-      description: 'Find properties on map with location-based search',
+      icon: Compass,
+      title: 'Discover Search',
+      description: 'Find properties with city and category filters',
       color: 'bg-purple-500',
     },
     {
@@ -789,33 +863,53 @@ export const FeaturesSection = () => {
   ];
 
   return (
-    <section className="section-padding bg-white" data-testid="features-section">
-      <div className="container-main">
-        <motion.div {...revealUp(reduceMotion, 0.02)} className="text-center mb-12">
-          <span className="inline-flex items-center gap-2 text-secondary font-medium text-sm uppercase tracking-wider">
+    <section className="section-padding relative overflow-hidden bg-gradient-to-b from-stone-50 via-white to-stone-50" data-testid="features-section">
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -top-20 left-0 h-72 w-72 rounded-full bg-emerald-200/30 blur-3xl" />
+        <div className="absolute top-24 right-0 h-80 w-80 rounded-full bg-cyan-200/20 blur-3xl" />
+      </div>
+
+      <div className="container-main relative">
+        <motion.div {...revealUp(reduceMotion, 0.02)} className="mx-auto max-w-3xl text-center mb-8 md:mb-10">
+          <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3.5 py-1.5 text-emerald-700 font-semibold text-[11px] md:text-xs uppercase tracking-[0.24em] shadow-sm">
             <Sparkles className="w-4 h-4" />
             Platform Features
           </span>
-          <h2 className="font-heading text-3xl md:text-4xl font-bold text-stone-900 mt-3">
-            Why Choose GRUVORA LIVING?
+          <h2 className="font-heading text-2xl md:text-4xl font-bold text-stone-950 mt-3 leading-tight">
+            Why choose GRUVORA LIVING?
           </h2>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3.5 md:gap-4">
           {features.map((feature, index) => {
             const Icon = feature.icon;
             return (
               <motion.div
-                key={index}
+                key={feature.title}
                 {...revealUp(reduceMotion, 0.04 + index * 0.05, 18)}
-                whileHover={reduceMotion ? undefined : { y: -4 }}
-                className="group p-8 rounded-2xl bg-stone-50 hover:bg-white hover:shadow-xl transition-all duration-300"
+                whileHover={reduceMotion ? undefined : { y: -6, scale: 1.01 }}
+                className="group relative overflow-hidden rounded-[1.6rem] border border-stone-200 bg-white p-5 md:p-6 shadow-[0_12px_34px_rgba(15,23,42,0.05)] transition-all duration-300 hover:shadow-[0_24px_60px_rgba(15,23,42,0.1)]"
               >
-                <div className={`w-14 h-14 ${feature.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
-                  <Icon className="w-7 h-7 text-white" />
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-secondary" aria-hidden="true" />
+                <div className={`absolute -right-8 -top-8 h-24 w-24 rounded-full ${feature.color} opacity-15 blur-2xl group-hover:opacity-25 transition-opacity`} aria-hidden="true" />
+
+                <div className="relative flex items-start justify-between gap-3">
+                  <div className={`w-12 h-12 ${feature.color} rounded-2xl flex items-center justify-center shadow-lg shadow-black/5 group-hover:scale-105 transition-transform`}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-stone-100 text-stone-600 border border-stone-200">
+                    0{index + 1}
+                  </span>
                 </div>
-                <h3 className="font-heading font-semibold text-xl text-stone-900 mb-3">{feature.title}</h3>
-                <p className="text-muted-foreground">{feature.description}</p>
+
+                <div className="relative mt-4">
+                  <h3 className="font-heading font-semibold text-lg md:text-xl text-stone-950 mb-2.5 leading-tight">
+                    {feature.title}
+                  </h3>
+                  <p className="text-stone-600 leading-relaxed text-sm md:text-[14px]">
+                    {feature.description}
+                  </p>
+                </div>
               </motion.div>
             );
           })}

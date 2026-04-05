@@ -38,8 +38,8 @@ const prefetchChunk = (key, loader) => {
   });
 };
 
-export const prefetchMapRoute = () => {
-  prefetchChunk("map-route", () => import("../components/MapSearchPage"));
+export const prefetchDiscoverRoute = () => {
+  prefetchChunk("discover-route", () => import("../components/DiscoverSearchPage"));
 };
 
 export const prefetchReelsRoute = () => {
