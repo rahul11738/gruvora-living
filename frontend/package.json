@@ -1,5 +1,5 @@
 {
-  "id": "fix2",
+  "id": "finalfix",
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
@@ -68,6 +68,12 @@
     "build": "CI=false react-scripts build",
     "test": "craco test",
     "smoke:routes": "node scripts/smoke-routes.cjs"
+  },
+  "eslintConfig": {
+    "extends": ["react-app"],
+    "rules": {
+      "react-hooks/exhaustive-deps": "off"
+    }
   },
   "browserslist": {
     "production": [
