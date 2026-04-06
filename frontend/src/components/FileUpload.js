@@ -356,6 +356,9 @@ export const VideoUploader = ({
             src={video.previewUrl || video.url}
             className="w-full aspect-video object-contain"
             controls
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
           />
           
           <div className="absolute top-3 right-3 flex gap-2">

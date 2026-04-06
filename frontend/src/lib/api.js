@@ -78,6 +78,26 @@ const api = axios.create({
   baseURL: `${activeBackendUrl}/api`,
 });
 
+const forceHttpsInPayload = (value) => {
+  if (typeof value === 'string') {
+    return value.replace('http://', 'https://');
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => forceHttpsInPayload(item));
+  }
+
+  if (value && typeof value === 'object') {
+    const next = {};
+    Object.entries(value).forEach(([key, item]) => {
+      next[key] = forceHttpsInPayload(item);
+    });
+    return next;
+  }
+
+  return value;
+};
+
 api.interceptors.request.use((config) => {
   if (!process.env.REACT_APP_BACKEND_URL && typeof window !== 'undefined') {
     const effectiveBaseUrl = config.baseURL || `${activeBackendUrl}/api`;
@@ -95,7 +115,10 @@ api.interceptors.request.use((config) => {
 
 // ✅ Auto token refresh on 401
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    response.data = forceHttpsInPayload(response.data);
+    return response;
+  },
   async (error) => {
     const originalRequest = error.config || {};
 

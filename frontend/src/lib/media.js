@@ -4,8 +4,5 @@ export const normalizeMediaUrl = (url) => {
   if (value.startsWith('//')) {
     return `https:${value}`;
   }
-  if (value.startsWith('http://')) {
-    return `https://${value.slice('http://'.length)}`;
-  }
-  return value;
+  return value.replace('http://', 'https://');
 };

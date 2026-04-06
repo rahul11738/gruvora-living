@@ -461,6 +461,9 @@ const SavedReelCard = ({ video, onRemove }) => {
             className="w-full h-full object-cover"
             muted
             preload="metadata"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
           />
         )}
         

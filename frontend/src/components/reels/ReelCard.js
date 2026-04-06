@@ -316,8 +316,9 @@ const ReelCard = React.memo(({
           className="h-full w-auto max-w-full max-h-screen object-contain bg-black mx-auto"
           onClick={togglePlay}
           onTimeUpdate={handleTimeUpdate}
-          onError={() => {
+          onError={(e) => {
             console.error('Video load error:', videoId);
+            e.currentTarget.style.display = 'none';
           }}
         />
 
