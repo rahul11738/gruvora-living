@@ -6721,37 +6721,189 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+WAF_SKIP_PATH_PREFIXES = (
+    "/api/health",
+    "/api/docs",
+    "/api/openapi.json",
+    "/socket.io",
+)
+WAF_MAX_JSON_BODY_BYTES = int(os.environ.get("WAF_MAX_JSON_BODY_BYTES", "2097152"))
+WAF_MAX_QUERY_LENGTH = int(os.environ.get("WAF_MAX_QUERY_LENGTH", "4096"))
+WAF_ENFORCE_ALLOWLIST = os.environ.get("WAF_ENFORCE_ALLOWLIST", "false").lower() == "true"
+IP_ALLOWLIST = {
+    ip.strip() for ip in os.environ.get("IP_ALLOWLIST", "").split(",") if ip.strip()
+}
+IP_DENYLIST = {
+    ip.strip() for ip in os.environ.get("IP_DENYLIST", "").split(",") if ip.strip()
+}
+WAF_BLOCK_PATTERNS = [
+    re.compile(r"<\s*script\b", re.IGNORECASE),
+    re.compile(r"javascript\s*:", re.IGNORECASE),
+    re.compile(r"on(?:error|load|click|mouseover)\s*=", re.IGNORECASE),
+    re.compile(r"(?:\bunion\b\s+\bselect\b|\bdrop\b\s+\btable\b|\binsert\b\s+\binto\b)", re.IGNORECASE),
+    re.compile(r"\b(or|and)\b\s+['\"]?\d+['\"]?\s*=\s*['\"]?\d+", re.IGNORECASE),
+    re.compile(r"(\.\./|%2e%2e%2f|%252e%252e%252f)", re.IGNORECASE),
+    re.compile(r"\b(select\s+.+\s+from)\b", re.IGNORECASE),
+]
+
+
+def _get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        # Use first client IP in chain: client, proxy1, proxy2
+        return forwarded_for.split(",", 1)[0].strip() or "unknown"
+    return request.client.host if request.client else "unknown"
+
+
+def _matches_attack_pattern(value: str) -> bool:
+    if not value:
+        return False
+    return any(pattern.search(value) for pattern in WAF_BLOCK_PATTERNS)
+
+
+def _extract_user_id_for_rate_limit(request: Request) -> Optional[str]:
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.lower().startswith("bearer "):
+        return None
+
+    token = normalize_auth_token(auth_header[7:])
+    if not token:
+        return None
+
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        return None
+
+    user_id = payload.get("user_id")
+    return str(user_id) if user_id else None
+
+
+class WAFMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        path = request.url.path or ""
+        path_lower = path.lower()
+        client_ip = _get_client_ip(request)
+
+        if path_lower.startswith(WAF_SKIP_PATH_PREFIXES):
+            return await call_next(request)
+
+        if client_ip in IP_DENYLIST:
+            logger.warning("WAF blocked denylisted ip=%s path=%s", client_ip, path)
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Access denied."},
+            )
+
+        if WAF_ENFORCE_ALLOWLIST and IP_ALLOWLIST and client_ip not in IP_ALLOWLIST:
+            logger.warning("WAF blocked non-allowlisted ip=%s path=%s", client_ip, path)
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Access denied."},
+            )
+
+        query = request.url.query or ""
+        if len(query) > WAF_MAX_QUERY_LENGTH:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Query string too large."},
+            )
+
+        combined_path_query = f"{path}?{query}"
+        if _matches_attack_pattern(combined_path_query):
+            logger.warning("WAF blocked request path/query from ip=%s path=%s", client_ip, path)
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Request blocked by security policy."},
+            )
+
+        content_type = (request.headers.get("content-type") or "").lower()
+
+        if "application/json" in content_type and request.method in {"POST", "PUT", "PATCH"}:
+            body = await request.body()
+            if len(body) > WAF_MAX_JSON_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Request body too large."},
+                )
+
+            body_text = body.decode("utf-8", errors="ignore")
+            if _matches_attack_pattern(body_text):
+                logger.warning("WAF blocked request body from ip=%s path=%s", client_ip, path)
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Request blocked by security policy."},
+                )
+
+        return await call_next(request)
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
+    def __init__(self, app, max_requests: int = 120, window_seconds: int = 60):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._requests: Dict[str, List[datetime]] = defaultdict(list)
 
+    def _resolve_policy(self, path: str) -> tuple[str, int, int]:
+        # route_key, max_requests, window_seconds
+        if path.startswith("/api/auth/"):
+            return "auth", 20, 60
+        if path.startswith("/api/videos/upload"):
+            return "upload", 10, 60
+        if path.startswith("/api/subscriptions/verify"):
+            return "payment", 15, 60
+        if path.startswith("/api/chat"):
+            return "chat", 60, 60
+        return "default", self.max_requests, self.window_seconds
+
+    def _resolve_subject(self, request: Request) -> tuple[str, str]:
+        user_id = _extract_user_id_for_rate_limit(request)
+        if user_id:
+            return f"user:{user_id}", "user"
+        return f"ip:{_get_client_ip(request)}", "ip"
+
     async def dispatch(self, request, call_next):
-        # Skip rate limit for health check
-        if request.url.path == "/api/health":
+        path = request.url.path
+        if path == "/api/health" or path.startswith("/socket.io"):
             return await call_next(request)
 
-        client_ip = request.client.host if request.client else "unknown"
-        now = datetime.now(timezone.utc)
-        cutoff = now - timedelta(seconds=self.window_seconds)
+        route_key, route_limit, route_window = self._resolve_policy(path)
+        subject_key, subject_type = self._resolve_subject(request)
+        bucket = f"{subject_key}:{route_key}"
 
-        # Clean old requests
-        self._requests[client_ip] = [
-            t for t in self._requests[client_ip] if t > cutoff
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=route_window)
+
+        self._requests[bucket] = [
+            t for t in self._requests[bucket] if t > cutoff
         ]
 
-        if len(self._requests[client_ip]) >= self.max_requests:
+        used = len(self._requests[bucket])
+        remaining = max(0, route_limit - used)
+
+        if used >= route_limit:
             return JSONResponse(
                 status_code=429,
-                content={"detail": "Too many requests. Please slow down."}
+                content={"detail": "Too many requests. Please slow down."},
+                headers={
+                    "Retry-After": str(route_window),
+                    "X-RateLimit-Limit": str(route_limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Window": str(route_window),
+                    "X-RateLimit-Scope": subject_type,
+                },
             )
 
-        self._requests[client_ip].append(now)
-        return await call_next(request)
+        self._requests[bucket].append(now)
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(route_limit)
+        response.headers["X-RateLimit-Remaining"] = str(max(0, remaining - 1))
+        response.headers["X-RateLimit-Window"] = str(route_window)
+        response.headers["X-RateLimit-Scope"] = subject_type
+        return response
 
-app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
+app.add_middleware(RateLimitMiddleware, max_requests=120, window_seconds=60)
+app.add_middleware(WAFMiddleware)
 
 # Include the router in the main app
 
@@ -6759,11 +6911,30 @@ app.add_middleware(RateLimitMiddleware, max_requests=100, window_seconds=60)
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
+
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: https:; "
+            "media-src 'self' https://res.cloudinary.com; "
+            "connect-src 'self' https://gruvora.com https://www.gruvora.com "
+            "https://gruvora-living-production.up.railway.app wss:; "
+            "frame-ancestors 'none'; "
+            "base-uri 'self'; "
+            "form-action 'self'"
+        )
+
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+        response.headers["Content-Security-Policy"] = csp
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+        if request.url.scheme == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)
