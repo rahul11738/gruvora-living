@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, UploadFile, File, Query, status, WebSocket, WebSocketDisconnect, Form, Header, Response, Request, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -108,6 +109,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
@@ -289,6 +291,9 @@ DELETE_RETRY_DELAYS_SECONDS = [30, 120, 600, 1800, 3600]
 ADMIN_STATS_CACHE_KEY = "admin:stats:v2"
 ADMIN_STATS_CACHE_TTL_SECONDS = int(os.environ.get("ADMIN_STATS_CACHE_TTL_SECONDS", "60"))
 RECOMMENDATIONS_CACHE_TTL_SECONDS = int(os.environ.get("RECOMMENDATIONS_CACHE_TTL_SECONDS", "120"))
+HOT_ENDPOINT_CACHE_TTL_SECONDS = int(os.environ.get("HOT_ENDPOINT_CACHE_TTL_SECONDS", "20"))
+HOT_ENDPOINT_CACHE_MAX_ITEMS = int(os.environ.get("HOT_ENDPOINT_CACHE_MAX_ITEMS", "1000"))
+_hot_endpoint_cache: Dict[str, Dict[str, Any]] = {}
 RECOMMENDATION_ALLOWED_ACTIONS = {
     "view",
     "search",
@@ -341,6 +346,57 @@ def ensure_category_allowed_for_role(role: Any, category: Any, *, detail_prefix:
             status_code=403,
             detail=f"{detail_prefix} '{category_value}' is not allowed for role '{role}'. Allowed: {allowed_label}",
         )
+
+
+def _build_hot_cache_key(namespace: str, params: Dict[str, Any]) -> str:
+    normalized = {k: params.get(k) for k in sorted(params.keys())}
+    digest = hashlib.sha256(json.dumps(normalized, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:24]
+    return f"{namespace}:{digest}"
+
+
+async def get_hot_cached_payload(cache_key: str) -> Optional[Dict[str, Any]]:
+    redis_key = f"hot:{cache_key}"
+    if redis_client:
+        try:
+            cached = await redis_client.get(redis_key)
+            if cached:
+                return json.loads(cached)
+        except Exception as cache_error:
+            logger.warning("Hot cache read fallback for %s: %s", cache_key, cache_error)
+
+    entry = _hot_endpoint_cache.get(cache_key)
+    if not entry:
+        return None
+    if entry["expires_at"] <= datetime.now(timezone.utc):
+        _hot_endpoint_cache.pop(cache_key, None)
+        return None
+    return entry.get("payload")
+
+
+async def set_hot_cached_payload(cache_key: str, payload: Dict[str, Any], ttl_seconds: int = HOT_ENDPOINT_CACHE_TTL_SECONDS) -> None:
+    redis_key = f"hot:{cache_key}"
+    if redis_client:
+        try:
+            await redis_client.setex(redis_key, ttl_seconds, json.dumps(payload, default=str))
+            return
+        except Exception as cache_error:
+            logger.warning("Hot cache write fallback for %s: %s", cache_key, cache_error)
+
+    if len(_hot_endpoint_cache) >= HOT_ENDPOINT_CACHE_MAX_ITEMS:
+        # Remove expired entries first; if still full, evict oldest insertion key.
+        now = datetime.now(timezone.utc)
+        expired_keys = [k for k, v in _hot_endpoint_cache.items() if v.get("expires_at") <= now]
+        for key in expired_keys:
+            _hot_endpoint_cache.pop(key, None)
+        if len(_hot_endpoint_cache) >= HOT_ENDPOINT_CACHE_MAX_ITEMS:
+            oldest_key = next(iter(_hot_endpoint_cache), None)
+            if oldest_key:
+                _hot_endpoint_cache.pop(oldest_key, None)
+
+    _hot_endpoint_cache[cache_key] = {
+        "payload": payload,
+        "expires_at": datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds),
+    }
 
 async def enforce_upload_rate_limit(user_id: str, action: str, max_requests: int = 30, window_seconds: int = 60) -> None:
     """Redis-backed rate limit guard with in-memory fallback."""
@@ -1409,7 +1465,8 @@ async def get_listings(
     sort_by: str = "created_at",
     sort_order: str = "desc",
     page: Optional[str] = "1",
-    limit: Optional[str] = "20"
+    limit: Optional[str] = "20",
+    response: Response = None,
 ):
     valid_categories = {item.value for item in ListingCategory}
     valid_listing_types = {item.value for item in ListingType}
@@ -1449,6 +1506,34 @@ async def get_listings(
     except (TypeError, ValueError):
         parsed_limit = 20
     parsed_limit = min(100, max(1, parsed_limit))
+
+    cache_key = _build_hot_cache_key(
+        "listings",
+        {
+            "category": normalized_category,
+            "owner_id": owner_id or "",
+            "listing_type": normalized_listing_type,
+            "sub_category": sub_category or "",
+            "city": city or "",
+            "min_price": parsed_min_price,
+            "max_price": parsed_max_price,
+            "search": (search or q or "").strip().lower(),
+            "amenities": amenities or "",
+            "lat": lat,
+            "lng": lng,
+            "radius": radius,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+            "page": parsed_page,
+            "limit": parsed_limit,
+        },
+    )
+    cached_payload = await get_hot_cached_payload(cache_key)
+    if cached_payload is not None:
+        if response is not None:
+            response.headers["X-Cache"] = "HIT"
+            response.headers["Cache-Control"] = f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+        return cached_payload
 
     query = {"status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]}, "is_available": True}
     
@@ -1520,12 +1605,17 @@ async def get_listings(
     listings = boosted_or_fresh + regular
     total = await db.listings.count_documents(query)
     
-    return {
+    payload = {
         "listings": listings,
         "total": total,
         "page": parsed_page,
         "pages": (total + parsed_limit - 1) // parsed_limit
     }
+    await set_hot_cached_payload(cache_key, payload)
+    if response is not None:
+        response.headers["X-Cache"] = "MISS"
+        response.headers["Cache-Control"] = f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+    return payload
 
 @api_router.get("/listings/trending")
 async def get_trending_listings(limit: int = 10, category: Optional[ListingCategory] = None):
@@ -3014,11 +3104,29 @@ async def get_videos(
     category: Optional[ListingCategory] = None,
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=50),
-    user: Optional[dict] = Depends(get_optional_current_user)
+    user: Optional[dict] = Depends(get_optional_current_user),
+    response: Response = None,
 ):
     query = {}
     if category:
         query["category"] = category
+
+    is_anonymous = not user
+    cache_key = _build_hot_cache_key(
+        "videos",
+        {
+            "category": str(category.value if isinstance(category, Enum) else category or ""),
+            "page": page,
+            "limit": limit,
+        },
+    )
+    if is_anonymous:
+        cached_payload = await get_hot_cached_payload(cache_key)
+        if cached_payload is not None:
+            if response is not None:
+                response.headers["X-Cache"] = "HIT"
+                response.headers["Cache-Control"] = f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+            return cached_payload
     
     skip = (page - 1) * limit
     projection = {
@@ -3070,7 +3178,13 @@ async def get_videos(
             v["user_saved"] = v["id"] in saved_set
             v["user_following"] = v.get("owner_id") in following_set
     
-    return {"videos": videos, "total": total, "page": page, "pages": (total + limit - 1) // limit}
+    payload = {"videos": videos, "total": total, "page": page, "pages": (total + limit - 1) // limit}
+    if is_anonymous:
+        await set_hot_cached_payload(cache_key, payload)
+        if response is not None:
+            response.headers["X-Cache"] = "MISS"
+            response.headers["Cache-Control"] = f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+    return payload
 
 @api_router.get("/videos/feed")
 async def get_video_feed(

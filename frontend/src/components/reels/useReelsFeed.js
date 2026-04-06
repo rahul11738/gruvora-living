@@ -19,7 +19,7 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
 
   const fetchVideos = useCallback(async () => {
     try {
-      const response = await videosAPI.getAll({ limit: 50 });
+      const response = await videosAPI.getAll({ limit: 20 });
       const vids = response.data.videos || [];
       const matchListingId = (video) => {
         const candidate = video?.listing_id || video?.listingId || video?.listing?.id;

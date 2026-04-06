@@ -77,6 +77,7 @@ const ensureBackendDiscovered = async () => {
 
 const api = axios.create({
   baseURL: `${activeBackendUrl}/api`,
+  timeout: 12000,
 });
 
 const forceHttpsInPayload = (value) => {
