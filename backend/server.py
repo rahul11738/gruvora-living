@@ -80,9 +80,15 @@ def _get_interaction_lock(key: str) -> asyncio.Lock:
 # Create the main app
 app = FastAPI(title="GharSetu API", version="2.0.0", description="Full-scale real estate & services marketplace")
 
+origins = [
+    "https://gruvora.com",
+    "https://www.gruvora.com",
+    "*"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
