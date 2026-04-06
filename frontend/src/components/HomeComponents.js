@@ -890,7 +890,6 @@ export const FeaturesSection = () => {
                 whileHover={reduceMotion ? undefined : { y: -6, scale: 1.01 }}
                 className="group relative overflow-hidden rounded-[1.6rem] border border-stone-200 bg-white p-5 md:p-6 shadow-[0_12px_34px_rgba(15,23,42,0.05)] transition-all duration-300 hover:shadow-[0_24px_60px_rgba(15,23,42,0.1)]"
               >
-                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-emerald-500 via-cyan-400 to-secondary" aria-hidden="true" />
                 <div className={`absolute -right-8 -top-8 h-24 w-24 rounded-full ${feature.color} opacity-15 blur-2xl group-hover:opacity-25 transition-opacity`} aria-hidden="true" />
 
                 <div className="relative flex items-start justify-between gap-3">

@@ -98,15 +98,9 @@ export const LoginPage = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-b from-stone-50 via-white to-emerald-50/40" data-testid="login-page">
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div className="absolute -top-20 left-0 h-72 w-72 rounded-full bg-emerald-200/30 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-cyan-200/20 blur-3xl" />
-      </div>
-
       <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
         <div className="w-full max-w-md">
-          <div className="rounded-[1.75rem] border border-stone-200 bg-white/92 backdrop-blur-xl shadow-[0_24px_80px_rgba(15,23,42,0.10)] overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-cyan-400 to-secondary" />
+          <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
               <Link to="/" className="flex items-center gap-2.5 mb-6">
                 <img
@@ -124,13 +118,6 @@ export const LoginPage = () => {
                 </span>
                 <h1 className="font-heading text-3xl sm:text-4xl font-bold text-stone-950 mt-3 mb-2 tracking-tight">Welcome Back</h1>
                 <p className="text-muted-foreground text-sm sm:text-base">Enter your credentials to access your account.</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {['Private login', 'Fast access', 'Trusted accounts'].map((item) => (
-                    <span key={item} className="inline-flex items-center rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-600">
-                      {item}
-                    </span>
-                  ))}
-                </div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-4.5">
@@ -175,7 +162,7 @@ export const LoginPage = () => {
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full h-12 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_12px_24px_rgba(5,150,105,0.20)]" disabled={loading} data-testid="login-submit-btn">
+                <Button type="submit" className="w-full h-12 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm" disabled={loading} data-testid="login-submit-btn">
                   {loading ? 'Signing in...' : 'Sign In'}
                   <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
@@ -297,15 +284,9 @@ export const RegisterPage = () => {
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-b from-stone-50 via-white to-emerald-50/40" data-testid="register-page">
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-        <div className="absolute -top-24 left-0 h-80 w-80 rounded-full bg-cyan-200/25 blur-3xl" />
-        <div className="absolute bottom-0 right-0 h-96 w-96 rounded-full bg-emerald-200/30 blur-3xl" />
-      </div>
-
       <div className="relative min-h-screen flex items-center justify-center px-4 py-10 sm:px-6 lg:px-8">
         <div className="w-full max-w-xl">
-          <div className="rounded-[1.75rem] border border-stone-200 bg-white/92 backdrop-blur-xl shadow-[0_24px_80px_rgba(15,23,42,0.10)] overflow-hidden">
-            <div className="h-1.5 bg-gradient-to-r from-emerald-500 via-cyan-400 to-secondary" />
+          <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
               <Link to="/" className="flex items-center gap-2.5 mb-6">
                 <img
@@ -323,13 +304,6 @@ export const RegisterPage = () => {
                 </span>
                 <h1 className="font-heading text-3xl sm:text-4xl font-bold text-stone-950 mt-3 mb-2 tracking-tight">Create Account</h1>
                 <p className="text-muted-foreground text-sm sm:text-base">Register to explore properties and services.</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {['Verified profiles', 'Smart onboarding', 'SaaS-ready flow'].map((item) => (
-                    <span key={item} className="inline-flex items-center rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-[11px] font-medium text-stone-600">
-                      {item}
-                    </span>
-                  ))}
-                </div>
               </div>
 
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-5">
