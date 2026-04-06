@@ -2908,7 +2908,7 @@ async def upload_video(
     video_id = str(uuid.uuid4())
     
     # Upload to Cloudinary
-    video_url = ""
+    video_public_id = ""
     thumbnail_url = ""
     
     if CLOUDINARY_CLOUD_NAME:
@@ -2924,7 +2924,7 @@ async def upload_video(
                 eager_async=True,
             )
             result = await asyncio.get_event_loop().run_in_executor(None, upload_func)
-            video_url = result.get('secure_url', '')
+            video_public_id = result.get('public_id', '')
             
             # Generate thumbnail
             thumbnail_url = cloudinary.utils.cloudinary_url(
@@ -2939,7 +2939,7 @@ async def upload_video(
             raise HTTPException(status_code=500, detail="Video upload failed")
     else:
         # Demo mode
-        video_url = "https://player.vimeo.com/external/434045526.sd.mp4?s=c27eecc69a27dbc4ff2b87d38afc35f1a9e7c02d&profile_id=165"
+        video_public_id = "demo/sample-video"
         thumbnail_url = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600"
     
     video_doc = {
@@ -2949,8 +2949,9 @@ async def upload_video(
         "title": title,
         "description": description or "",
         "category": parsed_category.value,
-        "url": video_url,
-        "video_url": video_url,
+        "video_public_id": video_public_id,
+        "url": f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{video_public_id}.mp4",
+        "video_url": video_public_id,
         "thumbnail_url": thumbnail_url,
         "listing_id": listing_id or "",
         "likes": 0,
@@ -2967,7 +2968,8 @@ async def upload_video(
         "success": True,
         "message": "Video uploaded successfully", 
         "video_id": video_id,
-        "url": video_url,
+        "video_public_id": video_public_id,
+        "url": f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{video_public_id}.mp4",
         "thumbnail_url": thumbnail_url
     }
 

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { generateCloudinaryVideoUrl } from './cloudinary';
 
 const FALLBACK_LOCAL_BACKEND_URLS = [
   'http://127.0.0.1:8000',
@@ -90,7 +91,13 @@ const forceHttpsInPayload = (value) => {
   if (value && typeof value === 'object') {
     const next = {};
     Object.entries(value).forEach(([key, item]) => {
-      next[key] = forceHttpsInPayload(item);
+      // If video_public_id exists, generate full URL for video_url
+      if (key === 'video_public_id' && item) {
+        next[key] = item;
+        next['video_url'] = generateCloudinaryVideoUrl(item);
+      } else {
+        next[key] = forceHttpsInPayload(item);
+      }
     });
     return next;
   }
