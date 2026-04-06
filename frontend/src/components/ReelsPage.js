@@ -59,11 +59,36 @@ export const ReelsPage = () => {
     fetchVideos,
     setIsMuted,
     setCommentCountMap,
+    setCurrentIndex,
     handleTouchStart,
     handleTouchEnd,
     handleScroll,
     scrollToVideo,
   } = useReelsFeed({ isAuthenticated, primeFromVideos, hydrateSnapshot, preferredListingId });
+
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root || !videos.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const index = Number(entry.target.dataset.index);
+            if (Number.isFinite(index)) {
+              setCurrentIndex(index);
+            }
+          }
+        });
+      },
+      { root, threshold: 0.7 }
+    );
+
+    const elements = root.querySelectorAll('.reel-item');
+    elements.forEach((el) => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [containerRef, setCurrentIndex, videos.length]);
 
   const {
     showDebugPanel,
@@ -237,28 +262,29 @@ export const ReelsPage = () => {
           onTouchEnd={handleTouchEnd}
         >
           {videos.map((video, index) => (
-            <ReelCard
-              key={video.id}
-              video={video}
-              videoId={video.id}
-              ownerId={video.owner_id}
-              isActive={index === currentIndex}
-              shouldLoad={Math.abs(index - currentIndex) <= 2}
-              isAuthenticated={isAuthenticated}
-              userId={user?.id}
-              onOpenComments={openComments}
-              isMuted={isMuted}
-              onToggleMute={() => setIsMuted(prev => !prev)}
-              liked={Boolean(likeMap[video.id]?.liked)}
-              likeCount={likeMap[video.id]?.count ?? (typeof video.likes === 'number' ? video.likes : 0)}
-              commentCount={commentCountMap[video.id] ?? (typeof video.comments_count === 'number' ? video.comments_count : 0)}
-              following={Boolean(followingMap[video.owner_id])}
-              followPending={Boolean(pendingFollowMap[video.owner_id])}
-              likePending={Boolean(pendingLikeMap[video.id])}
-              onLike={handleLikeToggle}
-              onFollow={handleFollowToggle}
-              isAdmin={isAdmin}
-            />
+            <div key={video.id} data-index={index} className="reel-item h-full w-full snap-start">
+              <ReelCard
+                video={video}
+                videoId={video.id}
+                ownerId={video.owner_id}
+                isActive={index === currentIndex}
+                shouldLoad={Math.abs(index - currentIndex) <= 2}
+                isAuthenticated={isAuthenticated}
+                userId={user?.id}
+                onOpenComments={openComments}
+                isMuted={isMuted}
+                onToggleMute={() => setIsMuted(prev => !prev)}
+                liked={Boolean(likeMap[video.id]?.liked)}
+                likeCount={likeMap[video.id]?.count ?? (typeof video.likes === 'number' ? video.likes : 0)}
+                commentCount={commentCountMap[video.id] ?? (typeof video.comments_count === 'number' ? video.comments_count : 0)}
+                following={Boolean(followingMap[video.owner_id])}
+                followPending={Boolean(pendingFollowMap[video.owner_id])}
+                likePending={Boolean(pendingLikeMap[video.id])}
+                onLike={handleLikeToggle}
+                onFollow={handleFollowToggle}
+                isAdmin={isAdmin}
+              />
+            </div>
           ))}
         </div>
       ) : (

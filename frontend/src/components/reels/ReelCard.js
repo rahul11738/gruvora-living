@@ -59,8 +59,15 @@ const ReelCard = React.memo(({
   const [hideLoading, setHideLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [isHidden, setIsHidden] = useState(video.hidden || false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasVideoError, setHasVideoError] = useState(false);
   const lastTap = useRef(0);
   const menuRef = useRef(null);
+
+  useEffect(() => {
+    setIsLoaded(false);
+    setHasVideoError(false);
+  }, [videoId]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -312,15 +319,39 @@ const ReelCard = React.memo(({
           loop
           muted={isMuted}
           playsInline
-          preload="metadata"
+          preload={isActive ? 'auto' : 'metadata'}
           className="h-full w-auto max-w-full max-h-screen object-contain bg-black mx-auto"
           onClick={togglePlay}
           onTimeUpdate={handleTimeUpdate}
+          onLoadedData={() => {
+            setIsLoaded(true);
+            setHasVideoError(false);
+          }}
           onError={(e) => {
             console.error('Video load error:', videoId);
-            e.currentTarget.style.display = 'none';
+            const el = e.currentTarget;
+            if (!el.dataset.fallbackApplied) {
+              el.dataset.fallbackApplied = 'true';
+              el.src = '/fallback-video.mp4';
+              el.load();
+              return;
+            }
+            setHasVideoError(true);
+            el.style.display = 'none';
           }}
         />
+
+        {!isLoaded && !hasVideoError && shouldLoad && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 z-10 pointer-events-none">
+            <span className="text-white/90 text-sm">Loading...</span>
+          </div>
+        )}
+
+        {hasVideoError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-10 pointer-events-none">
+            <span className="text-white/90 text-sm">Video unavailable</span>
+          </div>
+        )}
 
         <AnimatePresence>
           {showHeart && (

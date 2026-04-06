@@ -56,6 +56,24 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
     fetchVideos();
   }, [fetchVideos]);
 
+  useEffect(() => {
+    const nextVideo = videos[currentIndex + 1];
+    if (!nextVideo?.video_url && !nextVideo?.url) {
+      return undefined;
+    }
+
+    const preloadUrl = nextVideo.video_url || nextVideo.url;
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'video';
+    link.href = preloadUrl;
+    document.head.appendChild(link);
+
+    return () => {
+      document.head.removeChild(link);
+    };
+  }, [currentIndex, videos]);
+
   const handleTouchStart = useCallback((e) => {
     touchStartY.current = e.touches[0].clientY;
   }, []);

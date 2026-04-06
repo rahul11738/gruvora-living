@@ -95,7 +95,13 @@ const forceHttpsInPayload = (value) => {
     });
 
     if (next.video_public_id) {
-      next.video_url = generateCloudinaryVideoUrl(next.video_public_id, next.video_version);
+      next.video_url = generateCloudinaryVideoUrl(next.video_public_id, next.video_version, {
+        width: 480,
+        height: 800,
+        crop: 'fill',
+        quality: 'auto',
+        format: 'mp4',
+      });
       next.url = next.video_url;
     }
 
