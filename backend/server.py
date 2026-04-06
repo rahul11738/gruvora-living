@@ -2909,6 +2909,7 @@ async def upload_video(
     
     # Upload to Cloudinary
     video_public_id = ""
+    video_version: Optional[int] = None
     thumbnail_url = ""
     
     if CLOUDINARY_CLOUD_NAME:
@@ -2925,6 +2926,7 @@ async def upload_video(
             )
             result = await asyncio.get_event_loop().run_in_executor(None, upload_func)
             video_public_id = result.get('public_id', '')
+            video_version = result.get('version')
             
             # Generate thumbnail
             thumbnail_url = cloudinary.utils.cloudinary_url(
@@ -2940,7 +2942,16 @@ async def upload_video(
     else:
         # Demo mode
         video_public_id = "demo/sample-video"
+        video_version = None
         thumbnail_url = "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600"
+
+    if CLOUDINARY_CLOUD_NAME and video_public_id:
+        if video_version:
+            video_playback_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/v{video_version}/{video_public_id}.mp4"
+        else:
+            video_playback_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{video_public_id}.mp4"
+    else:
+        video_playback_url = "https://player.vimeo.com/external/434045526.sd.mp4?s=c27eecc69a27dbc4ff2b87d38afc35f1a9e7c02d&profile_id=165"
     
     video_doc = {
         "id": video_id,
@@ -2950,7 +2961,8 @@ async def upload_video(
         "description": description or "",
         "category": parsed_category.value,
         "video_public_id": video_public_id,
-        "url": f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{video_public_id}.mp4",
+        "video_version": video_version,
+        "url": video_playback_url,
         "video_url": video_public_id,
         "thumbnail_url": thumbnail_url,
         "listing_id": listing_id or "",
@@ -2969,7 +2981,8 @@ async def upload_video(
         "message": "Video uploaded successfully", 
         "video_id": video_id,
         "video_public_id": video_public_id,
-        "url": f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{video_public_id}.mp4",
+        "video_version": video_version,
+        "url": video_playback_url,
         "thumbnail_url": thumbnail_url
     }
 

@@ -91,14 +91,14 @@ const forceHttpsInPayload = (value) => {
   if (value && typeof value === 'object') {
     const next = {};
     Object.entries(value).forEach(([key, item]) => {
-      // If video_public_id exists, generate full URL for video_url
-      if (key === 'video_public_id' && item) {
-        next[key] = item;
-        next['video_url'] = generateCloudinaryVideoUrl(item);
-      } else {
-        next[key] = forceHttpsInPayload(item);
-      }
+      next[key] = forceHttpsInPayload(item);
     });
+
+    if (next.video_public_id) {
+      next.video_url = generateCloudinaryVideoUrl(next.video_public_id, next.video_version);
+      next.url = next.video_url;
+    }
+
     return next;
   }
 

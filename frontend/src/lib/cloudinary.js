@@ -6,12 +6,13 @@
 const CLOUDINARY_CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || 'dalkm3nih';
 
 /**
- * Generate Cloudinary video URL from public_id
+ * Generate Cloudinary video URL from public_id + optional version
  * @param {string} publicId - The public_id from Cloudinary (e.g., "gharsetu/reels/filename")
+ * @param {number|string|null} version - Cloudinary asset version (e.g., 1774361900)
  * @param {object} options - Optional transformations
  * @returns {string} Full HTTPS URL
  */
-export const generateCloudinaryVideoUrl = (publicId, options = {}) => {
+export const generateCloudinaryVideoUrl = (publicId, version = null, options = {}) => {
   if (!publicId) return '';
 
   // Handle both stored formats:
@@ -39,7 +40,10 @@ export const generateCloudinaryVideoUrl = (publicId, options = {}) => {
   }
 
   const base = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload`;
-  const path = transformation ? `${transformation}/${publicId}` : publicId;
+  const versionPrefix = version ? `v${version}/` : '';
+  const path = transformation
+    ? `${transformation}/${versionPrefix}${publicId}`
+    : `${versionPrefix}${publicId}`;
   
   return `${base}/${path}.${format}`;
 };

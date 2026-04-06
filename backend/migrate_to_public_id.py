@@ -15,22 +15,24 @@ load_dotenv()
 MONGO_URL = os.environ.get('MONGO_URL')
 DB_NAME = os.environ.get('MONGO_DB_NAME', 'gharsetu')
 
-async def extract_public_id(video_url):
+async def extract_public_id_and_version(video_url):
     """
     Extract public_id from Cloudinary URL
     Pattern: https://res.cloudinary.com/{cloud}/video/upload/{version}/{public_id}.{ext}
-    Returns: public_id (gharsetu/reels/filename)
+    Returns: tuple(public_id, version)
     """
     if not video_url:
-        return None
+        return None, None
     
     # Match pattern: /upload/{version}/{public_id}.{ext}
     # Also handle: /upload/{public_id}.{ext} (no version)
-    match = re.search(r'/upload/(?:v\d+/)?(.+?)\.(mp4|webm|mov|avi|flv)', video_url)
+    match = re.search(r'/upload/(?:v(\d+)/)?(.+?)\.(mp4|webm|mov|avi|flv)', video_url)
     if match:
-        return match.group(1)
+        version = int(match.group(1)) if match.group(1) else None
+        public_id = match.group(2)
+        return public_id, version
     
-    return None
+    return None, None
 
 
 async def migrate_videos():
@@ -52,7 +54,7 @@ async def migrate_videos():
     
     for video in videos:
         video_url = video.get("video_url", "")
-        public_id = await extract_public_id(video_url)
+        public_id, version = await extract_public_id_and_version(video_url)
         
         if public_id:
             # Update video document
@@ -61,13 +63,14 @@ async def migrate_videos():
                 {
                     "$set": {
                         "video_public_id": public_id,
+                        "video_version": version,
                         # Also clean up video_url if it's a full URL
                         "video_url": public_id
                     }
                 }
             )
             migrated += 1
-            print(f"✓ Migrated: {video['id']} → {public_id}")
+            print(f"✓ Migrated: {video['id']} → {public_id} (v{version})")
         else:
             failed.append({
                 "id": video.get("id"),
@@ -102,7 +105,7 @@ async def migrate_listings():
     
     for doc in documents:
         video_url = doc.get("video_url", "")
-        public_id = await extract_public_id(video_url)
+        public_id, version = await extract_public_id_and_version(video_url)
         
         if public_id:
             result = await collection.update_one(
@@ -110,12 +113,13 @@ async def migrate_listings():
                 {
                     "$set": {
                         "video_public_id": public_id,
+                        "video_version": version,
                         "video_url": public_id
                     }
                 }
             )
             migrated += 1
-            print(f"✓ Migrated listing: {doc.get('_id')} → {public_id}")
+            print(f"✓ Migrated listing: {doc.get('_id')} → {public_id} (v{version})")
     
     print(f"✅ Listings migrated: {migrated}")
 
