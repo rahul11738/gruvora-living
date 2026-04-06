@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { normalizeMediaUrl } from '../../lib/media';
 import {
   Heart,
   MessageCircle,
@@ -306,8 +307,8 @@ const ReelCard = React.memo(({
 
         <video
           ref={videoRef}
-          src={shouldLoad ? (video.video_url || video.url) : undefined}
-          poster={video.thumbnail_url}
+          src={shouldLoad ? normalizeMediaUrl(video.video_url || video.url) : undefined}
+          poster={normalizeMediaUrl(video.thumbnail_url)}
           loop
           muted={isMuted}
           playsInline

@@ -33,6 +33,7 @@ import {
   ArrowUpRight,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
+import { normalizeMediaUrl } from '../lib/media';
 
 export const UserDashboard = () => {
   const { user, logout } = useAuth();
@@ -450,13 +451,13 @@ const SavedReelCard = ({ video, onRemove }) => {
         {/* Video Thumbnail */}
         {video.thumbnail_url ? (
           <img
-            src={video.thumbnail_url}
+            src={normalizeMediaUrl(video.thumbnail_url)}
             alt={video.title}
             className="w-full h-full object-cover"
           />
         ) : (
           <video
-            src={video.url}
+            src={normalizeMediaUrl(video.url)}
             className="w-full h-full object-cover"
             muted
             preload="metadata"

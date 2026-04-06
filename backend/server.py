@@ -17,6 +17,7 @@ import bcrypt
 import json
 import csv
 import io
+import importlib
 from enum import Enum
 import asyncio
 from collections import defaultdict, Counter
@@ -2909,6 +2910,7 @@ async def upload_video(
                 result['public_id'],
                 resource_type="video",
                 format="jpg",
+                secure=True,
                 transformation=[{"width": 400, "crop": "scale"}]
             )[0]
         except Exception as e:
@@ -4228,7 +4230,12 @@ async def mark_notifications_read_compat(payload: Dict[str, Any], user: dict = D
 @api_router.post("/chat")
 async def chat_with_bot(msg: ChatMessage, user: dict = Depends(get_current_user)):
     try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
+        try:
+            chat_module = importlib.import_module("emergentintegrations.llm.chat")
+            LlmChat = chat_module.LlmChat
+            UserMessage = chat_module.UserMessage
+        except ImportError:
+            return {"response": "Chatbot is temporarily unavailable."}
         
         api_key = os.environ.get('EMERGENT_LLM_KEY')
         if not api_key:
@@ -6918,6 +6925,7 @@ async def send_notification(user_id: str, notification_type: str, title: str, me
 
 # Mount Socket.IO on the app
 socket_app = socketio.ASGIApp(sio, app)
+app = socket_app
 
 @app.on_event("startup")
 async def startup_services():

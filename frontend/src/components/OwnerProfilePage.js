@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
 import { usersAPI, listingsAPI } from '../lib/api';
 import { Header, Footer } from './Layout';
+import { normalizeMediaUrl } from '../lib/media';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -364,13 +365,13 @@ const ReelCard = ({ reel }) => {
     >
       {reel.thumbnail_url ? (
         <img
-          src={reel.thumbnail_url}
+            src={normalizeMediaUrl(reel.thumbnail_url)}
           alt={reel.title}
           className="w-full h-full object-cover"
         />
       ) : (
         <video
-          src={reel.video_url || reel.url}
+            src={normalizeMediaUrl(reel.video_url || reel.url)}
           className="w-full h-full object-cover"
           muted
           preload="metadata"
