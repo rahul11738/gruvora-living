@@ -5,6 +5,43 @@
 
 const CLOUDINARY_CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || 'dalkm3nih';
 
+const parseCloudinaryVideoRef = (value) => {
+  if (!value) return { publicId: null, version: null };
+
+  const text = String(value).trim();
+  if (!text) return { publicId: null, version: null };
+
+  if (!text.startsWith('http://') && !text.startsWith('https://')) {
+    return { publicId: text.replace(/\.[^./?#]+$/, ''), version: null };
+  }
+
+  const safeUrl = text.replace('http://', 'https://');
+  if (!safeUrl.includes('res.cloudinary.com') || !safeUrl.includes('/video/upload/')) {
+    return { publicId: safeUrl, version: null };
+  }
+
+  const tail = safeUrl.split('/video/upload/')[1]?.split('?')[0] || '';
+  const parts = tail.split('/').filter(Boolean);
+  if (!parts.length) return { publicId: safeUrl, version: null };
+
+  let version = null;
+  let versionIdx = -1;
+  parts.forEach((part, idx) => {
+    if (versionIdx === -1 && /^v\d+$/.test(part)) {
+      versionIdx = idx;
+      version = Number(part.slice(1));
+    }
+  });
+
+  const publicParts = versionIdx >= 0 ? parts.slice(versionIdx + 1) : parts;
+  if (!publicParts.length) return { publicId: safeUrl, version };
+
+  const last = publicParts[publicParts.length - 1].replace(/\.[^./?#]+$/, '');
+  publicParts[publicParts.length - 1] = last;
+  const publicId = publicParts.join('/');
+  return { publicId, version };
+};
+
 /**
  * Generate Cloudinary video URL from public_id + optional version
  * @param {string} publicId - The public_id from Cloudinary (e.g., "gharsetu/reels/filename")
@@ -15,11 +52,13 @@ const CLOUDINARY_CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || 'da
 export const generateCloudinaryVideoUrl = (publicId, version = null, options = {}) => {
   if (!publicId) return '';
 
-  // Handle both stored formats:
-  // 1. publicId directly: "gharsetu/reels/filename"
-  // 2. Full URL (fallback): "https://res.cloudinary.com/..."
-  if (publicId.startsWith('http://') || publicId.startsWith('https://')) {
-    return publicId.replace('http://', 'https://');
+  const parsed = parseCloudinaryVideoRef(publicId);
+  const resolvedPublicId = parsed.publicId;
+  const resolvedVersion = version ?? parsed.version;
+  if (!resolvedPublicId) return '';
+
+  if (resolvedPublicId.startsWith('https://') && !resolvedPublicId.includes('res.cloudinary.com')) {
+    return resolvedPublicId;
   }
 
   const {
@@ -40,10 +79,10 @@ export const generateCloudinaryVideoUrl = (publicId, version = null, options = {
   }
 
   const base = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload`;
-  const versionPrefix = version ? `v${version}/` : '';
+  const versionPrefix = resolvedVersion ? `v${resolvedVersion}/` : '';
   const path = transformation
-    ? `${transformation}/${versionPrefix}${publicId}`
-    : `${versionPrefix}${publicId}`;
+    ? `${transformation}/${versionPrefix}${resolvedPublicId}`
+    : `${versionPrefix}${resolvedPublicId}`;
   
   return `${base}/${path}.${format}`;
 };

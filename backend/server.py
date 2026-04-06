@@ -348,6 +348,101 @@ def ensure_category_allowed_for_role(role: Any, category: Any, *, detail_prefix:
         )
 
 
+def _extract_cloudinary_video_public_id_and_version(raw_value: Any) -> tuple[Optional[str], Optional[int]]:
+    if raw_value is None:
+        return None, None
+
+    text = str(raw_value).strip()
+    if not text:
+        return None, None
+
+    # Public ID only (already normalized)
+    if not text.startswith("http://") and not text.startswith("https://"):
+        cleaned = text.split("?", 1)[0]
+        if "/" in cleaned and cleaned.split("/", 1)[0].startswith("v") and cleaned.split("/", 1)[0][1:].isdigit():
+            version_part, remainder = cleaned.split("/", 1)
+            return remainder.rsplit(".", 1)[0], int(version_part[1:])
+        return cleaned.rsplit(".", 1)[0], None
+
+    if "res.cloudinary.com" not in text or "/video/upload/" not in text:
+        return None, None
+
+    tail = text.replace("http://", "https://", 1).split("/video/upload/", 1)[1]
+    tail = tail.split("?", 1)[0]
+    parts = [part for part in tail.split("/") if part]
+    if not parts:
+        return None, None
+
+    version = None
+    version_idx = None
+    for idx, part in enumerate(parts):
+        if re.fullmatch(r"v\d+", part):
+            version = int(part[1:])
+            version_idx = idx
+            break
+
+    public_parts = parts[version_idx + 1 :] if version_idx is not None else parts
+    if not public_parts:
+        return None, version
+
+    public_parts[-1] = public_parts[-1].rsplit(".", 1)[0]
+    public_id = "/".join(public_parts).strip("/")
+    if not public_id:
+        return None, version
+
+    return public_id, version
+
+
+def _build_cloudinary_video_playback_url(public_id: str, version: Optional[int]) -> Optional[str]:
+    if not CLOUDINARY_CLOUD_NAME or not public_id:
+        return None
+    if version is not None:
+        return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/v{int(version)}/{public_id}.mp4"
+    return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{public_id}.mp4"
+
+
+def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, Any]:
+    doc = dict(video_doc)
+
+    public_id = doc.get("video_public_id")
+    version = doc.get("video_version")
+
+    if isinstance(version, str) and version.isdigit():
+        version = int(version)
+
+    if not public_id:
+        source = doc.get("video_url") or doc.get("url")
+        extracted_public_id, extracted_version = _extract_cloudinary_video_public_id_and_version(source)
+        if extracted_public_id:
+            public_id = extracted_public_id
+            if version is None:
+                version = extracted_version
+
+    if public_id:
+        canonical_url = _build_cloudinary_video_playback_url(str(public_id), version)
+        if canonical_url:
+            doc["video_public_id"] = str(public_id)
+            doc["video_version"] = version
+            doc["video_url"] = canonical_url
+            doc["url"] = canonical_url
+            if not doc.get("thumbnail_url") or str(doc.get("thumbnail_url", "")).startswith("http://"):
+                if version is not None:
+                    doc["thumbnail_url"] = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/v{int(version)}/{public_id}.jpg"
+                else:
+                    doc["thumbnail_url"] = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{public_id}.jpg"
+    else:
+        fallback_url = str(doc.get("video_url") or doc.get("url") or "")
+        if fallback_url:
+            safe_url = fallback_url.replace("http://", "https://")
+            doc["video_url"] = safe_url
+            doc["url"] = safe_url
+
+    if doc.get("thumbnail_url"):
+        doc["thumbnail_url"] = str(doc["thumbnail_url"]).replace("http://", "https://")
+
+    return doc
+
+
 def _build_hot_cache_key(namespace: str, params: Dict[str, Any]) -> str:
     normalized = {k: params.get(k) for k in sorted(params.keys())}
     digest = hashlib.sha256(json.dumps(normalized, sort_keys=True, default=str).encode("utf-8")).hexdigest()[:24]
@@ -3140,6 +3235,8 @@ async def get_videos(
         "category": 1,
         "url": 1,
         "video_url": 1,
+        "video_public_id": 1,
+        "video_version": 1,
         "thumbnail_url": 1,
         "listing_id": 1,
         "likes": 1,
@@ -3152,6 +3249,7 @@ async def get_videos(
         "hashtags": 1,
     }
     videos = await db.videos.find(query, projection).sort("created_at", -1).skip(skip).limit(limit).to_list(limit)
+    videos = [_normalize_video_doc_for_response(video) for video in videos]
     total = await db.videos.count_documents(query)
 
     if user and videos:
@@ -3211,6 +3309,8 @@ async def get_video_feed(
         "category": 1,
         "url": 1,
         "video_url": 1,
+        "video_public_id": 1,
+        "video_version": 1,
         "thumbnail_url": 1,
         "listing_id": 1,
         "likes": 1,
@@ -3223,6 +3323,7 @@ async def get_video_feed(
         "hashtags": 1,
     }
     videos = await db.videos.find(query, projection).sort([("views", -1), ("created_at", -1)]).skip(skip).limit(limit).to_list(limit)
+    videos = [_normalize_video_doc_for_response(video) for video in videos]
 
     if videos:
         user_id = user["id"]
