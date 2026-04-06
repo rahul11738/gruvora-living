@@ -18,6 +18,7 @@ import json
 import csv
 import io
 import importlib
+from contextlib import asynccontextmanager
 from enum import Enum
 import asyncio
 from collections import defaultdict, Counter
@@ -77,8 +78,22 @@ def _get_interaction_lock(key: str) -> asyncio.Lock:
         interaction_locks[key] = lock
     return lock
 
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await startup_services()
+    try:
+        yield
+    finally:
+        await shutdown_db_client()
+
 # Create the main app
-app = FastAPI(title="GharSetu API", version="2.0.0", description="Full-scale real estate & services marketplace")
+app = FastAPI(
+    title="GharSetu API",
+    version="2.0.0",
+    description="Full-scale real estate & services marketplace",
+    lifespan=lifespan,
+)
 
 origins = [
     "https://gruvora.com",
@@ -6931,9 +6946,6 @@ async def send_notification(user_id: str, notification_type: str, title: str, me
 
 # Mount Socket.IO on the app
 socket_app = socketio.ASGIApp(sio, app)
-app = socket_app
-
-@app.on_event("startup")
 async def startup_services():
     global redis_client, delete_worker_task
     if redis_asyncio and redis_url:
@@ -7056,7 +7068,6 @@ async def startup_services():
 
     delete_worker_task = asyncio.create_task(media_delete_retry_worker())
 
-@app.on_event("shutdown")
 async def shutdown_db_client():
     global redis_client, delete_worker_task
     if delete_worker_task:
