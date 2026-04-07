@@ -187,19 +187,26 @@ export const HeroSection = () => {
   };
 
   return (
-    <section className="hero-container relative min-h-[90vh] flex items-center overflow-hidden" data-testid="hero-section">
+    <section className="hero-container relative min-h-[90vh] flex items-center overflow-hidden bg-stone-950" data-testid="hero-section">
       {/* Animated Background */}
       <div className="absolute inset-0">
         <motion.div
           initial={reduceMotion ? false : { scale: 1.1 }}
           animate={reduceMotion ? { scale: 1 } : { scale: 1 }}
           transition={reduceMotion ? { duration: 0 } : { duration: 10, ease: 'easeOut' }}
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage: 'url(https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1920)',
-          }}
+          className="absolute inset-0"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-stone-900/95 via-stone-900/80 to-stone-900/40" />
+        <img
+          src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1920"
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-stone-950/55" />
+        <div className="absolute inset-0 bg-gradient-to-r from-stone-950/95 via-stone-950/78 to-stone-950/40" />
         {/* Floating Elements */}
         <motion.div 
           animate={reduceMotion ? { opacity: 0.2, scale: 1 } : { 
@@ -305,8 +312,8 @@ export const HeroSection = () => {
               className="hero-search-shell w-full max-w-5xl mx-auto"
             >
               <div className="hero-search-inner">
-                <div className="w-full overflow-x-auto hide-scrollbar pb-1">
-                  <div className="flex w-max mx-auto items-center gap-3 px-2 py-1">
+                <div className="w-full pb-1">
+                  <div className="flex w-full flex-wrap justify-center sm:flex-nowrap sm:justify-center items-center gap-2 sm:gap-3 px-1 sm:px-2 py-1">
                     {[
                       { id: 'home', label: 'Home' },
                       { id: 'business', label: 'Business' },
@@ -323,7 +330,7 @@ export const HeroSection = () => {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.78 + index * 0.04, duration: 0.25 }}
                           onClick={() => setCategory(cat.id)}
-                          className={`hero-pill ${isActive ? 'hero-pill-active' : ''}`}
+                          className={`hero-pill min-w-fit ${isActive ? 'hero-pill-active' : ''}`}
                         >
                           <span>{cat.label}</span>
                         </motion.button>
