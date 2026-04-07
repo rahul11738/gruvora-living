@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 import calendar
 from pydantic import BaseModel, Field, EmailStr, ValidationError
-from typing import List, Optional, Dict, Any, Set
+from typing import List, Optional, Dict, Any, Set, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
 import jwt
@@ -99,12 +99,15 @@ app = FastAPI(
 origins = [
     "https://gruvora.com",
     "https://www.gruvora.com",
-    "*"
+    "https://gruvora-living-ewir9bpkg-rahul11738s-projects.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -348,7 +351,7 @@ def ensure_category_allowed_for_role(role: Any, category: Any, *, detail_prefix:
         )
 
 
-def _extract_cloudinary_video_public_id_and_version(raw_value: Any) -> tuple[Optional[str], Optional[int]]:
+def _extract_cloudinary_video_public_id_and_version(raw_value: Any) -> Tuple[Optional[str], Optional[int]]:
     if raw_value is None:
         return None, None
 
@@ -7059,7 +7062,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds = window_seconds
         self._requests: Dict[str, List[datetime]] = defaultdict(list)
 
-    def _resolve_policy(self, path: str) -> tuple[str, int, int]:
+    def _resolve_policy(self, path: str) -> Tuple[str, int, int]:
         # route_key, max_requests, window_seconds
         if path.startswith("/api/auth/"):
             return "auth", 20, 60
@@ -7071,7 +7074,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return "chat", 60, 60
         return "default", self.max_requests, self.window_seconds
 
-    def _resolve_subject(self, request: Request) -> tuple[str, str]:
+    def _resolve_subject(self, request: Request) -> Tuple[str, str]:
         user_id = _extract_user_id_for_rate_limit(request)
         if user_id:
             return f"user:{user_id}", "user"
