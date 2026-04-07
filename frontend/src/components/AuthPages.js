@@ -414,7 +414,7 @@ export const RegisterPage = () => {
             {/* Owner-specific fields */}
             {activeTab === 'owner' && (
               <>
-                  <Card className="border-secondary/20 bg-secondary/5 rounded-2xl shadow-none">
+                  <Card className="border-secondary/12 bg-secondary/5 rounded-2xl shadow-[0_10px_26px_rgba(15,23,42,0.04)] backdrop-blur-sm">
                   <CardHeader className="pb-4">
                       <CardTitle className="text-base text-stone-900">Select Owner Type</CardTitle>
                   </CardHeader>
@@ -428,9 +428,9 @@ export const RegisterPage = () => {
                             key={type.value}
                             type="button"
                             onClick={() => handleRoleChange(type.value)}
-                              className={`p-4 rounded-xl border-2 text-left transition-all bg-white ${
+                              className={`p-4 rounded-xl border text-left transition-all bg-white/95 shadow-[0_8px_22px_rgba(15,23,42,0.03)] ${
                               isSelected
-                                ? 'border-secondary bg-secondary/10 shadow-sm'
+                                ? 'border-secondary/40 bg-secondary/8 shadow-[0_10px_24px_rgba(234,88,12,0.08)]'
                                 : 'border-stone-200 hover:border-stone-300'
                             }`}
                           >
@@ -455,7 +455,7 @@ export const RegisterPage = () => {
                   </CardContent>
                 </Card>
 
-                    <Card className="border-primary/20 bg-primary/5 rounded-2xl shadow-none">
+                    <Card className="border-primary/12 bg-primary/5 rounded-2xl shadow-[0_10px_26px_rgba(15,23,42,0.04)] backdrop-blur-sm">
                   <CardHeader className="pb-4">
                       <CardTitle className="text-base flex items-center gap-2 text-stone-900">
                       <Shield className="w-5 h-5 text-primary" />
@@ -504,10 +504,10 @@ export const RegisterPage = () => {
 
                     {isSubscriptionRole && (
                       <div className="space-y-3">
-                        <Card className={`border-2 transition-all ${
+                        <Card className={`border transition-all shadow-[0_8px_22px_rgba(15,23,42,0.04)] ${
                           couponState?.valid
-                            ? 'border-green-400 bg-green-50'
-                            : 'border-orange-300 bg-orange-50'
+                            ? 'border-green-300 bg-green-50/80'
+                            : 'border-orange-200 bg-orange-50/80'
                         }`}>
                           <CardContent className="pt-5 space-y-4">
                             <div className="flex items-start gap-3">
@@ -602,7 +602,7 @@ export const RegisterPage = () => {
                     )}
 
                     {isCommissionRole && (
-                      <div className="p-4 bg-blue-50 rounded-xl border border-blue-200 text-sm">
+                      <div className="p-4 bg-blue-50/80 rounded-xl border border-blue-200/70 text-sm shadow-[0_8px_22px_rgba(15,23,42,0.04)]">
                         <div className="flex items-center gap-2 mb-1">
                           <Crown className="w-4 h-4 text-blue-600" />
                           <p className="font-semibold text-blue-800">No monthly fee</p>

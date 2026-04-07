@@ -239,7 +239,7 @@ export const HeroSection = () => {
               initial={reduceMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-8"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/8 backdrop-blur-sm border border-white/15 mb-8"
             >
               <Sparkles className="w-4 h-4 text-secondary" />
               <span className="text-white/90 text-sm font-medium">Gujarat's #1 Property Platform</span>
@@ -266,7 +266,7 @@ export const HeroSection = () => {
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.5 }}
-              className="text-lg md:text-xl text-stone-300 mb-6 leading-relaxed max-w-3xl mx-auto"
+              className="text-lg md:text-xl text-stone-200 mb-6 leading-relaxed max-w-3xl mx-auto"
             >
               Discover homes, business spaces, hotels, event venues, and professional services - all in one place.
             </motion.p>
@@ -274,7 +274,7 @@ export const HeroSection = () => {
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
-              className="text-stone-400 mb-10"
+              className="text-stone-300/80 mb-10"
             >
               {/* તમારી સંપૂર્ણ જગ્યા શોધો - ઘર, બિઝનેસ, રહેવાનું, ઇવેન્ટ અને સેવાઓ */}
             </motion.p>
@@ -1188,16 +1188,16 @@ export const CTASection = () => {
       <div className="container-main relative">
         <motion.div
           {...revealUp(reduceMotion, 0.04, 20)}
-          className="max-w-4xl mx-auto rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-sm px-5 py-8 md:px-10 md:py-10 text-center"
+          className="max-w-4xl mx-auto rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.1] to-white/[0.03] backdrop-blur-md px-5 py-8 md:px-10 md:py-10 text-center shadow-[0_20px_60px_rgba(2,6,23,0.18)]"
         >
           <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-200 border border-emerald-400/30">
               <CheckCircle className="w-3.5 h-3.5" /> Verified Owners
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-200 border border-white/20">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/8 text-stone-100 border border-white/15">
               <Users className="w-3.5 h-3.5" /> High Intent Buyers
             </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-200 border border-white/20">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/8 text-stone-100 border border-white/15">
               <Shield className="w-3.5 h-3.5" /> Trusted Platform
             </span>
           </div>
@@ -1209,20 +1209,20 @@ export const CTASection = () => {
             </span>
           </h2>
 
-          <p className="text-stone-300 text-sm md:text-lg mt-4 mb-7 max-w-2xl mx-auto leading-relaxed">
+          <p className="text-stone-200 text-sm md:text-lg mt-4 mb-7 max-w-2xl mx-auto leading-relaxed">
             Join thousands of verified owners, publish listings in minutes, and connect with serious buyers and renters across Gujarat.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button
               onClick={handleListPropertyClick}
-              className="h-12 rounded-full px-7 text-sm md:text-base font-semibold bg-emerald-500 hover:bg-emerald-400 text-stone-950"
+              className="h-12 rounded-full px-7 text-sm md:text-base font-semibold bg-emerald-500 hover:bg-emerald-400 text-stone-950 shadow-[0_12px_28px_rgba(16,185,129,0.18)]"
               data-testid="list-property-cta"
             >
               List Your Property Free
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
-            <Button asChild variant="outline" className="h-12 rounded-full border-white/30 text-white hover:bg-white/10 text-sm md:text-base px-7" data-testid="cta-contact-link">
+            <Button asChild variant="outline" className="h-12 rounded-full border-white/25 text-white hover:bg-white/10 text-sm md:text-base px-7 backdrop-blur-sm" data-testid="cta-contact-link">
               <Link to="/about-us">
                 Contact Us
               </Link>

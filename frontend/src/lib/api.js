@@ -80,6 +80,14 @@ const api = axios.create({
   timeout: 12000,
 });
 
+const CLOUDINARY_REEL_OPTIONS = {
+  width: 480,
+  height: 800,
+  crop: 'fill',
+  quality: 'auto',
+  format: 'mp4',
+};
+
 const forceHttpsInPayload = (value) => {
   if (typeof value === 'string') {
     return value.replace('http://', 'https://');
@@ -96,14 +104,15 @@ const forceHttpsInPayload = (value) => {
     });
 
     if (next.video_public_id) {
-      next.video_url = generateCloudinaryVideoUrl(next.video_public_id, next.video_version, {
-        width: 480,
-        height: 800,
-        crop: 'fill',
-        quality: 'auto',
-        format: 'mp4',
-      });
+      next.video_url = generateCloudinaryVideoUrl(next.video_public_id, next.video_version, CLOUDINARY_REEL_OPTIONS);
       next.url = next.video_url;
+    } else if (typeof next.video_url === 'string' || typeof next.url === 'string') {
+      const rawVideoRef = next.video_url || next.url;
+      const rebuilt = generateCloudinaryVideoUrl(rawVideoRef, next.video_version, CLOUDINARY_REEL_OPTIONS);
+      if (rebuilt) {
+        next.video_url = rebuilt;
+        next.url = rebuilt;
+      }
     }
 
     return next;
