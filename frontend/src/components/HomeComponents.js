@@ -258,8 +258,6 @@ export const HeroSection = () => {
               transition={reduceMotion ? { duration: 0 } : { delay: 0.3, duration: 0.6 }}
               className="font-heading text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-8"
             >
-              Find Your
-              <motion.span 
                 initial={reduceMotion ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
