@@ -428,7 +428,7 @@ export const Footer = () => {
         </div>
 
         <div className="border-t border-white/10 mt-6 pt-4">
-          <p className="text-stone-400 text-xs md:text-sm">2026 GRUVORA LIVING. All rights reserved.</p>
+          <p className="text-stone-400 text-xs md:text-sm">2026 All rights reserved.</p>
         </div>
       </div>
     </footer>
