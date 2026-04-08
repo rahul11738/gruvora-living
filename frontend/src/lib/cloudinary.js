@@ -12,6 +12,15 @@ const KNOWN_REEL_PUBLIC_ID_OVERRIDES = {
   },
 };
 
+const normalizeVersionValue = (value) => {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (/^v\d+$/i.test(text)) return text.slice(1);
+  if (/^\d+$/.test(text)) return text;
+  return null;
+};
+
 const isLikelyTransformationSegment = (segment) => {
   if (!segment) return false;
   // Cloudinary transformation segments are usually comma-delimited directives like c_fill,w_480,h_800
@@ -79,7 +88,7 @@ export const generateCloudinaryVideoUrl = (publicId, version = null, options = {
   const parsed = parseCloudinaryVideoRef(publicId);
   const override = parsed.publicId ? KNOWN_REEL_PUBLIC_ID_OVERRIDES[parsed.publicId] : null;
   const resolvedPublicId = override?.publicId || parsed.publicId;
-  const resolvedVersion = version ?? override?.version ?? parsed.version;
+  const resolvedVersion = normalizeVersionValue(version ?? override?.version ?? parsed.version);
   if (!resolvedPublicId) return '';
 
   if (resolvedPublicId.startsWith('https://') && !resolvedPublicId.includes('res.cloudinary.com')) {
@@ -95,12 +104,14 @@ export const generateCloudinaryVideoUrl = (publicId, version = null, options = {
   } = options;
 
   // Build transformation string
-  let transformation = '';
+  let transformation = 'f_auto,q_auto';
   if (width || height) {
-    transformation = `c_${crop}`;
+    transformation += `,c_${crop}`;
     if (width) transformation += `,w_${width}`;
     if (height) transformation += `,h_${height}`;
-    if (quality) transformation += `,q_${quality}`;
+  }
+  if (quality && quality !== 'auto') {
+    transformation += `,q_${quality}`;
   }
 
   const base = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/video/upload`;
@@ -111,6 +122,11 @@ export const generateCloudinaryVideoUrl = (publicId, version = null, options = {
 
   return `${base}/${path}.${format}`;
 };
+
+// Alias for reel/video usage where caller has public_id + version fields.
+export const getVideoUrl = (publicId, version = null, options = {}) => (
+  generateCloudinaryVideoUrl(publicId, version, options)
+);
 
 /**
  * Generate Cloudinary image URL from public_id
@@ -146,6 +162,7 @@ export const normalizeMediaUrl = (url) => {
 
 const cloudinaryUtils = {
   generateCloudinaryVideoUrl,
+  getVideoUrl,
   generateCloudinaryImageUrl,
   normalizeMediaUrl,
 };

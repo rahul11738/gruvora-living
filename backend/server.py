@@ -465,6 +465,8 @@ def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, An
         if canonical_url:
             doc["video_public_id"] = str(public_id)
             doc["video_version"] = version
+            doc["public_id"] = str(public_id)
+            doc["version"] = f"v{int(version)}" if version is not None else None
             doc["video_url"] = canonical_url
             doc["url"] = canonical_url
             if not doc.get("thumbnail_url") or str(doc.get("thumbnail_url", "")).startswith("http://"):
@@ -478,6 +480,8 @@ def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, An
             safe_url = fallback_url.replace("http://", "https://")
             doc["video_url"] = safe_url
             doc["url"] = safe_url
+        doc["public_id"] = None
+        doc["version"] = None
 
     if doc.get("thumbnail_url"):
         doc["thumbnail_url"] = str(doc["thumbnail_url"]).replace("http://", "https://")
@@ -3218,12 +3222,32 @@ async def create_video(video: VideoCreate, user: dict = Depends(get_owner_user))
     ensure_category_allowed_for_role(user.get("role"), video.category, detail_prefix="Reel category")
 
     video_id = str(uuid.uuid4())
+    extracted_public_id, extracted_version = _extract_cloudinary_video_public_id_and_version(video.video_url)
+
+    canonical_url = None
+    if extracted_public_id:
+        canonical_url = _build_cloudinary_video_playback_url(extracted_public_id, extracted_version)
+
+    normalized_video_url = extracted_public_id or str(video.video_url or "").replace("http://", "https://")
+    normalized_url = canonical_url or str(video.video_url or "").replace("http://", "https://")
+    thumbnail_url = str(video.thumbnail_url or "").replace("http://", "https://")
+    if extracted_public_id and not thumbnail_url and CLOUDINARY_CLOUD_NAME:
+        if extracted_version is not None:
+            thumbnail_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/v{int(extracted_version)}/{extracted_public_id}.jpg"
+        else:
+            thumbnail_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{extracted_public_id}.jpg"
+
     video_doc = {
         "id": video_id,
         "owner_id": user["id"],
         "owner_name": user["name"],
         "owner_verified": user.get("aadhar_status") == VerificationStatus.VERIFIED,
         **video.model_dump(),
+        "video_public_id": extracted_public_id,
+        "video_version": extracted_version,
+        "video_url": normalized_video_url,
+        "url": normalized_url,
+        "thumbnail_url": thumbnail_url,
         "likes": 0,
         "views": 0,
         "saves": 0,
