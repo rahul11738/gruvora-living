@@ -96,18 +96,22 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-origins = [
+default_origins = [
     "https://gruvora.com",
     "https://www.gruvora.com",
+    "https://api.gruvora.com",
     "https://gruvora-living-ewir9bpkg-rahul11738s-projects.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 
+env_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+origins = list(dict.fromkeys(default_origins + env_origins))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https://([a-z0-9-]+\.)?gruvora\.com|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
