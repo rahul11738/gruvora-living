@@ -266,15 +266,15 @@ export const ListingDetailPage = () => {
             <>
               <button
                 onClick={() => setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))}
-                className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
               >
-                <ChevronLeft className="w-6 h-6" />
+                <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               <button
                 onClick={() => setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))}
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
+                className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
               >
-                <ChevronRight className="w-6 h-6" />
+                <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
               </button>
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                 {images.map((_, i) => (
@@ -294,17 +294,17 @@ export const ListingDetailPage = () => {
             <button
               onClick={handleWishlist}
               disabled={wishlistPending}
-              className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${wishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
+              className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-colors ${wishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
                 }`}
               data-testid="wishlist-btn"
             >
-              <Heart className={`w-6 h-6 ${wishlisted ? 'fill-white' : ''}`} />
+              <Heart className={`w-5 h-5 md:w-6 md:h-6 ${wishlisted ? 'fill-white' : ''}`} />
             </button>
             <button
               onClick={handleShare}
-              className="w-12 h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
+              className="w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
             >
-              <Share2 className="w-6 h-6" />
+              <Share2 className="w-5 h-5 md:w-6 md:h-6" />
             </button>
           </div>
 
@@ -350,7 +350,7 @@ export const ListingDetailPage = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-heading text-3xl font-bold text-primary">
+                  <p className="font-heading text-2xl md:text-3xl font-bold text-primary">
                     {formatPrice(listing.price, listing.listing_type)}
                   </p>
                   {isPropertyTransactionCategory(listing.category) && (
