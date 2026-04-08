@@ -14,7 +14,6 @@ import {
   FileText,
   RefreshCw,
   Shield,
-  Sparkles,
   Zap,
 } from 'lucide-react';
 

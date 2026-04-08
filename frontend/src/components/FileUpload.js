@@ -1,16 +1,12 @@
-import React, { useState, useRef, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useRef } from 'react';
+import { motion } from 'framer-motion';
 import api from '../lib/api';
-import { Button } from './ui/button';
 import { toast } from 'sonner';
 import {
-  Upload,
   X,
   Image,
   Video,
   Loader2,
-  CheckCircle,
-  AlertCircle,
   Plus,
   Trash2,
 } from 'lucide-react';
@@ -63,9 +59,9 @@ const deleteFromCloudinary = async (publicId, resourceType = 'image') => {
 };
 
 // Image Upload Component
-export const ImageUploader = ({ 
-  images = [], 
-  onImagesChange, 
+export const ImageUploader = ({
+  images = [],
+  onImagesChange,
   maxImages = 10,
   folder = 'listings',
   className = ''
@@ -99,7 +95,7 @@ export const ImageUploader = ({
     if (!validFiles.length) return;
 
     setUploading(true);
-    
+
     try {
       const results = await Promise.allSettled(
         validFiles.map(file => uploadToCloudinary(file, { folder, resourceType: 'image' }))
@@ -157,9 +153,8 @@ export const ImageUploader = ({
       {/* Upload Area */}
       <div
         onClick={() => !uploading && fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
-          uploading ? 'border-primary bg-primary/5' : 'border-stone-200 hover:border-primary hover:bg-stone-50'
-        }`}
+        className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${uploading ? 'border-primary bg-primary/5' : 'border-stone-200 hover:border-primary hover:bg-stone-50'
+          }`}
       >
         <input
           ref={fileInputRef}
@@ -170,7 +165,7 @@ export const ImageUploader = ({
           className="hidden"
           disabled={uploading}
         />
-        
+
         {uploading ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="w-10 h-10 text-primary animate-spin" />
@@ -220,7 +215,7 @@ export const ImageUploader = ({
               )}
             </motion.div>
           ))}
-          
+
           {/* Add More Button */}
           {images.length < maxImages && (
             <button
@@ -325,9 +320,8 @@ export const VideoUploader = ({
       {!video ? (
         <div
           onClick={() => !uploading && fileInputRef.current?.click()}
-          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
-            uploading ? 'border-primary bg-primary/5' : 'border-stone-200 hover:border-primary hover:bg-stone-50'
-          }`}
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${uploading ? 'border-primary bg-primary/5' : 'border-stone-200 hover:border-primary hover:bg-stone-50'
+            }`}
         >
           <input
             ref={fileInputRef}
@@ -337,7 +331,7 @@ export const VideoUploader = ({
             className="hidden"
             disabled={uploading}
           />
-          
+
           <div className="flex flex-col items-center gap-3">
             <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
               <Video className="w-8 h-8 text-primary" />
@@ -360,7 +354,7 @@ export const VideoUploader = ({
               e.currentTarget.style.display = 'none';
             }}
           />
-          
+
           <div className="absolute top-3 right-3 flex gap-2">
             <span className="bg-black/70 text-white text-xs px-2 py-1 rounded">
               {video.name || 'Video'} • {video.size ? formatFileSize(video.size) : ''}
@@ -396,22 +390,20 @@ export const MediaUploader = ({
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setActiveTab('images')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'images'
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'images'
                 ? 'bg-primary text-white'
                 : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
+              }`}
           >
             <Image className="w-4 h-4 inline mr-2" />
             Images
           </button>
           <button
             onClick={() => setActiveTab('video')}
-            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'video'
+            className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'video'
                 ? 'bg-primary text-white'
                 : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
+              }`}
           >
             <Video className="w-4 h-4 inline mr-2" />
             Video

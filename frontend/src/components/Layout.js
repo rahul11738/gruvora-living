@@ -26,10 +26,7 @@ import {
   Settings,
   LayoutDashboard,
   Play,
-  MessageCircle,
-  X,
   Compass as DiscoverIcon,
-  Bell,
   Youtube,
   Instagram,
   Facebook,
@@ -89,11 +86,10 @@ export const Header = () => {
                 <Link
                   key={cat.id}
                   to={cat.href}
-                  className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-semibold tracking-wide transition-all duration-200 ${
-                    isActive
+                  className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-semibold tracking-wide transition-all duration-200 ${isActive
                       ? categoryNavTheme.active
                       : categoryNavTheme.inactive
-                  }`}
+                    }`}
                   data-testid={`nav-${cat.id}`}
                 >
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${isActive ? 'bg-stone-100 text-stone-700' : 'bg-stone-100/80 text-stone-500 group-hover:text-stone-700'}`}>
@@ -214,7 +210,7 @@ export const Header = () => {
               </SheetTrigger>
               <SheetContent side="right" className="w-[88vw] max-w-sm sm:max-w-md p-0 overflow-hidden">
                 <div className="flex flex-col h-full">
-                    <div className="px-5 pt-6 pb-4 border-b border-stone-100 bg-gradient-to-b from-stone-50 to-white">
+                  <div className="px-5 pt-6 pb-4 border-b border-stone-100 bg-gradient-to-b from-stone-50 to-white">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-xs uppercase tracking-[0.24em] text-emerald-600 font-semibold">Navigation</p>
@@ -232,11 +228,10 @@ export const Header = () => {
                           key={cat.id}
                           to={cat.href}
                           onClick={() => setMobileOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-colors border ${
-                            isActive
+                          className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-colors border ${isActive
                               ? `${categoryNavTheme.active}`
                               : `${categoryNavTheme.inactive}`
-                          }`}
+                            }`}
                         >
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? 'bg-white/15 text-white' : 'bg-white/70 text-current'}`}>
                             <Icon className="w-5 h-5" />
@@ -473,7 +468,7 @@ export const MobileBottomNav = () => {
           if (item.auth && !isAuthenticated) return null;
           const isActive = location.pathname === item.path;
           const Icon = item.icon;
-          
+
           return (
             <Link
               key={item.path}
@@ -487,11 +482,10 @@ export const MobileBottomNav = () => {
                   markRouteNavigation(item.path, item.markSource);
                 }
               }}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${
-                isActive 
-                  ? 'text-primary' 
+              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${isActive
+                  ? 'text-primary'
                   : 'text-stone-500'
-              }`}
+                }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'fill-primary/20' : ''}`} />
               <span className="text-[10px] font-medium">{item.label}</span>

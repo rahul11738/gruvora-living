@@ -7,18 +7,15 @@ import { usersAPI, listingsAPI } from '../lib/api';
 import { Header, Footer } from './Layout';
 import { normalizeMediaUrl } from '../lib/media';
 import { Button } from './ui/button';
-import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import {
   User,
   MapPin,
-  Calendar,
   Play,
   Grid3X3,
   Heart,
   Eye,
-  Users,
   UserPlus,
   UserMinus,
   CheckCircle,
@@ -75,7 +72,7 @@ export const OwnerProfilePage = () => {
         usersAPI.getProfile(ownerId),
         listingsAPI.getAll({ owner_id: ownerId, limit: 20 }),
       ]);
-      
+
       setOwner(profileRes.data);
       setListings(listingsRes.data.listings || []);
 
@@ -281,11 +278,10 @@ export const OwnerProfilePage = () => {
           <div className="flex items-center justify-center gap-8">
             <button
               onClick={() => setActiveTab('reels')}
-              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${
-                activeTab === 'reels'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${activeTab === 'reels'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
               data-testid="reels-tab"
             >
               <Play className="w-4 h-4" />
@@ -293,11 +289,10 @@ export const OwnerProfilePage = () => {
             </button>
             <button
               onClick={() => setActiveTab('listings')}
-              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${
-                activeTab === 'listings'
-                  ? 'border-primary text-primary'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${activeTab === 'listings'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
               data-testid="listings-tab"
             >
               <Grid3X3 className="w-4 h-4" />
@@ -369,13 +364,13 @@ const ReelCard = ({ reel }) => {
     >
       {reel.thumbnail_url ? (
         <img
-            src={normalizeMediaUrl(reel.thumbnail_url)}
+          src={normalizeMediaUrl(reel.thumbnail_url)}
           alt={reel.title}
           className="w-full h-full object-cover"
         />
       ) : (
         <video
-            src={normalizeMediaUrl(reel.video_url || reel.url)}
+          src={normalizeMediaUrl(reel.video_url || reel.url)}
           className="w-full h-full object-cover"
           muted
           preload="metadata"
@@ -384,10 +379,10 @@ const ReelCard = ({ reel }) => {
           }}
         />
       )}
-      
+
       {/* Overlay */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-      
+
       {/* Play Icon */}
       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
         <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center">
@@ -436,7 +431,7 @@ const ListingCard = ({ listing }) => {
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        
+
         {/* Category Badge */}
         <div className="absolute top-3 left-3">
           <div className={`${bgColor} px-3 py-1 rounded-full flex items-center gap-1`}>
@@ -460,7 +455,7 @@ const ListingCard = ({ listing }) => {
         <h3 className="font-heading font-semibold text-lg text-stone-900 line-clamp-1 group-hover:text-primary transition-colors">
           {listing.title}
         </h3>
-        
+
         <div className="flex items-center gap-1 mt-2 text-muted-foreground">
           <MapPin className="w-4 h-4 flex-shrink-0" />
           <span className="text-sm line-clamp-1">{listing.location}, {listing.city}</span>

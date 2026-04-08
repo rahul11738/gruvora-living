@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { useParams, useNavigate } from 'react-router-dom';
 import { listingsAPI, bookingsAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Calendar } from './ui/calendar';
@@ -37,10 +35,7 @@ import {
   PartyPopper,
   Wrench,
   Check,
-  Star,
   MessageCircle,
-  Video,
-  Play,
   CreditCard,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
@@ -70,7 +65,7 @@ const isPropertyTransactionCategory = (category) =>
 export const ListingDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { isWishlisted, toggleWishlist, pendingWishlistMap } = useInteractions();
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -78,7 +73,7 @@ export const ListingDetailPage = () => {
   const [showBookingDialog, setShowBookingDialog] = useState(false);
   const [bookingDate, setBookingDate] = useState(null);
   const [bookingNotes, setBookingNotes] = useState('');
-  const [bookingGuests, setBookingGuests] = useState(1);
+  const [bookingGuests] = useState(1);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [userBookings, setUserBookings] = useState([]);
 
@@ -239,8 +234,8 @@ export const ListingDetailPage = () => {
   const bgColor = categoryColors[listing.category] || 'bg-primary';
   const wishlisted = isWishlisted(id);
   const wishlistPending = Boolean(pendingWishlistMap[String(id)]);
-  const images = listing.images?.length > 0 
-    ? listing.images 
+  const images = listing.images?.length > 0
+    ? listing.images
     : ['https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=800'];
 
   return (
@@ -266,7 +261,7 @@ export const ListingDetailPage = () => {
             alt={listing.title}
             className="w-full h-full object-cover"
           />
-          
+
           {images.length > 1 && (
             <>
               <button
@@ -286,9 +281,8 @@ export const ListingDetailPage = () => {
                   <button
                     key={i}
                     onClick={() => setCurrentImageIndex(i)}
-                    className={`w-2 h-2 rounded-full transition-colors ${
-                      i === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                    }`}
+                    className={`w-2 h-2 rounded-full transition-colors ${i === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                      }`}
                   />
                 ))}
               </div>
@@ -300,9 +294,8 @@ export const ListingDetailPage = () => {
             <button
               onClick={handleWishlist}
               disabled={wishlistPending}
-              className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${
-                wishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
-              }`}
+              className={`w-12 h-12 rounded-full flex items-center justify-center transition-colors ${wishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
+                }`}
               data-testid="wishlist-btn"
             >
               <Heart className={`w-6 h-6 ${wishlisted ? 'fill-white' : ''}`} />
@@ -329,9 +322,8 @@ export const ListingDetailPage = () => {
               <button
                 key={i}
                 onClick={() => setCurrentImageIndex(i)}
-                className={`flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden border-2 transition-colors ${
-                  i === currentImageIndex ? 'border-primary' : 'border-transparent'
-                }`}
+                className={`flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden border-2 transition-colors ${i === currentImageIndex ? 'border-primary' : 'border-transparent'
+                  }`}
               >
                 <img src={img} alt="" className="w-full h-full object-cover" />
               </button>

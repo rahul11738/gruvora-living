@@ -17,11 +17,7 @@ import {
   Bell,
   Building2,
   Save,
-  Phone,
-  Mail,
-  MapPin,
   Image,
-  IndianRupee,
 } from 'lucide-react';
 
 const tabs = [
@@ -289,9 +285,8 @@ export const SettingsPage = () => {
                         key={tab.id}
                         type="button"
                         onClick={() => setActiveTab(tab.id)}
-                        className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                          active ? 'bg-primary text-white' : 'hover:bg-stone-100 text-stone-700'
-                        }`}
+                        className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${active ? 'bg-primary text-white' : 'hover:bg-stone-100 text-stone-700'
+                          }`}
                       >
                         <Icon className="w-4 h-4" />
                         <span className="text-sm font-medium">{tab.label}</span>

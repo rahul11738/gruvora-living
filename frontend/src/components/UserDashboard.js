@@ -6,21 +6,17 @@ import { wishlistAPI, bookingsAPI, videosAPI } from '../lib/api';
 import { prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import {
   Heart,
   Calendar,
   User,
-  Settings,
   LogOut,
-  Home,
   MapPin,
-  Clock,
   X,
   Loader2,
-  Menu,
   Eye,
   Trash2,
   Bookmark,
@@ -30,7 +26,6 @@ import {
   Filter,
   Sparkles,
   MessageCircle,
-  ArrowUpRight,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import { normalizeMediaUrl } from '../lib/media';
@@ -48,7 +43,6 @@ export const UserDashboard = () => {
   const [wishlist, setWishlist] = useState([]);
   const [savedReels, setSavedReels] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -60,7 +54,7 @@ export const UserDashboard = () => {
       setBookings(bookingsRes.data.bookings || []);
       setWishlist(wishlistRes.data.listings || []);
       setSavedReels(savedReelsRes.data.videos || []);
-      refreshWishlist().catch(() => {});
+      refreshWishlist().catch(() => { });
     } catch (error) {
       console.error('Failed to fetch data:', error);
     } finally {
@@ -76,7 +70,7 @@ export const UserDashboard = () => {
     try {
       await wishlistAPI.remove(listingId);
       setWishlist(wishlist.filter((l) => l.id !== listingId));
-      refreshWishlist().catch(() => {});
+      refreshWishlist().catch(() => { });
       toast.success('Removed from wishlist');
     } catch (error) {
       toast.error('Failed to remove from wishlist');
@@ -137,9 +131,8 @@ export const UserDashboard = () => {
                 <nav className="space-y-2">
                   <button
                     onClick={() => setActiveTab('bookings')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      activeTab === 'bookings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'bookings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                      }`}
                   >
                     <Calendar className="w-5 h-5" />
                     My Bookings
@@ -149,9 +142,8 @@ export const UserDashboard = () => {
                   </button>
                   <button
                     onClick={() => setActiveTab('wishlist')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      activeTab === 'wishlist' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'wishlist' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                      }`}
                   >
                     <Heart className="w-5 h-5" />
                     Wishlist
@@ -161,9 +153,8 @@ export const UserDashboard = () => {
                   </button>
                   <button
                     onClick={() => setActiveTab('saved-reels')}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                      activeTab === 'saved-reels' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                    }`}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'saved-reels' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                      }`}
                   >
                     <Bookmark className="w-5 h-5" />
                     Saved Reels
@@ -253,7 +244,7 @@ export const UserDashboard = () => {
                       <p className="text-muted-foreground mb-6">
                         Save reels you like to watch them later
                       </p>
-                      <Button 
+                      <Button
                         className="btn-primary"
                         onMouseEnter={prefetchReelsRoute}
                         onFocus={prefetchReelsRoute}
@@ -451,8 +442,8 @@ const SavedReelCard = ({ video, onRemove }) => {
   };
 
   return (
-    <Card 
-      className="overflow-hidden group cursor-pointer" 
+    <Card
+      className="overflow-hidden group cursor-pointer"
       data-testid={`saved-reel-${video.id}`}
       onClick={handlePlay}
     >
@@ -475,10 +466,10 @@ const SavedReelCard = ({ video, onRemove }) => {
             }}
           />
         )}
-        
+
         {/* Overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-        
+
         {/* Play Button */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="w-12 h-12 bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center">
@@ -543,7 +534,7 @@ export const WishlistPage = () => {
     try {
       const response = await wishlistAPI.get();
       setWishlist(response.data.listings || []);
-      refreshWishlist().catch(() => {});
+      refreshWishlist().catch(() => { });
     } catch (error) {
       console.error('Failed to fetch wishlist:', error);
     } finally {
@@ -555,7 +546,7 @@ export const WishlistPage = () => {
     try {
       await wishlistAPI.remove(listingId);
       setWishlist(wishlist.filter((l) => l.id !== listingId));
-      refreshWishlist().catch(() => {});
+      refreshWishlist().catch(() => { });
       toast.success('Removed from wishlist');
     } catch (error) {
       toast.error('Failed to remove');
@@ -647,20 +638,19 @@ export const WishlistPage = () => {
               { id: 'available', label: 'Available' },
               ...(hasPropertyTransactionListings
                 ? [
-                    { id: 'rent', label: 'Rent' },
-                    { id: 'buy', label: 'Buy' },
-                  ]
+                  { id: 'rent', label: 'Rent' },
+                  { id: 'buy', label: 'Buy' },
+                ]
                 : []),
             ].map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setFilter(item.id)}
-                className={`px-3 py-2 rounded-full text-xs font-medium border transition-colors ${
-                  filter === item.id
+                className={`px-3 py-2 rounded-full text-xs font-medium border transition-colors ${filter === item.id
                     ? 'bg-primary text-white border-primary'
                     : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
-                }`}
+                  }`}
               >
                 <Filter className="w-3.5 h-3.5 inline-block mr-1" />
                 {item.label}

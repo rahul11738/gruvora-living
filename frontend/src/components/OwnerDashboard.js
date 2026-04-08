@@ -2,10 +2,8 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { ownerAPI, listingsAPI, bookingsAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
+import { ownerAPI, listingsAPI, bookingsAPI, boostAPI } from '../lib/api';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import {
   Dialog,
@@ -13,9 +11,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from './ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import {
@@ -32,15 +28,10 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Edit,
   Trash2,
-  Image,
-  Video,
-  MapPin,
   IndianRupee,
   FileText,
   LayoutDashboard,
-  Settings,
   LogOut,
   Menu,
   X,
@@ -56,7 +47,6 @@ import {
   Shield,
   Loader2,
 } from 'lucide-react';
-import { Header } from './Layout';
 import ListingFormRouter from './listings/ListingFormRouter';
 import SubscriptionCard from './subscription/SubscriptionCard';
 
@@ -81,7 +71,6 @@ export const OwnerDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   const showSubscriptionTab = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(user?.role);
 
@@ -109,7 +98,7 @@ export const OwnerDashboard = () => {
       const ownerListings = (listingsRes.data.listings || []).filter((item) => item.owner_id === user?.id);
       setListings(ownerListings);
       setBookings(bookingsRes.data.bookings);
-      
+
       // Generate mock leads from bookings for demo
       const mockLeads = bookingsRes.data.bookings?.slice(0, 5).map((b, idx) => ({
         id: b.id || `lead-${idx}`,
@@ -122,7 +111,7 @@ export const OwnerDashboard = () => {
         status: b.status || 'pending'
       })) || [];
       setLeads(mockLeads);
-      
+
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
       toast.error('Failed to load dashboard');
@@ -145,7 +134,7 @@ export const OwnerDashboard = () => {
 
   const handleDeleteListing = useCallback(async (listingId) => {
     if (!window.confirm('Are you sure you want to delete this listing?')) return;
-    
+
     try {
       await listingsAPI.delete(listingId);
       setListings(listings.filter((l) => l.id !== listingId));
@@ -216,36 +205,32 @@ export const OwnerDashboard = () => {
             <nav className="space-y-2">
               <button
                 onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  activeTab === 'overview' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'overview' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                  }`}
               >
                 <LayoutDashboard className="w-5 h-5" />
                 Overview
               </button>
               <button
                 onClick={() => { setActiveTab('analytics'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  activeTab === 'analytics' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'analytics' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                  }`}
               >
                 <BarChart3 className="w-5 h-5" />
                 Analytics
               </button>
               <button
                 onClick={() => { setActiveTab('listings'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  activeTab === 'listings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'listings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                  }`}
               >
                 <FileText className="w-5 h-5" />
                 My Listings
               </button>
               <button
                 onClick={() => { setActiveTab('bookings'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  activeTab === 'bookings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'bookings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                  }`}
               >
                 <Clock className="w-5 h-5" />
                 Bookings
@@ -255,9 +240,8 @@ export const OwnerDashboard = () => {
               </button>
               <button
                 onClick={() => { setActiveTab('leads'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  activeTab === 'leads' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                }`}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'leads' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                  }`}
               >
                 <Users className="w-5 h-5" />
                 Leads
@@ -268,9 +252,8 @@ export const OwnerDashboard = () => {
               {showSubscriptionTab && (
                 <button
                   onClick={() => { setActiveTab('subscription'); setSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    activeTab === 'subscription' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                  }`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'subscription' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                    }`}
                 >
                   <Crown className="w-5 h-5" />
                   Subscription
@@ -315,7 +298,7 @@ export const OwnerDashboard = () => {
               <p className="text-muted-foreground">Welcome back, {user?.name?.split(' ')[0]}</p>
             </div>
             <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-                <Button className="btn-primary" data-testid="add-listing-btn" onClick={handleOpenCreateDialog} disabled={subscriptionStatusLoading}>
+              <Button className="btn-primary" data-testid="add-listing-btn" onClick={handleOpenCreateDialog} disabled={subscriptionStatusLoading}>
                 <Plus className="w-5 h-5 mr-2" />
                 Add Listing
               </Button>
@@ -680,7 +663,7 @@ const AnalyticsSection = ({ stats, listings }) => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -694,7 +677,7 @@ const AnalyticsSection = ({ stats, listings }) => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -708,7 +691,7 @@ const AnalyticsSection = ({ stats, listings }) => {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="bg-gradient-to-br from-orange-500/10 to-orange-500/5 border-orange-500/20">
           <CardContent className="pt-6">
             <div className="flex items-center gap-4">
@@ -738,11 +721,11 @@ const AnalyticsSection = ({ stats, listings }) => {
             {weeklyData.map((data, idx) => (
               <div key={idx} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex flex-col items-center gap-1">
-                  <div 
+                  <div
                     className="w-full bg-primary/20 rounded-t-lg transition-all hover:bg-primary/30"
                     style={{ height: `${(data.views / maxViews) * 200}px` }}
                   >
-                    <div 
+                    <div
                       className="w-full bg-primary rounded-t-lg"
                       style={{ height: `${(data.inquiries / data.views) * 100}%` }}
                     />
@@ -781,7 +764,7 @@ const AnalyticsSection = ({ stats, listings }) => {
               {listings.slice(0, 5).map((listing, idx) => (
                 <div key={listing.id} className="flex items-center gap-4 p-3 rounded-lg bg-stone-50">
                   <span className="text-2xl font-bold text-muted-foreground">#{idx + 1}</span>
-                  <img 
+                  <img
                     src={listing.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=100'}
                     alt={listing.title}
                     className="w-16 h-16 rounded-lg object-cover"
@@ -822,7 +805,7 @@ const LeadsSection = ({ leads, subscription }) => {
                 <p className="text-sm text-yellow-700 mt-1">
                   Subscribe to see full contact details of leads. Phone numbers are partially hidden.
                 </p>
-                <Link to="/owner/dashboard" onClick={() => {}} className="text-sm text-yellow-700 underline mt-2 inline-block">
+                <Link to="/owner/dashboard" onClick={() => { }} className="text-sm text-yellow-700 underline mt-2 inline-block">
                   View subscription plans →
                 </Link>
               </div>
@@ -870,11 +853,11 @@ const LeadsSection = ({ leads, subscription }) => {
                       {lead.status}
                     </Badge>
                   </div>
-                  
+
                   <div className="mt-4 p-3 bg-stone-50 rounded-lg">
                     <p className="text-sm text-stone-600">"{lead.message}"</p>
                   </div>
-                  
+
                   <div className="mt-4 flex items-center gap-4">
                     <div className="flex items-center gap-2 text-sm">
                       <Phone className="w-4 h-4 text-muted-foreground" />
@@ -893,26 +876,26 @@ const LeadsSection = ({ leads, subscription }) => {
                       {new Date(lead.created_at).toLocaleDateString()}
                     </div>
                   </div>
-                  
+
                   <div className="mt-4 flex gap-2">
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       className="btn-primary"
                       disabled={!hasSubscription}
                     >
                       <Phone className="w-4 h-4 mr-2" />
                       Call
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       variant="outline"
                       disabled={!hasSubscription}
                     >
                       <Mail className="w-4 h-4 mr-2" />
                       Email
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       variant="outline"
                     >
                       <MessageCircle className="w-4 h-4 mr-2" />
@@ -930,7 +913,7 @@ const LeadsSection = ({ leads, subscription }) => {
 };
 
 // Subscription Section Component
-const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
+export const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
   const hasSubscription = subscription?.has_subscription;
   const expiresAt = subscription?.subscription?.expires_at;
 
@@ -959,7 +942,7 @@ const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
                   {expiresAt ? new Date(expiresAt).toLocaleDateString() : 'N/A'}
                 </span>
               </p>
-              
+
               <div className="mt-6 p-4 bg-white rounded-xl">
                 <h3 className="font-semibold text-stone-700 mb-3">Your Premium Benefits:</h3>
                 <div className="grid grid-cols-2 gap-3">
@@ -986,7 +969,7 @@ const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
               <p className="text-muted-foreground mt-2">
                 Grow your business with premium features
               </p>
-              
+
               <div className="mt-8 space-y-3 text-left">
                 {features.map((feature, idx) => (
                   <div key={idx} className="flex items-center gap-3 p-3 bg-white rounded-lg">
@@ -997,9 +980,9 @@ const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
                   </div>
                 ))}
               </div>
-              
-              <Button 
-                onClick={onSubscribe} 
+
+              <Button
+                onClick={onSubscribe}
                 disabled={loading}
                 className="w-full btn-primary mt-8 h-12 text-lg"
               >
@@ -1015,7 +998,7 @@ const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
                   </>
                 )}
               </Button>
-              
+
               <p className="text-xs text-muted-foreground mt-4">
                 Secure payment via Razorpay. Cancel anytime.
               </p>
@@ -1118,18 +1101,16 @@ export const BoostListingModal = ({ listing, isOpen, onClose, user }) => {
               <button
                 key={option.id}
                 onClick={() => setSelectedDuration(option.id)}
-                className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${
-                  selectedDuration === option.id
-                    ? 'border-primary bg-primary/5'
-                    : 'border-stone-200 hover:border-stone-300'
-                }`}
+                className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedDuration === option.id
+                  ? 'border-primary bg-primary/5'
+                  : 'border-stone-200 hover:border-stone-300'
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                    selectedDuration === option.id
-                      ? 'border-primary bg-primary'
-                      : 'border-stone-300'
-                  }`}>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedDuration === option.id
+                    ? 'border-primary bg-primary'
+                    : 'border-stone-300'
+                    }`}>
                     {selectedDuration === option.id && (
                       <CheckCircle className="w-3 h-3 text-white" />
                     )}

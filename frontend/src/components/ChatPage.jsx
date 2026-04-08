@@ -1,15 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
-import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { Header } from './Layout';
 import { messagesAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
-import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import {
   MessageCircle, Send, Check, CheckCheck, Loader2, ChevronUp,
-  Search, ArrowLeft, MoreVertical, Circle, Building2, ExternalLink
+  Search, ArrowLeft, Circle, Building2, ExternalLink
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -35,7 +34,7 @@ const API_URL = normalizeSocketBaseUrl(resolveBackendUrl());
 const MESSAGE_PAGE_LIMIT = 50;
 const RECONNECT_DELAY_MS = [1000, 2000, 4000, 8000, 16000];
 
-const BLOCKED_WORDS = ['call me','whatsapp','phone','number','contact me','@gmail','@yahoo','@outlook','+91'];
+const BLOCKED_WORDS = ['call me', 'whatsapp', 'phone', 'number', 'contact me', '@gmail', '@yahoo', '@outlook', '+91'];
 const PHONE_RE = /(?:\+?\d[\s-]*){10,}/;
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 
@@ -197,11 +196,10 @@ const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial }) => {
         </div>
       )}
       <div className={`relative max-w-[72%] group`}>
-        <div className={`px-3.5 py-2 rounded-2xl shadow-sm ${
-          isMine
+        <div className={`px-3.5 py-2 rounded-2xl shadow-sm ${isMine
             ? 'bg-primary text-white rounded-br-sm'
             : 'bg-white text-stone-800 rounded-bl-sm border border-stone-100'
-        }`}>
+          }`}>
           <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{msg.content}</p>
           <div className={`flex items-center justify-end gap-1 mt-1 ${isMine ? 'text-white/70' : 'text-stone-400'}`}>
             <span className="text-[10px]">{formatTime(msg.created_at)}</span>
@@ -223,7 +221,6 @@ const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial }) => {
 // ─── Main ChatPage ────────────────────────────────────────────────────────────
 export const ChatPage = () => {
   const { user, token } = useAuth();
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // URL params
@@ -244,7 +241,6 @@ export const ChatPage = () => {
   const [socketConnected, setSocketConnected] = useState(false);
   const [typingUsers, setTypingUsers] = useState(new Set());
   const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
   const [mobileView, setMobileView] = useState('list'); // 'list' | 'chat'
 
   const socketRef = useRef(null);

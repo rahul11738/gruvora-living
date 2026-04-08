@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { listingsAPI, categoriesAPI, recommendationsAPI, chatAPI } from '../lib/api';
@@ -8,8 +8,6 @@ import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import {
   Home,
@@ -27,7 +25,6 @@ import {
   Shield,
   Users,
   TrendingUp,
-  ChevronRight,
   Mic,
   MicOff,
   Compass,
@@ -143,16 +140,16 @@ export const HeroSection = () => {
       toast.error('Voice search is not supported in this browser.');
       return;
     }
-    
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    
+
     recognition.lang = 'en-IN';
     recognition.continuous = false;
-    
+
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
-    
+
     recognition.onresult = async (event) => {
       const transcript = event.results[0][0].transcript;
       const cleanedTranscript = transcript.trim();
@@ -178,7 +175,7 @@ export const HeroSection = () => {
         navigate(`/category/${category}?${params.toString()}`);
       }
     };
-    
+
     recognition.start();
   };
 
@@ -212,21 +209,21 @@ export const HeroSection = () => {
         <div className="absolute inset-0 bg-stone-950/55" />
         <div className="absolute inset-0 bg-gradient-to-r from-stone-950/95 via-stone-950/78 to-stone-950/40" />
         {/* Floating Elements */}
-        <motion.div 
-          animate={reduceMotion ? { opacity: 0.2, scale: 1 } : { 
+        <motion.div
+          animate={reduceMotion ? { opacity: 0.2, scale: 1 } : {
             scale: [1, 1.2, 1],
             opacity: [0.2, 0.3, 0.2]
           }}
           transition={reduceMotion ? { duration: 0 } : { duration: 4, repeat: Infinity }}
-          className="absolute top-20 right-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl" 
+          className="absolute top-20 right-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl"
         />
-        <motion.div 
-          animate={reduceMotion ? { opacity: 0.2, scale: 1 } : { 
+        <motion.div
+          animate={reduceMotion ? { opacity: 0.2, scale: 1 } : {
             scale: [1, 1.3, 1],
             opacity: [0.2, 0.4, 0.2]
           }}
           transition={reduceMotion ? { duration: 0 } : { duration: 5, repeat: Infinity, delay: 1 }}
-          className="absolute bottom-20 left-20 w-96 h-96 bg-secondary/20 rounded-full blur-3xl" 
+          className="absolute bottom-20 left-20 w-96 h-96 bg-secondary/20 rounded-full blur-3xl"
         />
         <motion.div
           animate={reduceMotion ? { opacity: 0.12, y: 0 } : {
@@ -246,7 +243,7 @@ export const HeroSection = () => {
             transition={reduceMotion ? { duration: 0 } : { duration: 0.8 }}
             className="w-full max-w-5xl text-center flex flex-col items-center"
           >
-            <motion.div 
+            <motion.div
               initial={reduceMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.2 }}
@@ -255,8 +252,8 @@ export const HeroSection = () => {
               <Sparkles className="w-4 h-4 text-secondary" />
               <span className="text-white/90 text-sm font-medium">Gujarat's #1 Property Platform</span>
             </motion.div>
-            
-            <motion.h1 
+
+            <motion.h1
               initial={reduceMotion ? false : { opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.3, duration: 0.6 }}
@@ -272,8 +269,8 @@ export const HeroSection = () => {
                 Perfect Space
               </motion.span>
             </motion.h1>
-            
-            <motion.p 
+
+            <motion.p
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.5 }}
@@ -281,7 +278,7 @@ export const HeroSection = () => {
             >
               Discover homes, business spaces, hotels, event venues, and professional services - all in one place.
             </motion.p>
-            <motion.p 
+            <motion.p
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
@@ -448,7 +445,7 @@ export const CategoriesSection = () => {
         />
       </div>
       <div className="container-main">
-        <motion.div 
+        <motion.div
           {...revealUp(reduceMotion, 0.02)}
           className="text-center mb-12"
         >
@@ -487,7 +484,7 @@ export const CategoriesSection = () => {
                   <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full ${theme.glow} blur-2xl transition-transform duration-500 group-hover:scale-125`} />
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.75),transparent_45%)]" />
                   <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} opacity-0 group-hover:opacity-95 transition-opacity duration-500`} />
-                  
+
                   <div className="relative z-10">
                     <div className="mb-4 flex items-center justify-between">
                       <span className="inline-flex items-center rounded-full border border-stone-200/80 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600 group-hover:border-white/35 group-hover:bg-white/15 group-hover:text-white/90">
@@ -500,7 +497,7 @@ export const CategoriesSection = () => {
                       )}
                     </div>
 
-                    <motion.div 
+                    <motion.div
                       whileHover={reduceMotion ? undefined : { scale: 1.08, rotate: 4 }}
                       className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/40`}
                     >
@@ -540,7 +537,6 @@ export const CategoriesSection = () => {
 export const TrendingSection = () => {
   const reduceMotion = useReducedMotion();
   const [listings, setListings] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState(null);
 
   const fetchTrending = useCallback(async () => {
@@ -549,8 +545,6 @@ export const TrendingSection = () => {
       setListings(response.data.listings);
     } catch (error) {
       console.error('Failed to fetch trending:', error);
-    } finally {
-      setLoading(false);
     }
   }, [activeCategory]);
 
@@ -583,17 +577,16 @@ export const TrendingSection = () => {
               Popular Properties
             </h2>
           </div>
-          
+
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
             {categoryTabs.map((tab) => (
               <button
                 key={tab.id || 'all'}
                 onClick={() => setActiveCategory(tab.id)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  activeCategory === tab.id
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeCategory === tab.id
                     ? 'bg-primary text-white shadow-md shadow-primary/30'
                     : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:-translate-y-0.5'
-                }`}
+                  }`}
               >
                 {tab.label}
               </button>
@@ -758,7 +751,7 @@ export const PropertyCard = memo(({ listing, showActions = true, contextCategory
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        
+
         {/* Top Badges */}
         <div className="absolute top-4 left-4 flex items-center gap-2">
           <div className={`${bgColor} px-3 py-1 rounded-full flex items-center gap-1`}>
@@ -813,7 +806,7 @@ export const PropertyCard = memo(({ listing, showActions = true, contextCategory
         <h3 className="font-heading font-semibold text-lg text-stone-900 line-clamp-1 group-hover:text-primary transition-colors">
           {listing.title}
         </h3>
-        
+
         <div className="flex items-center gap-1 mt-2 text-muted-foreground">
           <MapPin className="w-4 h-4 flex-shrink-0" />
           <span className="text-sm line-clamp-1">{listing.location}, {listing.city}</span>

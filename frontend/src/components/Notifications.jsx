@@ -4,10 +4,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api, { notificationsAPI, messagesAPI } from '../lib/api';
-import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import {
-  Bell, X, Check, CheckCheck, MessageCircle, Calendar,
+  Bell, X, MessageCircle, Calendar,
   CreditCard, Heart, UserPlus, Home, AlertCircle, ShieldCheck,
   Building2,
 } from 'lucide-react';
@@ -37,7 +36,6 @@ const resolveBackendUrl = () => {
 const API_URL = normalizeSocketBaseUrl(resolveBackendUrl());
 
 // ── Reconnect state ──────────────────────────────────────────────────────────
-let _notifSocket = null;
 let _reconnectAttempt = 0;
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
 
@@ -257,9 +255,9 @@ export const NotificationProvider = ({ children }) => {
                   if (target) {
                     window.location.assign(target);
                   }
-                } catch {}
+                } catch { }
               };
-            } catch {}
+            } catch { }
           }
         } catch (err) {
           console.warn('[notifications] incoming handler failed', err);
@@ -295,7 +293,7 @@ export const NotificationProvider = ({ children }) => {
 
     // Request browser notification permission
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission().catch(() => {});
+      Notification.requestPermission().catch(() => { });
     }
 
     return () => {
@@ -371,7 +369,7 @@ export const NotificationProvider = ({ children }) => {
           lastUnreadRef.current = serverUnread;
           await fetchNotifications(true);
         }
-      } catch {}
+      } catch { }
     }, 5000);
 
     return () => clearInterval(intervalId);
@@ -390,7 +388,7 @@ export const NotificationProvider = ({ children }) => {
     if (isSyntheticNotificationId(id)) return;
     try {
       await notificationsAPI.markRead(id);
-    } catch {}
+    } catch { }
   }, [token]);
 
   // ── Mark all read ───────────────────────────────────────────────────────────
@@ -400,7 +398,7 @@ export const NotificationProvider = ({ children }) => {
     lastUnreadRef.current = 0;
     try {
       await notificationsAPI.markAllRead();
-    } catch {}
+    } catch { }
   }, [token]);
 
   return (

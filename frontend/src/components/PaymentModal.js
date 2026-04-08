@@ -3,30 +3,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { paymentsAPI, listingsAPI } from '../lib/api';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { toast } from 'sonner';
 import {
   CreditCard,
-  Check,
   Shield,
   X,
   Loader2,
-  IndianRupee,
   Calendar,
-  User,
   Lock,
   CheckCircle,
 } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || '';
-
-export const PaymentModal = ({ 
-  isOpen, 
-  onClose, 
-  listing, 
+export const PaymentModal = ({
+  isOpen,
+  onClose,
+  listing,
   bookingDetails,
-  onSuccess 
+  onSuccess
 }) => {
   const { user, token } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -113,7 +106,7 @@ export const PaymentModal = ({
         name: 'GharSetu',
         description: listing?.title || 'Booking Payment',
         order_id: orderData.order_id,
-        handler: async function(response) {
+        handler: async function (response) {
           // Verify payment
           try {
             const verifyResponse = await paymentsAPI.verify({
@@ -156,7 +149,7 @@ export const PaymentModal = ({
           color: '#0E7450'
         },
         modal: {
-          ondismiss: function() {
+          ondismiss: function () {
             setPaymentStep('details');
             setLoading(false);
           }
@@ -325,12 +318,12 @@ export const PaymentModal = ({
 };
 
 // Payment Button Component
-export const PaymentButton = ({ 
-  listing, 
-  bookingDetails, 
+export const PaymentButton = ({
+  listing,
+  bookingDetails,
   className = '',
   onSuccess,
-  children 
+  children
 }) => {
   const { isAuthenticated } = useAuth();
   const [showPayment, setShowPayment] = useState(false);

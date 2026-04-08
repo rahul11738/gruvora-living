@@ -119,8 +119,10 @@ export const normalizeMediaUrl = (url) => {
   return url.replace(/^http:\/\//, 'https://');
 };
 
-export default {
+const cloudinaryUtils = {
   generateCloudinaryVideoUrl,
   generateCloudinaryImageUrl,
   normalizeMediaUrl,
 };
+
+export default cloudinaryUtils;
