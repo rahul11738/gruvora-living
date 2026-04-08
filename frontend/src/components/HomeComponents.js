@@ -461,7 +461,7 @@ export const CategoriesSection = () => {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 relative z-10">
+        <div className="relative z-10 -mx-4 flex gap-4 overflow-x-auto px-4 pb-3 hide-scrollbar snap-x snap-mandatory sm:-mx-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-5">
           {displayCategories.map((cat, index) => {
             const Icon = categoryIcons[cat.id] || Home;
             const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
@@ -475,6 +475,7 @@ export const CategoriesSection = () => {
                 {...revealUp(reduceMotion, index * 0.06, 24)}
                 whileHover={reduceMotion ? undefined : { y: -8 }}
                 transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
+                className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none"
               >
                 <Link
                   to={`/category/${cat.id}`}
