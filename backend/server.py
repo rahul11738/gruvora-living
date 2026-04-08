@@ -118,6 +118,16 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+
+@app.get("/")
+async def root_probe():
+    return {"status": "ok", "service": "gharsetu-api"}
+
+
+@app.get("/health")
+async def root_health_probe():
+    return {"status": "healthy", "service": "gharsetu-api", "timestamp": datetime.now(timezone.utc).isoformat()}
+
 api_router = APIRouter(prefix="/api")
 security = HTTPBearer()
 optional_security = HTTPBearer(auto_error=False)

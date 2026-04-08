@@ -145,6 +145,14 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config || {};
 
+    const status = error.response?.status;
+    const isTransientGatewayError = !status || status === 502 || status === 503 || status === 504;
+    if (isTransientGatewayError && !originalRequest._gatewayRetry) {
+      originalRequest._gatewayRetry = true;
+      await new Promise((resolve) => setTimeout(resolve, 450));
+      return api(originalRequest);
+    }
+
     if (
       !process.env.REACT_APP_BACKEND_URL &&
       typeof window !== 'undefined' &&
@@ -159,7 +167,7 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       const token = localStorage.getItem('gharsetu_token');
       if (token) {
         try {
@@ -168,7 +176,7 @@ api.interceptors.response.use(
             { token },
             { headers: { 'Content-Type': 'application/json' } }
           );
-          
+
           const newToken = refreshResponse.data.token;
           localStorage.setItem('gharsetu_token', newToken);
           originalRequest.headers = originalRequest.headers || {};
