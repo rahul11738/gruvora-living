@@ -101,7 +101,7 @@ const categoryBgColors = {
 
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
-  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').trim().toLowerCase());
 
 const gujaratCities = [
   'Surat',
@@ -602,7 +602,7 @@ export const TrendingSection = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {listings.slice(0, 4).map((listing, index) => (
             <motion.div key={listing.id} {...revealUp(reduceMotion, 0.05 + index * 0.05, 20)}>
-              <PropertyCard listing={listing} />
+              <PropertyCard listing={listing} contextCategory={activeCategory} />
             </motion.div>
           ))}
         </div>
@@ -683,13 +683,14 @@ export const RecommendationsSection = () => {
   );
 };
 
-export const PropertyCard = memo(({ listing, showActions = true }) => {
+export const PropertyCard = memo(({ listing, showActions = true, contextCategory = null }) => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { isWishlisted, toggleWishlist, pendingWishlistMap } = useInteractions();
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryBgColors[listing.category] || 'bg-primary';
-  const showTransactionType = isPropertyTransactionCategory(listing.category);
+  const effectiveCategory = contextCategory || listing.category;
+  const showTransactionType = isPropertyTransactionCategory(effectiveCategory);
   const wishlisted = isWishlisted(listing.id);
   const wishlistPending = Boolean(pendingWishlistMap[listing.id]);
 

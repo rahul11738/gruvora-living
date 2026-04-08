@@ -33,7 +33,7 @@ const categoryColors = {
 
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
-  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').trim().toLowerCase());
 
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
@@ -168,7 +168,12 @@ export const DiscoverSearchPage = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {listings.map((listing) => (
-              <ListViewCard key={listing.id} listing={listing} formatPrice={formatPrice} />
+              <ListViewCard
+                key={listing.id}
+                listing={listing}
+                formatPrice={formatPrice}
+                contextCategory={selectedCategory}
+              />
             ))}
           </div>
         )}
@@ -177,9 +182,10 @@ export const DiscoverSearchPage = () => {
   );
 };
 
-const ListViewCard = ({ listing, formatPrice }) => {
+const ListViewCard = ({ listing, formatPrice, contextCategory = null }) => {
   const Icon = categoryIcons[listing.category] || Home;
-  const showTransactionType = isPropertyTransactionCategory(listing.category);
+  const effectiveCategory = contextCategory || listing.category;
+  const showTransactionType = isPropertyTransactionCategory(effectiveCategory);
   const showTransactionType = isPropertyTransactionCategory(listing.category);
 
   return (
