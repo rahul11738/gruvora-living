@@ -2,5 +2,11 @@
   "framework": "create-react-app",
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build",
-  "outputDirectory": "build"
+  "outputDirectory": "build",
+  "rewrites": [
+    {
+      "source": "/backend-proxy/:path*",
+      "destination": "https://api.gruvora.com/:path*"
+    }
+  ]
 }

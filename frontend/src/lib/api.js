@@ -14,6 +14,16 @@ const resolveInitialBackendUrl = () => {
   }
 
   if (typeof window !== 'undefined') {
+    const host = window.location.hostname || '';
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+    if (!isLocalHost) {
+      // On Vercel/prod domains, route requests through same-origin rewrite
+      // to avoid browser CORS preflight failures.
+      return '/backend-proxy';
+    }
+  }
+
+  if (typeof window !== 'undefined') {
     const stored = window.localStorage.getItem('gharsetu_backend_url');
     if (stored) {
       return stored;
