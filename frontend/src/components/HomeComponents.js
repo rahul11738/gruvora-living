@@ -314,7 +314,7 @@ export const HeroSection = () => {
             >
               <div className="hero-search-inner">
                 <div className="w-full pb-1">
-                  <div className="flex w-full flex-wrap justify-center sm:flex-nowrap sm:justify-center items-center gap-2 sm:gap-3 px-1 sm:px-2 py-1">
+                  <div className="flex w-full flex-nowrap justify-start sm:justify-center items-center gap-2 sm:gap-3 px-1 sm:px-2 py-1 overflow-x-auto hide-scrollbar">
                     {[
                       { id: 'home', label: 'Home' },
                       { id: 'business', label: 'Business' },
@@ -584,8 +584,8 @@ export const TrendingSection = () => {
                 key={tab.id || 'all'}
                 onClick={() => setActiveCategory(tab.id)}
                 className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${activeCategory === tab.id
-                    ? 'bg-primary text-white shadow-md shadow-primary/30'
-                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:-translate-y-0.5'
+                  ? 'bg-primary text-white shadow-md shadow-primary/30'
+                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200 hover:-translate-y-0.5'
                   }`}
               >
                 {tab.label}
