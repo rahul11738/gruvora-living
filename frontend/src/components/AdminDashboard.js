@@ -302,12 +302,11 @@ export const AdminDashboard = () => {
         <div className="p-6 border-b border-stone-700">
           <Link to="/" className="flex items-center gap-2">
             <img
-              src="/GruvoraLogo.jpeg"
+              src="/gruvoraLogo.jpeg"
               alt="Gruvora"
-              className="w-9 h-9 rounded-lg object-cover"
+              className="h-8 w-auto max-w-[140px] object-contain rounded-md"
             />
             <div>
-              <p className="font-bold text-sm">Gruvora</p>
               <p className="text-xs text-stone-400">Admin Panel</p>
             </div>
           </Link>

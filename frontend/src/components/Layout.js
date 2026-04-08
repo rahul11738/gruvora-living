@@ -72,13 +72,12 @@ export const Header = () => {
       <div className="container-main">
         <div className="flex items-center justify-between gap-4 h-18 md:h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center gap-3 shrink-0" data-testid="logo">
+          <Link to="/" className="flex items-center shrink-0" data-testid="logo">
             <img
-              src="/GruvoraLogo.jpeg"
+              src="/gruvoraLogo.jpeg"
               alt="Gruvora"
-              className="w-9 h-9 md:w-10 md:h-10 rounded-xl object-cover shadow-[0_8px_20px_rgba(15,23,42,0.12)] ring-1 ring-black/5"
+              className="h-9 md:h-10 w-auto max-w-[170px] object-contain"
             />
-            <span className="font-heading font-bold text-lg md:text-xl text-primary tracking-tight">Gruvora</span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -330,7 +329,11 @@ export const Footer = () => {
       <div className="container-main relative py-8 md:py-10">
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-4 md:p-5 mb-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-emerald-300">GRUVORA LIVING</p>
+            <img
+              src="/gruvoraLogo.jpeg"
+              alt="Gruvora"
+              className="h-8 w-auto max-w-[180px] object-contain"
+            />
             <h3 className="font-heading text-xl md:text-2xl font-semibold mt-1">Your Home Bridge for Properties, Stays, Events and Services</h3>
             <p className="text-stone-300 mt-2 text-sm">Trusted marketplace to list and discover in one platform.</p>
           </div>
@@ -342,9 +345,8 @@ export const Footer = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <img src="/GruvoraLogo.jpeg" alt="Gruvora" className="w-10 h-10 rounded-xl object-cover" />
-              <span className="font-heading font-bold text-xl">GRUVORA LIVING</span>
+            <div className="mb-4 inline-flex items-center rounded-xl bg-white/95 px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.18)]">
+              <img src="/gruvoraLogo.jpeg" alt="Gruvora" className="h-9 w-auto max-w-[180px] object-contain" />
             </div>
             <p className="text-stone-300 text-sm leading-relaxed">
               Smart digital platform to connect users with homes, businesses, stay options, event spaces, and local services.

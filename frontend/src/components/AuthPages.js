@@ -102,13 +102,12 @@ export const LoginPage = () => {
         <div className="w-full max-w-md">
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
-              <Link to="/" className="flex items-center gap-2.5 mb-6">
+              <Link to="/" className="inline-flex items-center mb-6 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
                 <img
-                  src="/GruvoraLogo.jpeg"
+                  src="/gruvoraLogo.jpeg"
                   alt="Gruvora"
-                  className="w-10 h-10 rounded-xl object-cover shadow-[0_8px_20px_rgba(15,23,42,0.12)] ring-1 ring-black/5"
+                  className="h-10 sm:h-11 w-auto max-w-[180px] object-contain"
                 />
-                <span className="font-heading font-bold text-2xl text-primary tracking-tight">Gruvora</span>
               </Link>
 
               <div className="mb-6">
@@ -288,13 +287,12 @@ export const RegisterPage = () => {
         <div className="w-full max-w-xl">
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
-              <Link to="/" className="flex items-center gap-2.5 mb-6">
+              <Link to="/" className="inline-flex items-center mb-6 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
                 <img
-                  src="/GruvoraLogo.jpeg"
+                  src="/gruvoraLogo.jpeg"
                   alt="Gruvora"
-                  className="w-10 h-10 rounded-xl object-cover shadow-[0_8px_20px_rgba(15,23,42,0.12)] ring-1 ring-black/5"
+                  className="h-10 sm:h-11 w-auto max-w-[180px] object-contain"
                 />
-                <span className="font-heading font-bold text-2xl text-primary tracking-tight">Gruvora</span>
               </Link>
 
               <div className="mb-5">

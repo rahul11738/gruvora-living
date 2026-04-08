@@ -15,7 +15,7 @@ const StaticDocPage = ({ title, effectiveDate, sections }) => {
       <Header />
       <main className="container-main py-8 md:py-12">
         <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-stone-200 shadow-sm p-6 md:p-10">
-          <p className="text-xs tracking-wide uppercase text-primary font-semibold">GRUVORA LIVING</p>
+          <img src="/gruvoraLogo.jpeg" alt="Gruvora" className="h-8 w-auto max-w-[180px] object-contain" />
           <h1 className="font-heading text-2xl md:text-4xl font-bold text-stone-900 mt-2">{title}</h1>
           {effectiveDate ? (
             <p className="text-sm text-stone-500 mt-2">Effective Date: {effectiveDate}</p>
