@@ -31,6 +31,14 @@ const categoryColors = {
   services: '#f97316',
 };
 
+const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
+const isPropertyTransactionCategory = (category) =>
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+
+const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
+const isPropertyTransactionCategory = (category) =>
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+
 const gujaratCities = [
   'Surat',
   'Ahmedabad',
@@ -77,10 +85,11 @@ export const DiscoverSearchPage = () => {
     fetchListings();
   };
 
-  const formatPrice = (price, type) => {
+  const formatPrice = (price, type, category) => {
     if (price >= 10000000) return `₹${(price / 10000000).toFixed(2)} Cr`;
     if (price >= 100000) return `₹${(price / 100000).toFixed(2)} L`;
-    return `₹${price?.toLocaleString('en-IN')}${type === 'rent' ? '/mo' : ''}`;
+    const monthlySuffix = type === 'rent' && isPropertyTransactionCategory(category) ? '/mo' : '';
+    return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
   return (
@@ -170,6 +179,8 @@ export const DiscoverSearchPage = () => {
 
 const ListViewCard = ({ listing, formatPrice }) => {
   const Icon = categoryIcons[listing.category] || Home;
+  const showTransactionType = isPropertyTransactionCategory(listing.category);
+  const showTransactionType = isPropertyTransactionCategory(listing.category);
 
   return (
     <Link
@@ -194,11 +205,15 @@ const ListViewCard = ({ listing, formatPrice }) => {
           </Badge>
         </div>
 
-        <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full">
-          <span className="text-xs font-semibold text-stone-700 capitalize">
-            {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
-          </span>
-        </div>
+        {showTransactionType && (
+          {showTransactionType && (
+            <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full">
+              <span className="text-xs font-semibold text-stone-700 capitalize">
+                {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
+              </span>
+            </div>
+          )}
+        )}
       </div>
 
       <div className="p-4">
@@ -212,7 +227,7 @@ const ListViewCard = ({ listing, formatPrice }) => {
 
         <div className="flex items-center justify-between mt-4 pt-4 border-t border-stone-100">
           <p className="font-heading font-bold text-xl text-primary">
-            {formatPrice(listing.price, listing.listing_type)}
+            {formatPrice(listing.price, listing.listing_type, listing.category)}
           </p>
           <div className="flex items-center gap-3 text-muted-foreground text-sm">
             <span className="flex items-center gap-1">

@@ -35,6 +35,10 @@ import {
 import { Header, Footer } from './Layout';
 import { normalizeMediaUrl } from '../lib/media';
 
+const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
+const isPropertyTransactionCategory = (category) =>
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+
 export const UserDashboard = () => {
   const { user, logout } = useAuth();
   const { refreshWishlist } = useInteractions();
@@ -342,10 +346,13 @@ const BookingCard = ({ booking }) => {
 };
 
 const WishlistCard = ({ listing, onRemove }) => {
+  const showTransactionType = isPropertyTransactionCategory(listing.category);
+
   const formatPrice = (price, type) => {
     if (price >= 10000000) return `₹${(price / 10000000).toFixed(2)} Cr`;
     if (price >= 100000) return `₹${(price / 100000).toFixed(2)} L`;
-    return `₹${price?.toLocaleString('en-IN')}${type === 'rent' ? '/mo' : ''}`;
+    const monthlySuffix = showTransactionType && type === 'rent' ? '/mo' : '';
+    return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
   const formatSavedTime = (value) => {
@@ -370,9 +377,11 @@ const WishlistCard = ({ listing, onRemove }) => {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
         <div className="absolute left-3 top-3 flex flex-wrap gap-2">
-          <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm text-[11px] font-medium text-stone-700 shadow-sm">
-            {listing.listing_type === 'rent' ? 'For rent' : 'For sale'}
-          </span>
+          {showTransactionType && (
+            <span className="px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm text-[11px] font-medium text-stone-700 shadow-sm">
+              {listing.listing_type === 'rent' ? 'For rent' : 'For sale'}
+            </span>
+          )}
           {listing.category && (
             <span className="px-2.5 py-1 rounded-full bg-primary/90 text-white text-[11px] font-medium shadow-sm">
               {String(listing.category).replace(/_/g, ' ')}
@@ -516,6 +525,11 @@ export const WishlistPage = () => {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('all');
 
+  const hasPropertyTransactionListings = useMemo(
+    () => wishlist.some((listing) => isPropertyTransactionCategory(listing.category)),
+    [wishlist]
+  );
+
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/login?redirect=/wishlist');
@@ -557,17 +571,33 @@ export const WishlistPage = () => {
       const matchesFilter =
         filter === 'all' ||
         (filter === 'available' && listing.is_available !== false) ||
-        (filter === 'rent' && String(listing.listing_type || '').toLowerCase() === 'rent') ||
-        (filter === 'buy' && String(listing.listing_type || '').toLowerCase() !== 'rent');
+        (filter === 'rent' &&
+          hasPropertyTransactionListings &&
+          isPropertyTransactionCategory(listing.category) &&
+          String(listing.listing_type || '').toLowerCase() === 'rent') ||
+        (filter === 'buy' &&
+          hasPropertyTransactionListings &&
+          isPropertyTransactionCategory(listing.category) &&
+          String(listing.listing_type || '').toLowerCase() !== 'rent');
       return matchesSearch && matchesFilter;
     });
-  }, [filter, query, wishlist]);
+  }, [filter, hasPropertyTransactionListings, query, wishlist]);
 
   const stats = useMemo(() => ({
     total: wishlist.length,
     available: wishlist.filter((listing) => listing.is_available !== false).length,
-    rent: wishlist.filter((listing) => String(listing.listing_type || '').toLowerCase() === 'rent').length,
+    rent: wishlist.filter(
+      (listing) =>
+        isPropertyTransactionCategory(listing.category) &&
+        String(listing.listing_type || '').toLowerCase() === 'rent'
+    ).length,
   }), [wishlist]);
+
+  useEffect(() => {
+    if (!hasPropertyTransactionListings && (filter === 'rent' || filter === 'buy')) {
+      setFilter('all');
+    }
+  }, [filter, hasPropertyTransactionListings]);
 
   return (
     <div className="min-h-screen bg-stone-50" data-testid="wishlist-page">
@@ -583,7 +613,7 @@ export const WishlistPage = () => {
             <h1 className="font-heading text-3xl font-bold">My Wishlist</h1>
             <p className="text-sm text-stone-500 mt-1">Saved properties, direct owner chat, and a clean mobile-first review flow.</p>
           </div>
-          <div className="grid grid-cols-3 gap-3 w-full lg:w-auto">
+          <div className={`grid ${hasPropertyTransactionListings ? 'grid-cols-3' : 'grid-cols-2'} gap-3 w-full lg:w-auto`}>
             <div className="rounded-2xl bg-white border border-stone-200 px-4 py-3 shadow-sm min-w-[96px]">
               <p className="text-[11px] uppercase tracking-wide text-stone-400">Saved</p>
               <p className="text-xl font-bold text-stone-900">{stats.total}</p>
@@ -592,10 +622,12 @@ export const WishlistPage = () => {
               <p className="text-[11px] uppercase tracking-wide text-stone-400">Live</p>
               <p className="text-xl font-bold text-stone-900">{stats.available}</p>
             </div>
-            <div className="rounded-2xl bg-white border border-stone-200 px-4 py-3 shadow-sm min-w-[96px]">
-              <p className="text-[11px] uppercase tracking-wide text-stone-400">Rent</p>
-              <p className="text-xl font-bold text-stone-900">{stats.rent}</p>
-            </div>
+            {hasPropertyTransactionListings && (
+              <div className="rounded-2xl bg-white border border-stone-200 px-4 py-3 shadow-sm min-w-[96px]">
+                <p className="text-[11px] uppercase tracking-wide text-stone-400">Rent</p>
+                <p className="text-xl font-bold text-stone-900">{stats.rent}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -613,8 +645,12 @@ export const WishlistPage = () => {
             {[
               { id: 'all', label: 'All' },
               { id: 'available', label: 'Available' },
-              { id: 'rent', label: 'Rent' },
-              { id: 'buy', label: 'Buy' },
+              ...(hasPropertyTransactionListings
+                ? [
+                    { id: 'rent', label: 'Rent' },
+                    { id: 'buy', label: 'Buy' },
+                  ]
+                : []),
             ].map((item) => (
               <button
                 key={item.id}

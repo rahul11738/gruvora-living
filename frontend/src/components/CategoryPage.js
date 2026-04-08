@@ -123,8 +123,13 @@ const categoryDescriptions = {
   services: 'Connect with trusted professionals for home and business needs.',
 };
 
+const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
+const isPropertyTransactionCategory = (category) =>
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+
 export const CategoryPage = () => {
   const { category } = useParams();
+  const showListingTypeControls = isPropertyTransactionCategory(category);
   const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const { isWishlisted, toggleWishlist, pendingWishlistMap } = useInteractions();
@@ -139,7 +144,7 @@ export const CategoryPage = () => {
 
   const [filters, setFilters] = useState({
     sub_category: searchParams.get('sub_category') || '',
-    listing_type: searchParams.get('type') || '',
+    listing_type: showListingTypeControls ? searchParams.get('type') || '' : '',
     city: searchParams.get('city') || '',
     min_price: searchParams.get('min_price') || '',
     max_price: searchParams.get('max_price') || '',
@@ -196,7 +201,7 @@ export const CategoryPage = () => {
           category: category,
           page: filters.page,
           sub_category: filters.sub_category || undefined,
-          listing_type: filters.listing_type || undefined,
+          listing_type: showListingTypeControls ? filters.listing_type || undefined : undefined,
           city: filters.city || undefined,
           min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
           max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
@@ -212,7 +217,7 @@ export const CategoryPage = () => {
           const sub = filters.sub_category.toLowerCase();
           smartResults = smartResults.filter((l) => String(l.sub_category || '').toLowerCase() === sub);
         }
-        if (filters.listing_type) {
+        if (showListingTypeControls && filters.listing_type) {
           const type = filters.listing_type.toLowerCase();
           smartResults = smartResults.filter((l) => String(l.listing_type || '').toLowerCase() === type);
         }
@@ -239,13 +244,17 @@ export const CategoryPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [category, filters]);
+  }, [category, filters, showListingTypeControls]);
 
   useEffect(() => {
     fetchListings();
   }, [fetchListings]);
 
   const handleFilterChange = (key, value) => {
+    if (key === 'listing_type' && !showListingTypeControls) {
+      return;
+    }
+
     const newFilters = {
       ...filters,
       [key]: value,
@@ -255,6 +264,7 @@ export const CategoryPage = () => {
 
     const params = new URLSearchParams();
     Object.entries(newFilters).forEach(([k, v]) => {
+      if (k === 'listing_type' && !showListingTypeControls) return;
       if (v) params.set(k, v);
     });
     setSearchParams(params);
@@ -368,19 +378,21 @@ export const CategoryPage = () => {
             </Select>
 
             {/* Type */}
-            <Select
-              value={filters.listing_type || "all"}
-              onValueChange={(value) => handleFilterChange('listing_type', value === "all" ? "" : value)}
-            >
-              <SelectTrigger className="w-[140px] rounded-xl" data-testid="type-filter">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="rent">For Rent</SelectItem>
-                <SelectItem value="sell">For Sale</SelectItem>
-              </SelectContent>
-            </Select>
+            {showListingTypeControls && (
+              <Select
+                value={filters.listing_type || "all"}
+                onValueChange={(value) => handleFilterChange('listing_type', value === "all" ? "" : value)}
+              >
+                <SelectTrigger className="w-[140px] rounded-xl" data-testid="type-filter">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="rent">For Rent</SelectItem>
+                  <SelectItem value="sell">For Sale</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
 
             {/* More Filters */}
             <Sheet open={showFilters} onOpenChange={setShowFilters}>
@@ -595,7 +607,8 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
     } else if (price >= 100000) {
       return `₹${(price / 100000).toFixed(2)} L`;
     }
-    return `₹${price.toLocaleString('en-IN')}${type === 'rent' ? '/mo' : ''}`;
+    const monthlySuffix = isPropertyTransactionCategory(listing.category) && type === 'rent' ? '/mo' : '';
+    return `₹${price.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
   if (viewMode === 'list') {
@@ -697,11 +710,13 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
           <Icon className="w-3 h-3 text-white" />
           <span className="text-white text-xs font-medium capitalize">{listing.category}</span>
         </div>
-        <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full">
-          <span className="text-xs font-medium text-stone-700 capitalize">
-            {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
-          </span>
-        </div>
+        {isPropertyTransactionCategory(listing.category) && (
+          <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full">
+            <span className="text-xs font-medium text-stone-700 capitalize">
+              {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
+            </span>
+          </div>
+        )}
         <button
           onClick={(e) => onWishlist(listing.id, e)}
           disabled={wishlistPending}

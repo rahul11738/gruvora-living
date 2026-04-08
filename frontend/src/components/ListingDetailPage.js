@@ -63,6 +63,10 @@ const categoryColors = {
   services: 'bg-orange-500',
 };
 
+const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
+const isPropertyTransactionCategory = (category) =>
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+
 export const ListingDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -210,7 +214,8 @@ export const ListingDetailPage = () => {
     } else if (price >= 100000) {
       return `₹${(price / 100000).toFixed(2)} L`;
     }
-    return `₹${price?.toLocaleString('en-IN')}${type === 'rent' ? '/mo' : ''}`;
+    const monthlySuffix = type === 'rent' && isPropertyTransactionCategory(listing?.category) ? '/mo' : '';
+    return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
   if (loading) {
@@ -356,9 +361,11 @@ export const ListingDetailPage = () => {
                   <p className="font-heading text-3xl font-bold text-primary">
                     {formatPrice(listing.price, listing.listing_type)}
                   </p>
-                  <span className="text-sm text-muted-foreground capitalize">
-                    {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
-                  </span>
+                  {isPropertyTransactionCategory(listing.category) && (
+                    <span className="text-sm text-muted-foreground capitalize">
+                      {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
+                    </span>
+                  )}
                 </div>
               </div>
 

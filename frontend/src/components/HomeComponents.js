@@ -99,6 +99,10 @@ const categoryBgColors = {
   services: 'bg-orange-500',
 };
 
+const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
+const isPropertyTransactionCategory = (category) =>
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+
 const gujaratCities = [
   'Surat',
   'Ahmedabad',
@@ -685,6 +689,7 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
   const { isWishlisted, toggleWishlist, pendingWishlistMap } = useInteractions();
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryBgColors[listing.category] || 'bg-primary';
+  const showTransactionType = isPropertyTransactionCategory(listing.category);
   const wishlisted = isWishlisted(listing.id);
   const wishlistPending = Boolean(pendingWishlistMap[listing.id]);
 
@@ -728,7 +733,8 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
     } else if (price >= 100000) {
       return `₹${(price / 100000).toFixed(2)} L`;
     }
-    return `₹${price?.toLocaleString('en-IN')}${type === 'rent' ? '/mo' : ''}`;
+    const monthlySuffix = showTransactionType && type === 'rent' ? '/mo' : '';
+    return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
   return (
@@ -762,11 +768,13 @@ export const PropertyCard = memo(({ listing, showActions = true }) => {
         </div>
 
         {/* Type Badge */}
-        <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full">
-          <span className="text-xs font-semibold text-stone-700 capitalize">
-            {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
-          </span>
-        </div>
+        {showTransactionType && (
+          <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full">
+            <span className="text-xs font-semibold text-stone-700 capitalize">
+              {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
+            </span>
+          </div>
+        )}
 
         {/* Wishlist Button */}
         {showActions && (
