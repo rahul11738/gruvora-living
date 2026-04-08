@@ -47,6 +47,7 @@ import {
   Shield,
   Loader2,
 } from 'lucide-react';
+import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import ListingFormRouter from './listings/ListingFormRouter';
 import SubscriptionCard from './subscription/SubscriptionCard';
 
@@ -173,7 +174,7 @@ export const OwnerDashboard = () => {
       <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
         <div className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
           <img
-            src="/gruvoraLogo.jpeg"
+            src={gruvoraLogo}
             alt="Gruvora"
             className="h-8 w-auto max-w-[140px] object-contain"
           />
@@ -189,7 +190,7 @@ export const OwnerDashboard = () => {
           <div className="p-6">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
               <img
-                src="/gruvoraLogo.jpeg"
+                src={gruvoraLogo}
                 alt="Gruvora"
                 className="h-10 w-auto max-w-[180px] object-contain"
               />

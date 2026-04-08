@@ -5,6 +5,7 @@ import { NotificationBell } from './Notifications';
 import { Button } from './ui/button';
 import { observeRoutePrefetch, prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
+import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,7 +72,7 @@ export const Header = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center shrink-0" data-testid="logo">
             <img
-              src="/gruvoraLogo.jpeg"
+              src={gruvoraLogo}
               alt="Gruvora"
               className="h-9 md:h-10 w-auto max-w-[170px] object-contain"
             />
@@ -87,8 +88,8 @@ export const Header = () => {
                   key={cat.id}
                   to={cat.href}
                   className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-semibold tracking-wide transition-all duration-200 ${isActive
-                      ? categoryNavTheme.active
-                      : categoryNavTheme.inactive
+                    ? categoryNavTheme.active
+                    : categoryNavTheme.inactive
                     }`}
                   data-testid={`nav-${cat.id}`}
                 >
@@ -229,8 +230,8 @@ export const Header = () => {
                           to={cat.href}
                           onClick={() => setMobileOpen(false)}
                           className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-colors border ${isActive
-                              ? `${categoryNavTheme.active}`
-                              : `${categoryNavTheme.inactive}`
+                            ? `${categoryNavTheme.active}`
+                            : `${categoryNavTheme.inactive}`
                             }`}
                         >
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? 'bg-white/15 text-white' : 'bg-white/70 text-current'}`}>
@@ -325,7 +326,7 @@ export const Footer = () => {
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-4 md:p-5 mb-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <img
-              src="/gruvoraLogo.jpeg"
+              src={gruvoraLogo}
               alt="Gruvora"
               className="h-8 w-auto max-w-[180px] object-contain"
             />
@@ -341,7 +342,7 @@ export const Footer = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
           <div>
             <div className="mb-4 inline-flex items-center rounded-xl bg-white/95 px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.18)]">
-              <img src="/gruvoraLogo.jpeg" alt="Gruvora" className="h-9 w-auto max-w-[180px] object-contain" />
+              <img src={gruvoraLogo} alt="Gruvora" className="h-9 w-auto max-w-[180px] object-contain" />
             </div>
             <p className="text-stone-300 text-sm leading-relaxed">
               Smart digital platform to connect users with homes, businesses, stay options, event spaces, and local services.
@@ -483,8 +484,8 @@ export const MobileBottomNav = () => {
                 }
               }}
               className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg transition-colors ${isActive
-                  ? 'text-primary'
-                  : 'text-stone-500'
+                ? 'text-primary'
+                : 'text-stone-500'
                 }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'fill-primary/20' : ''}`} />

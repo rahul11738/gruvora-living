@@ -18,6 +18,7 @@ import {
   RotateCcw, Search, ChevronLeft, ChevronRight,
   AlertTriangle, Activity, BarChart3, Mail, Phone, MapPin,
 } from 'lucide-react';
+import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 
 const CATEGORY_ICONS = {
   home: Home, business: Building2, stay: Hotel,
@@ -302,7 +303,7 @@ export const AdminDashboard = () => {
         <div className="p-6 border-b border-stone-700">
           <Link to="/" className="flex items-center gap-2">
             <img
-              src="/gruvoraLogo.jpeg"
+              src={gruvoraLogo}
               alt="Gruvora"
               className="h-8 w-auto max-w-[140px] object-contain rounded-md"
             />
@@ -319,11 +320,10 @@ export const AdminDashboard = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                  activeTab === tab.id
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${activeTab === tab.id
                     ? 'bg-primary text-white'
                     : 'text-stone-400 hover:bg-stone-800 hover:text-white'
-                }`}
+                  }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 <span className="flex-1 text-left">{tab.label}</span>
@@ -615,7 +615,7 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
   );
 };
 
-const UsersTab = ({ users, total, page, search, roleFilter, blockStatusFilter = '', onSearch, onRoleFilter, onBlockStatusFilter = () => {}, onPageChange,
+const UsersTab = ({ users, total, page, search, roleFilter, blockStatusFilter = '', onSearch, onRoleFilter, onBlockStatusFilter = () => { }, onPageChange,
   onVerifyEmail, onViewProfile, onBlock, onUnblock, onDelete }) => {
   const totalPages = Math.ceil(total / 50);
 
@@ -909,8 +909,8 @@ const ListingsTab = ({ listings, pendingListings, total, page, statusFilter, onS
                       <span className="text-xs text-stone-400 capitalize">{l.category}</span>
                       <Badge className={
                         l.status === 'approved' ? 'bg-green-100 text-green-700' :
-                        l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
+                          l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-red-100 text-red-700'
                       }>{l.status}</Badge>
                     </div>
                     <p className="font-medium text-sm truncate mt-0.5">{l.title}</p>
@@ -961,90 +961,90 @@ const ListingsTab = ({ listings, pendingListings, total, page, statusFilter, onS
 
 const NotificationsTab = ({ target, title, message, type, sending, onTargetChange,
   onTitleChange, onMessageChange, onTypeChange, onSend, stats }) => (
-    <div className="space-y-6 max-w-2xl">
-      <div>
-        <h1 className="text-2xl font-bold">Send Notification</h1>
-        <p className="text-stone-500 text-sm">Broadcast messages to users and owners</p>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Total users', value: stats?.total_users || 0 },
-          { label: 'Total owners', value: stats?.total_owners || 0 },
-          { label: 'All combined', value: (stats?.total_users || 0) + (stats?.total_owners || 0) },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-stone-100 rounded-xl p-4">
-            <p className="text-xs text-stone-500">{label}</p>
-            <p className="text-xl font-bold mt-0.5">{value.toLocaleString()}</p>
-          </div>
-        ))}
-      </div>
-
-      <Card>
-        <CardContent className="pt-6 space-y-4">
-          <div>
-            <label className="text-sm font-medium text-stone-700">Send to</label>
-            <select
-              value={target}
-              onChange={(e) => onTargetChange(e.target.value)}
-              className="mt-1 w-full h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-            >
-              <option value="all">All (users + owners)</option>
-              <option value="users">All users only</option>
-              <option value="owners">All owners only</option>
-            </select>
-            <p className="text-xs text-stone-400 mt-1">To send to a specific person, enter their user ID here.</p>
-            {!['all', 'users', 'owners'].includes(target) && target && (
-              <p className="text-xs text-blue-600 mt-0.5">Targeting user ID: {target}</p>
-            )}
-            <Input
-              className="mt-2"
-              placeholder="Or paste specific user ID..."
-              onBlur={(e) => e.target.value && onTargetChange(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Type</label>
-            <select
-              value={type}
-              onChange={(e) => onTypeChange(e.target.value)}
-              className="mt-1 w-full h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
-            >
-              <option value="admin_message">Admin Message</option>
-              <option value="warning">Warning</option>
-              <option value="system">System Update</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Title</label>
-            <Input
-              className="mt-1"
-              placeholder="Notification title..."
-              value={title}
-              onChange={(e) => onTitleChange(e.target.value)}
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-stone-700">Message</label>
-            <Textarea
-              className="mt-1"
-              rows={4}
-              placeholder="Write your message here..."
-              value={message}
-              onChange={(e) => onMessageChange(e.target.value)}
-            />
-          </div>
-
-          <Button onClick={onSend} disabled={sending || !title.trim() || !message.trim()} className="w-full">
-            {sending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Bell className="w-4 h-4 mr-2" />Send Notification</>}
-          </Button>
-        </CardContent>
-      </Card>
+  <div className="space-y-6 max-w-2xl">
+    <div>
+      <h1 className="text-2xl font-bold">Send Notification</h1>
+      <p className="text-stone-500 text-sm">Broadcast messages to users and owners</p>
     </div>
-  );
+
+    <div className="grid grid-cols-3 gap-4">
+      {[
+        { label: 'Total users', value: stats?.total_users || 0 },
+        { label: 'Total owners', value: stats?.total_owners || 0 },
+        { label: 'All combined', value: (stats?.total_users || 0) + (stats?.total_owners || 0) },
+      ].map(({ label, value }) => (
+        <div key={label} className="bg-stone-100 rounded-xl p-4">
+          <p className="text-xs text-stone-500">{label}</p>
+          <p className="text-xl font-bold mt-0.5">{value.toLocaleString()}</p>
+        </div>
+      ))}
+    </div>
+
+    <Card>
+      <CardContent className="pt-6 space-y-4">
+        <div>
+          <label className="text-sm font-medium text-stone-700">Send to</label>
+          <select
+            value={target}
+            onChange={(e) => onTargetChange(e.target.value)}
+            className="mt-1 w-full h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+          >
+            <option value="all">All (users + owners)</option>
+            <option value="users">All users only</option>
+            <option value="owners">All owners only</option>
+          </select>
+          <p className="text-xs text-stone-400 mt-1">To send to a specific person, enter their user ID here.</p>
+          {!['all', 'users', 'owners'].includes(target) && target && (
+            <p className="text-xs text-blue-600 mt-0.5">Targeting user ID: {target}</p>
+          )}
+          <Input
+            className="mt-2"
+            placeholder="Or paste specific user ID..."
+            onBlur={(e) => e.target.value && onTargetChange(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-stone-700">Type</label>
+          <select
+            value={type}
+            onChange={(e) => onTypeChange(e.target.value)}
+            className="mt-1 w-full h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+          >
+            <option value="admin_message">Admin Message</option>
+            <option value="warning">Warning</option>
+            <option value="system">System Update</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-stone-700">Title</label>
+          <Input
+            className="mt-1"
+            placeholder="Notification title..."
+            value={title}
+            onChange={(e) => onTitleChange(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium text-stone-700">Message</label>
+          <Textarea
+            className="mt-1"
+            rows={4}
+            placeholder="Write your message here..."
+            value={message}
+            onChange={(e) => onMessageChange(e.target.value)}
+          />
+        </div>
+
+        <Button onClick={onSend} disabled={sending || !title.trim() || !message.trim()} className="w-full">
+          {sending ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sending...</> : <><Bell className="w-4 h-4 mr-2" />Send Notification</>}
+        </Button>
+      </CardContent>
+    </Card>
+  </div>
+);
 
 const LogsTab = ({ logs, total, page, onPageChange }) => {
   const totalPages = Math.ceil(total / 50);
@@ -1173,8 +1173,8 @@ const ProfileModalContent = ({ data, onVerifyEmail }) => {
               <div key={l.id} className="flex items-center gap-2 p-2 bg-stone-50 rounded text-sm">
                 <Badge className={
                   l.status === 'approved' ? 'bg-green-100 text-green-700' :
-                  l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
-                  'bg-red-100 text-red-700'
+                    l.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-red-100 text-red-700'
                 }>{l.status}</Badge>
                 <span className="truncate">{l.title}</span>
                 <span className="text-stone-400 flex-shrink-0">{l.price?.toLocaleString('en-IN')}</span>
