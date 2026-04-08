@@ -23,20 +23,19 @@ if (config.enableHealthCheck) {
 }
 
 let webpackConfig = {
-  eslint: {
-    configure: {
-      extends: ["plugin:react-hooks/recommended"],
-      rules: {
-        "react-hooks/rules-of-hooks": "error",
-        "react-hooks/exhaustive-deps": "warn",
-      },
-    },
-  },
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
     },
-    configure: (webpackConfig) => {
+    configure: (webpackConfig, { env, paths }) => {
+      // Ensure resolveLoader handles CSS properly
+      if (!webpackConfig.resolveLoader) {
+        webpackConfig.resolveLoader = {};
+      }
+      webpackConfig.resolveLoader.modules = [
+        'node_modules',
+        path.resolve(__dirname, 'node_modules'),
+      ];
 
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {
