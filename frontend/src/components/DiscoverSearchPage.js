@@ -206,13 +206,11 @@ const ListViewCard = ({ listing, formatPrice }) => {
         </div>
 
         {showTransactionType && (
-          {showTransactionType && (
-            <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full">
-              <span className="text-xs font-semibold text-stone-700 capitalize">
-                {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
-              </span>
-            </div>
-          )}
+          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur-sm px-3 py-1 rounded-full">
+            <span className="text-xs font-semibold text-stone-700 capitalize">
+              {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
+            </span>
+          </div>
         )}
       </div>
 
