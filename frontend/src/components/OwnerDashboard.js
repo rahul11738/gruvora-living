@@ -516,6 +516,7 @@ export const OwnerDashboard = () => {
 };
 
 const ListingRow = memo(({ listing, onDelete, showActions }) => {
+  const navigate = useNavigate();
   const Icon = categoryIcons[listing.category] || Home;
 
   const getStatusBadge = (status) => {

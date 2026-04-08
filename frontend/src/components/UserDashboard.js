@@ -37,7 +37,7 @@ import { normalizeMediaUrl } from '../lib/media';
 
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
-  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').trim().toLowerCase());
 
 export const UserDashboard = () => {
   const { user, logout } = useAuth();

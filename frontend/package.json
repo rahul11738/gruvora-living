@@ -65,7 +65,7 @@
   },
   "scripts": {
     "start": "craco start",
-    "build": "CI=false react-scripts build",
+    "build": "craco build",
     "test": "craco test",
     "smoke:routes": "node scripts/smoke-routes.cjs"
   },

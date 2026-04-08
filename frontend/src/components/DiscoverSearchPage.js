@@ -35,10 +35,6 @@ const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
   PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').trim().toLowerCase());
 
-const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
-const isPropertyTransactionCategory = (category) =>
-  PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
-
 const gujaratCities = [
   'Surat',
   'Ahmedabad',
@@ -185,8 +181,9 @@ export const DiscoverSearchPage = () => {
 const ListViewCard = ({ listing, formatPrice, contextCategory = null }) => {
   const Icon = categoryIcons[listing.category] || Home;
   const effectiveCategory = contextCategory || listing.category;
-  const showTransactionType = isPropertyTransactionCategory(effectiveCategory);
-  const showTransactionType = isPropertyTransactionCategory(listing.category);
+  const showTransactionType =
+    isPropertyTransactionCategory(effectiveCategory) &&
+    isPropertyTransactionCategory(listing.category);
 
   return (
     <Link

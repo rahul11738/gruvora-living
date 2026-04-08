@@ -710,7 +710,7 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
           <Icon className="w-3 h-3 text-white" />
           <span className="text-white text-xs font-medium capitalize">{listing.category}</span>
         </div>
-        {showListingTypeControls && (
+        {isPropertyTransactionCategory(listing.category) && (
           <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full">
             <span className="text-xs font-medium text-stone-700 capitalize">
               {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
