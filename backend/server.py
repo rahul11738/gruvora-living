@@ -398,7 +398,18 @@ def _extract_cloudinary_video_public_id_and_version(raw_value: Any) -> Tuple[Opt
             version_idx = idx
             break
 
-    public_parts = parts[version_idx + 1 :] if version_idx is not None else parts
+    public_parts = parts[version_idx + 1 :] if version_idx is not None else list(parts)
+
+    if version_idx is None:
+        def _is_transformation_segment(segment: str) -> bool:
+            if not segment:
+                return False
+            tokens = segment.split(",")
+            return all(re.fullmatch(r"[a-z]{1,5}_.+", token, flags=re.IGNORECASE) for token in tokens)
+
+        while public_parts and _is_transformation_segment(public_parts[0]):
+            public_parts.pop(0)
+
     if not public_parts:
         return None, version
 
@@ -416,6 +427,14 @@ def _build_cloudinary_video_playback_url(public_id: str, version: Optional[int])
     if version is not None:
         return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/v{int(version)}/{public_id}.mp4"
     return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{public_id}.mp4"
+
+
+CLOUDINARY_VIDEO_PUBLIC_ID_ALIASES: Dict[str, Tuple[str, Optional[int]]] = {
+    "gharshetu/reels/f83a2271-c448-4c04-99ad-f2c3e4c8a06c": (
+        "gharshetu/reels/ggqemxl7p6kvyzl92hux",
+        1775508039,
+    ),
+}
 
 
 def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -436,6 +455,12 @@ def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, An
                 version = extracted_version
 
     if public_id:
+        alias = CLOUDINARY_VIDEO_PUBLIC_ID_ALIASES.get(str(public_id))
+        if alias:
+            public_id, alias_version = alias
+            if version is None and alias_version is not None:
+                version = int(alias_version)
+
         canonical_url = _build_cloudinary_video_playback_url(str(public_id), version)
         if canonical_url:
             doc["video_public_id"] = str(public_id)

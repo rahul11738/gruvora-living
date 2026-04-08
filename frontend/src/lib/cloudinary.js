@@ -5,6 +5,13 @@
 
 const CLOUDINARY_CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || 'dalkm3nih';
 
+const KNOWN_REEL_PUBLIC_ID_OVERRIDES = {
+  'gharshetu/reels/f83a2271-c448-4c04-99ad-f2c3e4c8a06c': {
+    publicId: 'gharshetu/reels/ggqemxl7p6kvyzl92hux',
+    version: 1775508039,
+  },
+};
+
 const isLikelyTransformationSegment = (segment) => {
   if (!segment) return false;
   // Cloudinary transformation segments are usually comma-delimited directives like c_fill,w_480,h_800
@@ -70,8 +77,9 @@ export const generateCloudinaryVideoUrl = (publicId, version = null, options = {
   if (!publicId) return '';
 
   const parsed = parseCloudinaryVideoRef(publicId);
-  const resolvedPublicId = parsed.publicId;
-  const resolvedVersion = version ?? parsed.version;
+  const override = parsed.publicId ? KNOWN_REEL_PUBLIC_ID_OVERRIDES[parsed.publicId] : null;
+  const resolvedPublicId = override?.publicId || parsed.publicId;
+  const resolvedVersion = version ?? override?.version ?? parsed.version;
   if (!resolvedPublicId) return '';
 
   if (resolvedPublicId.startsWith('https://') && !resolvedPublicId.includes('res.cloudinary.com')) {
