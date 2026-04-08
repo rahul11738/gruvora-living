@@ -83,7 +83,7 @@ export const generateCloudinaryVideoUrl = (publicId, version = null, options = {
   const path = transformation
     ? `${transformation}/${versionPrefix}${resolvedPublicId}`
     : `${versionPrefix}${resolvedPublicId}`;
-  
+
   return `${base}/${path}.${format}`;
 };
 
@@ -107,7 +107,7 @@ export const generateCloudinaryImageUrl = (publicId, options = {}) => {
 
   const transformation = `c_${crop},w_${width},h_${height},q_${quality}`;
   const base = `https://res.cloudinary.com/${CLOUDINARY_CLOUD_NAME}/image/upload`;
-  
+
   return `${base}/${transformation}/${publicId}.${format}`;
 };
 
