@@ -5,6 +5,14 @@
 
 const CLOUDINARY_CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || 'dalkm3nih';
 
+const isLikelyTransformationSegment = (segment) => {
+  if (!segment) return false;
+  // Cloudinary transformation segments are usually comma-delimited directives like c_fill,w_480,h_800
+  // and can also appear as chained segments such as t_preset or fl_progressive.
+  const tokens = segment.split(',');
+  return tokens.every((token) => /^[a-z]{1,5}_.+/i.test(token));
+};
+
 const parseCloudinaryVideoRef = (value) => {
   if (!value) return { publicId: null, version: null };
 
@@ -33,7 +41,16 @@ const parseCloudinaryVideoRef = (value) => {
     }
   });
 
-  const publicParts = versionIdx >= 0 ? parts.slice(versionIdx + 1) : parts;
+  const publicParts = versionIdx >= 0 ? parts.slice(versionIdx + 1) : [...parts];
+
+  // If version is absent and URL came from transformed delivery path,
+  // remove leading transformation segments so only public_id remains.
+  if (versionIdx < 0) {
+    while (publicParts.length && isLikelyTransformationSegment(publicParts[0])) {
+      publicParts.shift();
+    }
+  }
+
   if (!publicParts.length) return { publicId: safeUrl, version };
 
   const last = publicParts[publicParts.length - 1].replace(/\.[^./?#]+$/, '');

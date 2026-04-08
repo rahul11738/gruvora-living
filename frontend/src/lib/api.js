@@ -81,8 +81,8 @@ const api = axios.create({
 });
 
 const CLOUDINARY_REEL_OPTIONS = {
-  width: 480,
-  height: 800,
+  width: null,
+  height: null,
   crop: 'fill',
   quality: 'auto',
   format: 'mp4',

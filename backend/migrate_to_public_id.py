@@ -52,7 +52,18 @@ def extract_public_id_and_version(video_url):
             version_idx = idx
             break
 
-    public_parts = parts[version_idx + 1:] if version_idx is not None else parts
+    public_parts = parts[version_idx + 1:] if version_idx is not None else list(parts)
+
+    if version_idx is None:
+        def _is_transformation_segment(segment: str) -> bool:
+            if not segment:
+                return False
+            tokens = segment.split(',')
+            return all(re.fullmatch(r'[a-z]{1,5}_.+', token, flags=re.IGNORECASE) for token in tokens)
+
+        while public_parts and _is_transformation_segment(public_parts[0]):
+            public_parts.pop(0)
+
     if not public_parts:
         return None, version
 
@@ -61,10 +72,6 @@ def extract_public_id_and_version(video_url):
     if not public_id:
         return None, version
 
-    # Ignore obvious transformation-only prefixes when URL lacked a version segment.
-    if version is None and ',' in public_id.split('/')[0]:
-        return None, None
-    
     return public_id, version
 
 
