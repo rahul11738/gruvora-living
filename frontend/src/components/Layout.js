@@ -32,7 +32,6 @@ import {
   Instagram,
   Facebook,
   Mail,
-  ArrowRight,
 } from 'lucide-react';
 
 const categories = [
@@ -323,22 +322,6 @@ export const Footer = () => {
       <div className="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/30 via-transparent to-transparent" />
 
       <div className="container-main relative py-8 md:py-10">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-4 md:p-5 mb-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-          <div>
-            <img
-              src={gruvoraLogo}
-              alt="Gruvora"
-              className="h-8 w-auto max-w-[180px] object-contain"
-            />
-            <h3 className="font-heading text-xl md:text-2xl font-semibold mt-1">Your Home Bridge for Properties, Stays, Events and Services</h3>
-            <p className="text-stone-300 mt-2 text-sm">Trusted marketplace to list and discover in one platform.</p>
-          </div>
-          <Link to="/owner/register" className="inline-flex items-center gap-2 rounded-full bg-emerald-500 px-5 py-2.5 text-sm font-semibold text-stone-950 hover:bg-emerald-400 transition-colors">
-            Start Listing
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
           <div>
             <div className="mb-4 inline-flex items-center rounded-xl bg-white/95 px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.18)]">
