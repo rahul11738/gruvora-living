@@ -35,6 +35,8 @@ import {
   Calendar,
   Video,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Award,
   Globe,
 } from 'lucide-react';
