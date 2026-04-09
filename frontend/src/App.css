@@ -18,38 +18,59 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { 
-    opacity: 0; 
-    transform: translateY(20px); 
+  from {
+    opacity: 0;
+    transform: translateY(20px);
   }
-  to { 
-    opacity: 1; 
-    transform: translateY(0); 
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
 @keyframes scaleIn {
-  from { 
-    opacity: 0; 
-    transform: scale(0.95); 
+  from {
+    opacity: 0;
+    transform: scale(0.95);
   }
-  to { 
-    opacity: 1; 
-    transform: scale(1); 
+
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
 /* Stagger Animation */
-.stagger-1 { animation-delay: 0.1s; }
-.stagger-2 { animation-delay: 0.2s; }
-.stagger-3 { animation-delay: 0.3s; }
-.stagger-4 { animation-delay: 0.4s; }
-.stagger-5 { animation-delay: 0.5s; }
+.stagger-1 {
+  animation-delay: 0.1s;
+}
+
+.stagger-2 {
+  animation-delay: 0.2s;
+}
+
+.stagger-3 {
+  animation-delay: 0.3s;
+}
+
+.stagger-4 {
+  animation-delay: 0.4s;
+}
+
+.stagger-5 {
+  animation-delay: 0.5s;
+}
 
 /* Property Card Hover Effects */
 .card-property:hover .property-image {
@@ -57,8 +78,8 @@
 }
 
 /* Custom Focus States */
-input:focus, 
-textarea:focus, 
+input:focus,
+textarea:focus,
 select:focus,
 button:focus-visible {
   outline: none;
@@ -76,8 +97,13 @@ button:focus-visible {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* Toast Customization */
@@ -91,7 +117,7 @@ button:focus-visible {
     padding-left: 1rem;
     padding-right: 1rem;
   }
-  
+
   .section-padding {
     padding-top: 3rem;
     padding-bottom: 3rem;
@@ -314,7 +340,7 @@ button:focus-visible {
     right: 10px;
   }
 
-  .hero-voice-slot > button {
+  .hero-voice-slot>button {
     width: 36px;
     height: 36px;
   }
@@ -326,7 +352,7 @@ button:focus-visible {
     gap: 8px;
   }
 
-  .hero-search-grid > :first-child {
+  .hero-search-grid> :first-child {
     grid-column: 1 / -1;
   }
 
@@ -348,6 +374,7 @@ button:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .hero-pill,
   .hero-search-btn {
     transition: none;
@@ -357,5 +384,35 @@ button:focus-visible {
   .hero-search-btn:hover,
   .hero-search-btn:active {
     transform: none;
+  }
+}
+
+/* Category Rail - SaaS polish */
+.category-rail {
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-inline: 1rem;
+}
+
+.category-spotlight-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(5, 150, 105, 0.75), rgba(14, 116, 144, 0.55), rgba(249, 115, 22, 0.55));
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.category-spotlight-card:hover::before,
+.category-spotlight-card:focus-visible::before {
+  opacity: 1;
+}
+
+@media (max-width: 767px) {
+  .category-spotlight-card {
+    box-shadow: 0 14px 34px -24px rgba(15, 23, 42, 0.52);
   }
 }

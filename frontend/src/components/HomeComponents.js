@@ -461,74 +461,79 @@ export const CategoriesSection = () => {
           </p>
         </motion.div>
 
-        <div className="relative z-10 -mx-4 flex gap-4 overflow-x-auto px-4 pb-3 hide-scrollbar snap-x snap-mandatory sm:-mx-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-5">
-          {displayCategories.map((cat, index) => {
-            const Icon = categoryIcons[cat.id] || Home;
-            const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
-            const theme = categoryCardThemes[cat.id] || categoryCardThemes.home;
-            const isActive = activeCategoryId === cat.id;
-            const subCategoryCount = cat.sub_categories?.length || 0;
+        <div className="relative z-10">
+          <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-stone-50 to-transparent md:hidden" />
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-stone-50 to-transparent md:hidden" />
 
-            return (
-              <motion.div
-                key={cat.id}
-                {...revealUp(reduceMotion, index * 0.06, 24)}
-                whileHover={reduceMotion ? undefined : { y: -8 }}
-                transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
-                className="w-[78vw] max-w-[320px] shrink-0 snap-start md:w-auto md:max-w-none"
-              >
-                <Link
-                  to={`/category/${cat.id}`}
-                  className={`group relative overflow-hidden rounded-3xl p-6 md:p-7 block border border-stone-200/90 bg-gradient-to-b ${theme.soft} transition-all duration-500 hover:shadow-[0_24px_64px_-28px_rgba(20,20,20,0.45)] ${isActive ? `ring-2 ${theme.ring} shadow-[0_20px_52px_-26px_rgba(16,185,129,0.6)]` : 'hover:border-white'}`}
-                  data-testid={`category-card-${cat.id}`}
+          <div className="category-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 hide-scrollbar snap-x snap-mandatory sm:-mx-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-5">
+            {displayCategories.map((cat, index) => {
+              const Icon = categoryIcons[cat.id] || Home;
+              const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
+              const theme = categoryCardThemes[cat.id] || categoryCardThemes.home;
+              const isActive = activeCategoryId === cat.id;
+              const subCategoryCount = cat.sub_categories?.length || 0;
+
+              return (
+                <motion.div
+                  key={cat.id}
+                  {...revealUp(reduceMotion, index * 0.06, 24)}
+                  whileHover={reduceMotion ? undefined : { y: -8 }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
+                  className="w-[80vw] max-w-[328px] shrink-0 snap-start md:w-auto md:max-w-none"
                 >
-                  <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full ${theme.glow} blur-2xl transition-transform duration-500 group-hover:scale-125`} />
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.75),transparent_45%)]" />
-                  <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} opacity-0 group-hover:opacity-95 transition-opacity duration-500`} />
+                  <Link
+                    to={`/category/${cat.id}`}
+                    className={`category-spotlight-card group relative overflow-hidden rounded-3xl p-6 md:p-7 block border border-stone-200/90 bg-gradient-to-b ${theme.soft} transition-all duration-500 hover:shadow-[0_24px_64px_-28px_rgba(20,20,20,0.45)] ${isActive ? `ring-2 ${theme.ring} shadow-[0_20px_52px_-26px_rgba(16,185,129,0.6)]` : 'hover:border-white'}`}
+                    data-testid={`category-card-${cat.id}`}
+                  >
+                    <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full ${theme.glow} blur-2xl transition-transform duration-500 group-hover:scale-125`} />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.75),transparent_45%)]" />
+                    <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} opacity-0 group-hover:opacity-95 transition-opacity duration-500`} />
 
-                  <div className="relative z-10">
-                    <div className="mb-4 flex items-center justify-between">
-                      <span className="inline-flex items-center rounded-full border border-stone-200/80 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600 group-hover:border-white/35 group-hover:bg-white/15 group-hover:text-white/90">
-                        {subCategoryCount > 0 ? `${subCategoryCount} types` : 'Top picks'}
-                      </span>
-                      {isActive && (
-                        <span className="inline-flex items-center rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-stone-800">
-                          Active
+                    <div className="relative z-10">
+                      <div className="mb-4 flex items-center justify-between">
+                        <span className="inline-flex items-center rounded-full border border-stone-200/80 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600 group-hover:border-white/35 group-hover:bg-white/15 group-hover:text-white/90">
+                          {subCategoryCount > 0 ? `${subCategoryCount} types` : 'Top picks'}
                         </span>
-                      )}
-                    </div>
-
-                    <motion.div
-                      whileHover={reduceMotion ? undefined : { scale: 1.08, rotate: 4 }}
-                      className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/40`}
-                    >
-                      <Icon className="w-8 h-8 text-white" />
-                    </motion.div>
-
-                    <h3 className="font-heading font-bold text-2xl text-stone-900 group-hover:text-white transition-colors">
-                      {cat.name}
-                    </h3>
-                    <p className={`font-semibold text-sm mt-1 transition-colors ${theme.accent} group-hover:text-white/90`}>
-                      {cat.name_gu}
-                    </p>
-                    <p className="text-muted-foreground text-sm mt-3 line-clamp-2 min-h-[2.6rem] group-hover:text-white/75 transition-colors">
-                      {cat.description || cat.sub_categories?.slice(0, 4).map(s => s.name).join(', ')}
-                    </p>
-
-                    <div className="mt-5 flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-primary group-hover:text-white transition-colors">
-                        <span className="text-sm font-semibold">Explore</span>
-                        <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" />
+                        {isActive && (
+                          <span className="inline-flex items-center rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-stone-800">
+                            Active
+                          </span>
+                        )}
                       </div>
-                      <span className="text-xs font-medium text-stone-500 group-hover:text-white/75 transition-colors">
-                        Instant view
-                      </span>
+
+                      <motion.div
+                        whileHover={reduceMotion ? undefined : { scale: 1.08, rotate: 4 }}
+                        className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/40`}
+                      >
+                        <Icon className="w-8 h-8 text-white" />
+                      </motion.div>
+
+                      <h3 className="font-heading font-bold text-2xl text-stone-900 group-hover:text-white transition-colors">
+                        {cat.name}
+                      </h3>
+                      <p className={`font-semibold text-sm mt-1 transition-colors ${theme.accent} group-hover:text-white/90`}>
+                        {cat.name_gu}
+                      </p>
+                      <p className="text-muted-foreground text-sm mt-3 line-clamp-2 min-h-[2.6rem] group-hover:text-white/75 transition-colors">
+                        {cat.description || cat.sub_categories?.slice(0, 4).map(s => s.name).join(', ')}
+                      </p>
+
+                      <div className="mt-5 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-primary group-hover:text-white transition-colors">
+                          <span className="text-sm font-semibold">Explore</span>
+                          <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" />
+                        </div>
+                        <span className="text-xs font-medium text-stone-500 group-hover:text-white/75 transition-colors">
+                          Instant view
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              </motion.div>
-            );
-          })}
+                  </Link>
+                </motion.div>
+              );
+            })}
+          </div>
         </div>
       </div>
     </section>
