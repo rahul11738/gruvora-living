@@ -247,7 +247,7 @@ export const HeroSection = () => {
               initial={reduceMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/8 backdrop-blur-sm border border-white/15 mb-8"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/8 md:backdrop-blur-sm border border-white/15 mb-8"
             >
               <Sparkles className="w-4 h-4 text-secondary" />
               <span className="text-white/90 text-sm font-medium">Gujarat's #1 Property Platform</span>
@@ -293,13 +293,13 @@ export const HeroSection = () => {
               transition={reduceMotion ? { duration: 0 } : { delay: 0.66, duration: 0.4 }}
               className="flex flex-wrap items-center justify-center gap-2 mb-8"
             >
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-100 border border-emerald-400/35 backdrop-blur-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-100 border border-emerald-400/35 md:backdrop-blur-sm">
                 <Shield className="w-3.5 h-3.5" /> Verified Owners
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 backdrop-blur-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 md:backdrop-blur-sm">
                 <CheckCircle className="w-3.5 h-3.5" /> Trusted Listings
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 backdrop-blur-sm">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 md:backdrop-blur-sm">
                 <TrendingUp className="w-3.5 h-3.5" /> Fast Discovery
               </span>
             </motion.div>
@@ -465,7 +465,17 @@ export const CategoriesSection = () => {
           <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-stone-50 to-transparent md:hidden" />
           <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-stone-50 to-transparent md:hidden" />
 
-          <div className="category-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 hide-scrollbar snap-x snap-mandatory sm:-mx-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-5">
+          <div className="md:hidden mb-2 px-1 flex items-center justify-end gap-2 text-xs text-stone-500" aria-hidden="true">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white/90 shadow-sm">
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </span>
+            <span className="font-medium tracking-wide">Swipe</span>
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white/90 shadow-sm animate-pulse">
+              <ChevronRight className="w-3.5 h-3.5" />
+            </span>
+          </div>
+
+          <div className="category-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 hide-scrollbar snap-x snap-proximity sm:-mx-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-5">
             {displayCategories.map((cat, index) => {
               const Icon = categoryIcons[cat.id] || Home;
               const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
