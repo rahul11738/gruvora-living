@@ -463,9 +463,8 @@ export const CategoriesSection = () => {
 
   return (
     <section
-      className="section-padding relative bg-gradient-to-b from-stone-50 via-white to-stone-50/70"
+      className="section-padding relative bg-[radial-gradient(1000px_420px_at_50%_-10%,rgba(16,185,129,0.14),transparent_65%),linear-gradient(to_bottom,#fafaf9,#ffffff,#fafaf9)]"
       data-testid="categories-section"
-      style={{ touchAction: 'pan-y' }}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         <motion.div
@@ -482,10 +481,10 @@ export const CategoriesSection = () => {
       <div className="container-main relative z-10">
         <motion.div
           {...revealUp(reduceMotion, 0.02)}
-          className="mb-10"
+          className="mb-10 rounded-3xl border border-white/70 bg-white/70 p-5 md:p-7 shadow-[0_20px_60px_-30px_rgba(15,23,42,0.35)] backdrop-blur-sm"
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="inline-flex items-center gap-2 text-secondary font-semibold text-sm uppercase tracking-[0.18em]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-emerald-800 font-semibold text-xs md:text-sm uppercase tracking-[0.16em]">
               <Zap className="w-4 h-4" />
               Explore Categories
             </span>
@@ -524,10 +523,10 @@ export const CategoriesSection = () => {
             </div>
           </div>
 
-          <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 leading-tight">
+          <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 leading-tight tracking-tight">
             Discover Your Perfect Space Faster
           </h2>
-          <p className="text-muted-foreground mt-3 max-w-3xl text-base md:text-lg">
+          <p className="text-muted-foreground mt-3 max-w-3xl text-base md:text-lg leading-relaxed">
             Premium categories with smarter discovery, cleaner browsing, and instant navigation
             from homes to on-demand services.
           </p>
@@ -535,13 +534,14 @@ export const CategoriesSection = () => {
 
         <div
           ref={railRef}
-          style={{ touchAction: 'pan-x' }}
+          style={{ WebkitOverflowScrolling: 'touch' }}
           className="
             flex gap-4
             overflow-x-auto
             pb-4
             hide-scrollbar
             snap-x snap-proximity
+            scroll-px-4
             md:grid md:grid-cols-2 md:overflow-visible
             lg:grid-cols-5
           "
@@ -566,12 +566,12 @@ export const CategoriesSection = () => {
                   className={`
                       group relative overflow-hidden rounded-3xl p-6 md:p-7
                       flex flex-col h-full
-                      border border-stone-200/90
+                      border border-stone-200/85
                       bg-gradient-to-b ${theme.soft}
                       transition-all duration-500
-                      hover:shadow-[0_28px_64px_-24px_rgba(20,20,20,0.40)]
+                      hover:shadow-[0_30px_70px_-24px_rgba(20,20,20,0.42)]
                       ${isActive
-                      ? `ring-2 ${theme.ring} shadow-[0_20px_52px_-26px_rgba(16,185,129,0.5)]`
+                      ? `ring-2 ${theme.ring} shadow-[0_22px_56px_-24px_rgba(16,185,129,0.55)]`
                       : 'hover:border-white/60'
                     }
                     `}
