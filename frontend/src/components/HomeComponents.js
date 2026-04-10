@@ -546,13 +546,8 @@ export const CategoriesSection = () => {
           ref={railRef}
           style={{ WebkitOverflowScrolling: 'touch' }}
           className="
-            flex gap-4
-            overflow-x-auto
-            pb-4
-            hide-scrollbar
-            snap-x snap-proximity
-            scroll-px-4
-            md:grid md:grid-cols-2 md:overflow-visible
+            grid grid-cols-1 gap-4
+            md:grid-cols-2 md:gap-6 md:overflow-visible
             lg:grid-cols-5
           "
         >
@@ -569,7 +564,7 @@ export const CategoriesSection = () => {
                 {...revealUp(reduceMotion, index * 0.06, 24)}
                 whileHover={!reduceMotion && canHoverCards ? { y: -8 } : undefined}
                 transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
-                className="w-[76vw] max-w-[290px] shrink-0 snap-start md:w-auto md:max-w-none"
+                className="w-full md:w-auto md:max-w-none"
               >
                 <Link
                   to={`/category/${cat.id}`}
