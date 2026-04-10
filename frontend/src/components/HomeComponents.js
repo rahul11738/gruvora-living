@@ -497,7 +497,7 @@ const CategoryCard = memo(({ cat, index, isActive, reduceMotion }) => {
           delay: index * 0.08,
           ease: [0.22, 1, 0.36, 1],
         }}
-      className="group relative flex-shrink-0 w-[82vw] sm:w-[62vw] md:w-auto"
+      className="group relative w-full"
     >
       <Link
         to={`/category/${cat.id}`}
@@ -791,14 +791,14 @@ export const CategoriesSection = () => {
         <div
           ref={railRef}
           className={[
-            'flex flex-nowrap gap-4 overflow-x-auto overflow-y-hidden pb-2 px-1 touch-pan-x',
-            'md:grid md:grid-cols-5 md:gap-5 md:overflow-visible',
+            'grid grid-flow-col auto-cols-[82vw] sm:auto-cols-[62vw] gap-4 overflow-x-auto overflow-y-hidden pb-2 px-1 touch-pan-x',
+            'md:grid md:grid-cols-5 md:auto-cols-auto md:gap-5 md:overflow-visible',
             'hide-scrollbar',
           ].join(' ')}
           style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}
         >
           {displayCategories.map((cat, index) => (
-            <div key={cat.id} className="snap-start shrink-0" style={{ scrollSnapAlign: 'start' }}>
+            <div key={cat.id} className="snap-start min-w-0" style={{ scrollSnapAlign: 'start' }}>
               <CategoryCard
                 cat={cat}
                 index={index}
