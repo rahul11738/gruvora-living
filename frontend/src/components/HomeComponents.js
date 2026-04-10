@@ -701,47 +701,6 @@ const DotIndicators = ({ categories, activeCategoryId, railRef }) => (
   </div>
 );
 
-const StatsBar = memo(({ reduceMotion }) => {
-  const ref = useRef(null);
-  const inView = useInView(ref, { once: true, margin: '-40px' });
-
-  const stats = [
-    { value: '5,200+', label: 'Active listings', icon: Home },
-    { value: '12K+', label: 'Happy customers', icon: Users },
-    { value: '98%', label: 'Verified owners', icon: CheckCircle },
-    { value: '10', label: 'Gujarat cities', icon: Globe },
-  ];
-
-  return (
-    <motion.div
-      ref={ref}
-      initial={reduceMotion ? false : { opacity: 0, y: 20 }}
-      animate={inView ? { opacity: 1, y: 0 } : {}}
-      transition={reduceMotion ? { duration: 0 } : { duration: 0.5, delay: 0.4 }}
-      className="mt-10 md:mt-12 grid grid-cols-2 md:grid-cols-4 gap-3"
-    >
-      {stats.map((stat, i) => {
-        const StatIcon = stat.icon;
-        return (
-          <motion.div
-            key={stat.label}
-            initial={reduceMotion ? false : { opacity: 0, scale: 0.92 }}
-            animate={inView ? { opacity: 1, scale: 1 } : {}}
-            transition={reduceMotion ? { duration: 0 } : { duration: 0.4, delay: 0.45 + i * 0.07 }}
-            className="flex flex-col items-center justify-center gap-1.5 py-5 px-4 rounded-2xl border border-stone-100 bg-white/70 backdrop-blur-sm text-center shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300"
-          >
-            <StatIcon className="w-5 h-5 text-stone-600" aria-hidden="true" />
-            <span className="font-heading font-black text-2xl text-stone-900 leading-none">
-              <AnimatedCount value={stat.value} inView={inView} />
-            </span>
-            <span className="text-[12px] text-stone-500 font-medium">{stat.label}</span>
-          </motion.div>
-        );
-      })}
-    </motion.div>
-  );
-});
-
 export const CategoriesSection = () => {
   const reduceMotion = useReducedMotion();
   const location = useLocation();
@@ -832,14 +791,14 @@ export const CategoriesSection = () => {
         <div
           ref={railRef}
           className={[
-            'flex gap-4 overflow-x-auto pb-2',
+            'flex flex-nowrap gap-4 overflow-x-auto overflow-y-hidden pb-2 px-1 touch-pan-x',
             'md:grid md:grid-cols-5 md:gap-5 md:overflow-visible',
             'hide-scrollbar',
           ].join(' ')}
           style={{ WebkitOverflowScrolling: 'touch', scrollSnapType: 'x mandatory' }}
         >
           {displayCategories.map((cat, index) => (
-            <div key={cat.id} className="snap-start" style={{ scrollSnapAlign: 'start' }}>
+            <div key={cat.id} className="snap-start shrink-0" style={{ scrollSnapAlign: 'start' }}>
               <CategoryCard
                 cat={cat}
                 index={index}
@@ -855,8 +814,6 @@ export const CategoriesSection = () => {
           activeCategoryId={activeCategoryId}
           railRef={railRef}
         />
-
-        <StatsBar reduceMotion={reduceMotion} />
       </div>
     </section>
   );
