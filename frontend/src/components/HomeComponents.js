@@ -407,7 +407,17 @@ export const CategoriesSection = () => {
   const [categories, setCategories] = useState([]);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+  const [canHoverCards, setCanHoverCards] = useState(false);
   const railRef = React.useRef(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const media = window.matchMedia('(hover: hover) and (pointer: fine)');
+    const update = () => setCanHoverCards(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -557,7 +567,7 @@ export const CategoriesSection = () => {
               <motion.div
                 key={cat.id}
                 {...revealUp(reduceMotion, index * 0.06, 24)}
-                whileHover={reduceMotion ? undefined : { y: -8 }}
+                whileHover={!reduceMotion && canHoverCards ? { y: -8 } : undefined}
                 transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
                 className="w-[76vw] max-w-[290px] shrink-0 snap-start md:w-auto md:max-w-none"
               >
@@ -594,7 +604,7 @@ export const CategoriesSection = () => {
                     </div>
 
                     <motion.div
-                      whileHover={reduceMotion ? undefined : { scale: 1.1, rotate: 5 }}
+                      whileHover={!reduceMotion && canHoverCards ? { scale: 1.1, rotate: 5 } : undefined}
                       transition={{ duration: 0.2 }}
                       className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/40`}
                     >
