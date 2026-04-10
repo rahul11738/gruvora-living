@@ -1,4 +1,3 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -406,6 +405,9 @@ export const CategoriesSection = () => {
   const reduceMotion = useReducedMotion();
   const location = useLocation();
   const [categories, setCategories] = useState([]);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(true);
+  const railRef = React.useRef(null);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -417,6 +419,29 @@ export const CategoriesSection = () => {
       }
     };
     fetchCategories();
+  }, []);
+
+  const updateScrollState = useCallback(() => {
+    const el = railRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 8);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8);
+  }, []);
+
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener('scroll', updateScrollState, { passive: true });
+    window.addEventListener('resize', updateScrollState);
+    return () => {
+      el.removeEventListener('scroll', updateScrollState);
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, [updateScrollState]);
+
+  const scrollBy = useCallback((dir) => {
+    railRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
   }, []);
 
   const defaultCategories = [
@@ -465,20 +490,71 @@ export const CategoriesSection = () => {
         </motion.div>
 
         <div className="relative z-10">
-          <div className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-stone-50 to-transparent md:hidden" />
-          <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-stone-50 to-transparent md:hidden" />
+          <div
+            className={`
+              pointer-events-none absolute inset-y-0 left-0 z-20 w-16
+              bg-gradient-to-r from-stone-50 to-transparent
+              transition-opacity duration-300 md:hidden
+              ${canScrollLeft ? 'opacity-100' : 'opacity-0'}
+            `}
+            aria-hidden="true"
+          />
+          <button
+            onClick={() => scrollBy(-1)}
+            aria-label="Scroll left"
+            className={`
+              absolute left-1 top-1/2 -translate-y-1/2 z-30 md:hidden
+              w-9 h-9 rounded-full bg-white shadow-lg border border-stone-200
+              flex items-center justify-center
+              transition-all duration-200 active:scale-90
+              ${canScrollLeft ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
+            `}
+          >
+            <ChevronLeft className="w-4 h-4 text-stone-700" />
+          </button>
 
-          <div className="md:hidden mb-2 px-1 flex items-center justify-end gap-2 text-xs text-stone-500" aria-hidden="true">
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white/90 shadow-sm">
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </span>
-            <span className="font-medium tracking-wide">Swipe</span>
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-stone-200 bg-white/90 shadow-sm animate-pulse">
-              <ChevronRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
+          <div
+            className={`
+              pointer-events-none absolute inset-y-0 right-0 z-20 w-16
+              bg-gradient-to-l from-stone-50 to-transparent
+              transition-opacity duration-300 md:hidden
+              ${canScrollRight ? 'opacity-100' : 'opacity-0'}
+            `}
+            aria-hidden="true"
+          />
+          <button
+            onClick={() => scrollBy(1)}
+            aria-label="Scroll right"
+            className={`
+              absolute right-1 top-1/2 -translate-y-1/2 z-30 md:hidden
+              w-9 h-9 rounded-full bg-white shadow-lg border border-stone-200
+              flex items-center justify-center
+              transition-all duration-200 active:scale-90
+              ${canScrollRight ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
+            `}
+          >
+            <ChevronRight className="w-4 h-4 text-stone-700" />
+          </button>
 
-          <div className="category-rail -mx-4 flex gap-4 overflow-x-auto px-4 pb-4 hide-scrollbar snap-x snap-proximity sm:-mx-6 sm:px-6 md:mx-0 md:grid md:grid-cols-2 md:gap-6 lg:grid-cols-5">
+          {canScrollRight && !canScrollLeft && (
+            <p className="md:hidden mb-3 px-1 flex items-center justify-end gap-1.5 text-xs text-stone-500 select-none" aria-hidden="true">
+              <span className="font-medium tracking-wide">Swipe</span>
+              <ChevronRight className="w-3.5 h-3.5 animate-pulse" />
+            </p>
+          )}
+
+          <div
+            ref={railRef}
+            className="
+              flex gap-4 overflow-x-auto
+              px-1 pb-4
+              hide-scrollbar snap-x snap-proximity
+              overscroll-x-contain
+              touch-pan-x
+              md:grid md:grid-cols-2 md:overflow-visible md:px-0
+              lg:grid-cols-5
+            "
+          >
             {displayCategories.map((cat, index) => {
               const Icon = categoryIcons[cat.id] || Home;
               const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
@@ -492,7 +568,7 @@ export const CategoriesSection = () => {
                   {...revealUp(reduceMotion, index * 0.06, 24)}
                   whileHover={reduceMotion ? undefined : { y: -8 }}
                   transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
-                  className="w-[80vw] max-w-[328px] shrink-0 snap-start md:w-auto md:max-w-none"
+                  className="w-[78vw] max-w-[300px] shrink-0 snap-start md:w-auto md:max-w-none"
                 >
                   <Link
                     to={`/category/${cat.id}`}
@@ -546,6 +622,18 @@ export const CategoriesSection = () => {
                 </motion.div>
               );
             })}
+          </div>
+
+          <div className="mt-4 flex justify-center gap-1.5 md:hidden" aria-hidden="true">
+            {displayCategories.map((cat) => (
+              <span
+                key={cat.id}
+                className={`h-1.5 rounded-full transition-all duration-300 ${activeCategoryId === cat.id
+                    ? 'w-5 bg-primary'
+                    : 'w-1.5 bg-stone-300'
+                  }`}
+              />
+            ))}
           </div>
         </div>
       </div>
