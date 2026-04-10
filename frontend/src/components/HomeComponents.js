@@ -286,7 +286,7 @@ export const HeroSection = () => {
               transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
               className="text-stone-300/80 mb-10"
             >
-              {/* તમારી સંપૂર્ણ જગ્યા શોધો - ઘર, બિઝનેસ, રહેવાનું, ઇવેન્ટ અને સેવાઓ */}
+              {/* a��a��a�+a��a�� a�+a��a��a��a��a��a�� a��a��a��a��a�+ a��a��a��a�� - a��a��, a��a�+a��a��a��a�+, a��a��a��a��a�+a��a��a��, a��a��a��a��a��a�� a��a��a�� a�+a��a��a�+a�� */}
             </motion.p>
 
             <motion.div
@@ -421,35 +421,38 @@ export const CategoriesSection = () => {
     fetchCategories();
   }, []);
 
-  const updateScrollState = useCallback(() => {
+  const syncScrollState = useCallback(() => {
     const el = railRef.current;
     if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 8);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8);
+    const atLeft = el.scrollLeft <= 4;
+    const atRight = el.scrollLeft >= el.scrollWidth - el.clientWidth - 4;
+    setCanScrollLeft(!atLeft);
+    setCanScrollRight(!atRight);
   }, []);
 
   useEffect(() => {
     const el = railRef.current;
     if (!el) return;
-    updateScrollState();
-    el.addEventListener('scroll', updateScrollState, { passive: true });
-    window.addEventListener('resize', updateScrollState);
+    syncScrollState();
+    el.addEventListener('scroll', syncScrollState, { passive: true });
+    const ro = new ResizeObserver(syncScrollState);
+    ro.observe(el);
     return () => {
-      el.removeEventListener('scroll', updateScrollState);
-      window.removeEventListener('resize', updateScrollState);
+      el.removeEventListener('scroll', syncScrollState);
+      ro.disconnect();
     };
-  }, [updateScrollState]);
+  }, [syncScrollState]);
 
-  const scrollBy = useCallback((dir) => {
-    railRef.current?.scrollBy({ left: dir * 320, behavior: 'smooth' });
+  const slide = useCallback((dir) => {
+    railRef.current?.scrollBy({ left: dir * 310, behavior: 'smooth' });
   }, []);
 
   const defaultCategories = [
-    { id: 'home', name: 'Home', name_gu: 'ઘર', description: '1-4 BHK, Villas, Penthouses, Farmhouses' },
-    { id: 'business', name: 'Business', name_gu: 'બિઝનેસ', description: 'Shops, Offices, Warehouses, Co-working' },
-    { id: 'stay', name: 'Stay', name_gu: 'રહેવાનું', description: 'Hotels, Guest Houses, Resorts, PG' },
-    { id: 'event', name: 'Event', name_gu: 'ઇવેન્ટ', description: 'Party Plots, Marriage Halls, Banquets' },
-    { id: 'services', name: 'Services', name_gu: 'સેવાઓ', description: 'Plumber, Electrician, Cleaning, Repair' },
+    { id: 'home', name: 'Home', name_gu: 'Home', description: '1-4 BHK, Villas, Penthouses, Farmhouses' },
+    { id: 'business', name: 'Business', name_gu: 'Business', description: 'Shops, Offices, Warehouses, Co-working' },
+    { id: 'stay', name: 'Stay', name_gu: 'Stay', description: 'Hotels, Guest Houses, Resorts, PG' },
+    { id: 'event', name: 'Event', name_gu: 'Event', description: 'Party Plots, Marriage Halls, Banquets' },
+    { id: 'services', name: 'Services', name_gu: 'Services', description: 'Plumber, Electrician, Cleaning, Repair' },
   ];
 
   const displayCategories = categories.length > 0 ? categories : defaultCategories;
@@ -459,8 +462,12 @@ export const CategoriesSection = () => {
     : '';
 
   return (
-    <section className="section-padding relative overflow-hidden bg-gradient-to-b from-stone-50 via-white to-stone-50/70" data-testid="categories-section">
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+    <section
+      className="section-padding relative bg-gradient-to-b from-stone-50 via-white to-stone-50/70"
+      data-testid="categories-section"
+      style={{ touchAction: 'pan-y' }}
+    >
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
         <motion.div
           animate={reduceMotion ? { opacity: 0.24 } : { y: [0, -16, 0], opacity: [0.24, 0.32, 0.24] }}
           transition={reduceMotion ? { duration: 0 } : { duration: 7, repeat: Infinity, ease: 'easeInOut' }}
@@ -472,169 +479,171 @@ export const CategoriesSection = () => {
           className="absolute -bottom-24 left-4 md:left-24 h-80 w-80 rounded-full bg-orange-200/40 blur-3xl"
         />
       </div>
-      <div className="container-main">
+      <div className="container-main relative z-10">
         <motion.div
           {...revealUp(reduceMotion, 0.02)}
-          className="text-center mb-12"
+          className="mb-10"
         >
-          <span className="inline-flex items-center gap-2 text-secondary font-semibold text-sm uppercase tracking-[0.18em]">
-            <Zap className="w-4 h-4" />
-            Explore Categories
-          </span>
-          <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 mt-3 leading-tight">
+          <div className="flex items-center justify-between mb-3">
+            <span className="inline-flex items-center gap-2 text-secondary font-semibold text-sm uppercase tracking-[0.18em]">
+              <Zap className="w-4 h-4" />
+              Explore Categories
+            </span>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => slide(-1)}
+                disabled={!canScrollLeft}
+                aria-label="Previous category"
+                className={`
+                  w-9 h-9 rounded-full border flex items-center justify-center
+                  transition-all duration-200 active:scale-90
+                  ${canScrollLeft
+                    ? 'bg-white border-stone-200 shadow-sm text-stone-700 hover:bg-stone-50 hover:shadow-md'
+                    : 'bg-stone-100 border-stone-200 text-stone-300 cursor-not-allowed'
+                  }
+                `}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => slide(1)}
+                disabled={!canScrollRight}
+                aria-label="Next category"
+                className={`
+                  w-9 h-9 rounded-full border flex items-center justify-center
+                  transition-all duration-200 active:scale-90
+                  ${canScrollRight
+                    ? 'bg-white border-stone-200 shadow-sm text-stone-700 hover:bg-stone-50 hover:shadow-md'
+                    : 'bg-stone-100 border-stone-200 text-stone-300 cursor-not-allowed'
+                  }
+                `}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <h2 className="font-heading text-3xl md:text-5xl font-bold text-stone-900 leading-tight">
             Discover Your Perfect Space Faster
           </h2>
-          <p className="text-muted-foreground mt-4 max-w-3xl mx-auto text-base md:text-lg">
-            Premium categories with smarter discovery, cleaner browsing, and instant navigation from homes to on-demand services.
+          <p className="text-muted-foreground mt-3 max-w-3xl text-base md:text-lg">
+            Premium categories with smarter discovery, cleaner browsing, and instant navigation
+            from homes to on-demand services.
           </p>
         </motion.div>
 
-        <div className="relative z-10">
-          <div
-            className={`
-              pointer-events-none absolute inset-y-0 left-0 z-20 w-16
-              bg-gradient-to-r from-stone-50 to-transparent
-              transition-opacity duration-300 md:hidden
-              ${canScrollLeft ? 'opacity-100' : 'opacity-0'}
-            `}
-            aria-hidden="true"
-          />
-          <button
-            onClick={() => scrollBy(-1)}
-            aria-label="Scroll left"
-            className={`
-              absolute left-1 top-1/2 -translate-y-1/2 z-30 md:hidden
-              w-9 h-9 rounded-full bg-white shadow-lg border border-stone-200
-              flex items-center justify-center
-              transition-all duration-200 active:scale-90
-              ${canScrollLeft ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
-            `}
-          >
-            <ChevronLeft className="w-4 h-4 text-stone-700" />
-          </button>
+        <div
+          ref={railRef}
+          style={{ touchAction: 'pan-x' }}
+          className="
+            flex gap-4
+            overflow-x-auto
+            pb-4
+            hide-scrollbar
+            snap-x snap-proximity
+            md:grid md:grid-cols-2 md:overflow-visible
+            lg:grid-cols-5
+          "
+        >
+          {displayCategories.map((cat, index) => {
+            const Icon = categoryIcons[cat.id] || Home;
+            const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
+            const theme = categoryCardThemes[cat.id] || categoryCardThemes.home;
+            const isActive = activeCategoryId === cat.id;
+            const subCategoryCount = cat.sub_categories?.length || 0;
 
-          <div
-            className={`
-              pointer-events-none absolute inset-y-0 right-0 z-20 w-16
-              bg-gradient-to-l from-stone-50 to-transparent
-              transition-opacity duration-300 md:hidden
-              ${canScrollRight ? 'opacity-100' : 'opacity-0'}
-            `}
-            aria-hidden="true"
-          />
-          <button
-            onClick={() => scrollBy(1)}
-            aria-label="Scroll right"
-            className={`
-              absolute right-1 top-1/2 -translate-y-1/2 z-30 md:hidden
-              w-9 h-9 rounded-full bg-white shadow-lg border border-stone-200
-              flex items-center justify-center
-              transition-all duration-200 active:scale-90
-              ${canScrollRight ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}
-            `}
-          >
-            <ChevronRight className="w-4 h-4 text-stone-700" />
-          </button>
-
-          {canScrollRight && !canScrollLeft && (
-            <p className="md:hidden mb-3 px-1 flex items-center justify-end gap-1.5 text-xs text-stone-500 select-none" aria-hidden="true">
-              <span className="font-medium tracking-wide">Swipe</span>
-              <ChevronRight className="w-3.5 h-3.5 animate-pulse" />
-            </p>
-          )}
-
-          <div
-            ref={railRef}
-            className="
-              flex gap-4 overflow-x-auto
-              px-1 pb-4
-              hide-scrollbar snap-x snap-proximity
-              overscroll-x-contain
-              touch-pan-x
-              md:grid md:grid-cols-2 md:overflow-visible md:px-0
-              lg:grid-cols-5
-            "
-          >
-            {displayCategories.map((cat, index) => {
-              const Icon = categoryIcons[cat.id] || Home;
-              const gradientColor = categoryColors[cat.id] || 'from-primary to-emerald-600';
-              const theme = categoryCardThemes[cat.id] || categoryCardThemes.home;
-              const isActive = activeCategoryId === cat.id;
-              const subCategoryCount = cat.sub_categories?.length || 0;
-
-              return (
-                <motion.div
-                  key={cat.id}
-                  {...revealUp(reduceMotion, index * 0.06, 24)}
-                  whileHover={reduceMotion ? undefined : { y: -8 }}
-                  transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
-                  className="w-[78vw] max-w-[300px] shrink-0 snap-start md:w-auto md:max-w-none"
-                >
-                  <Link
-                    to={`/category/${cat.id}`}
-                    className={`category-spotlight-card group relative overflow-hidden rounded-3xl p-6 md:p-7 block border border-stone-200/90 bg-gradient-to-b ${theme.soft} transition-all duration-500 hover:shadow-[0_24px_64px_-28px_rgba(20,20,20,0.45)] ${isActive ? `ring-2 ${theme.ring} shadow-[0_20px_52px_-26px_rgba(16,185,129,0.6)]` : 'hover:border-white'}`}
-                    data-testid={`category-card-${cat.id}`}
-                  >
-                    <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full ${theme.glow} blur-2xl transition-transform duration-500 group-hover:scale-125`} />
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.75),transparent_45%)]" />
-                    <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} opacity-0 group-hover:opacity-95 transition-opacity duration-500`} />
-
-                    <div className="relative z-10">
-                      <div className="mb-4 flex items-center justify-between">
-                        <span className="inline-flex items-center rounded-full border border-stone-200/80 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600 group-hover:border-white/35 group-hover:bg-white/15 group-hover:text-white/90">
-                          {subCategoryCount > 0 ? `${subCategoryCount} types` : 'Top picks'}
-                        </span>
-                        {isActive && (
-                          <span className="inline-flex items-center rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-stone-800">
-                            Active
-                          </span>
-                        )}
-                      </div>
-
-                      <motion.div
-                        whileHover={reduceMotion ? undefined : { scale: 1.08, rotate: 4 }}
-                        className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/40`}
-                      >
-                        <Icon className="w-8 h-8 text-white" />
-                      </motion.div>
-
-                      <h3 className="font-heading font-bold text-2xl text-stone-900 group-hover:text-white transition-colors">
-                        {cat.name}
-                      </h3>
-                      <p className={`font-semibold text-sm mt-1 transition-colors ${theme.accent} group-hover:text-white/90`}>
-                        {cat.name_gu}
-                      </p>
-                      <p className="text-muted-foreground text-sm mt-3 line-clamp-2 min-h-[2.6rem] group-hover:text-white/75 transition-colors">
-                        {cat.description || cat.sub_categories?.slice(0, 4).map(s => s.name).join(', ')}
-                      </p>
-
-                      <div className="mt-5 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-primary group-hover:text-white transition-colors">
-                          <span className="text-sm font-semibold">Explore</span>
-                          <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" />
-                        </div>
-                        <span className="text-xs font-medium text-stone-500 group-hover:text-white/75 transition-colors">
-                          Instant view
-                        </span>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 flex justify-center gap-1.5 md:hidden" aria-hidden="true">
-            {displayCategories.map((cat) => (
-              <span
+            return (
+              <motion.div
                 key={cat.id}
-                className={`h-1.5 rounded-full transition-all duration-300 ${activeCategoryId === cat.id
-                    ? 'w-5 bg-primary'
-                    : 'w-1.5 bg-stone-300'
-                  }`}
-              />
-            ))}
-          </div>
+                {...revealUp(reduceMotion, index * 0.06, 24)}
+                whileHover={reduceMotion ? undefined : { y: -8 }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: 'easeOut' }}
+                className="w-[76vw] max-w-[290px] shrink-0 snap-start md:w-auto md:max-w-none"
+              >
+                <Link
+                  to={`/category/${cat.id}`}
+                  className={`
+                      group relative overflow-hidden rounded-3xl p-6 md:p-7
+                      flex flex-col h-full
+                      border border-stone-200/90
+                      bg-gradient-to-b ${theme.soft}
+                      transition-all duration-500
+                      hover:shadow-[0_28px_64px_-24px_rgba(20,20,20,0.40)]
+                      ${isActive
+                      ? `ring-2 ${theme.ring} shadow-[0_20px_52px_-26px_rgba(16,185,129,0.5)]`
+                      : 'hover:border-white/60'
+                    }
+                    `}
+                  data-testid={`category-card-${cat.id}`}
+                >
+                  <div className={`absolute -right-10 -top-10 h-32 w-32 rounded-full ${theme.glow} blur-2xl transition-transform duration-500 group-hover:scale-150`} />
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.8),transparent_50%)]" />
+                  <div className={`absolute inset-0 bg-gradient-to-br ${gradientColor} opacity-0 group-hover:opacity-95 transition-opacity duration-500`} />
+
+                  <div className="relative z-10 flex flex-col flex-1">
+                    <div className="mb-5 flex items-center justify-between">
+                      <span className="inline-flex items-center rounded-full border border-stone-200/80 bg-white/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-stone-600 group-hover:border-white/35 group-hover:bg-white/15 group-hover:text-white/90">
+                        {subCategoryCount > 0 ? `${subCategoryCount} types` : 'Top picks'}
+                      </span>
+                      {isActive && (
+                        <span className="inline-flex items-center rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-stone-800">
+                          Active
+                        </span>
+                      )}
+                    </div>
+
+                    <motion.div
+                      whileHover={reduceMotion ? undefined : { scale: 1.1, rotate: 5 }}
+                      transition={{ duration: 0.2 }}
+                      className={`w-16 h-16 bg-gradient-to-br ${gradientColor} rounded-2xl flex items-center justify-center mb-5 shadow-lg ring-1 ring-white/40`}
+                    >
+                      <Icon className="w-8 h-8 text-white" />
+                    </motion.div>
+
+                    <h3 className="font-heading font-bold text-2xl text-stone-900 group-hover:text-white transition-colors">
+                      {cat.name}
+                    </h3>
+                    <p className={`font-semibold text-sm mt-1 transition-colors ${theme.accent} group-hover:text-white/90`}>
+                      {cat.name_gu}
+                    </p>
+                    <p className="text-muted-foreground text-sm mt-3 leading-relaxed line-clamp-2 group-hover:text-white/75 transition-colors flex-1">
+                      {cat.description || cat.sub_categories?.slice(0, 4).map(s => s.name).join(', ')}
+                    </p>
+
+                    <div className="mt-5 pt-4 border-t border-stone-100/60 group-hover:border-white/20 flex items-center justify-between transition-colors">
+                      <div className="flex items-center gap-2 text-primary group-hover:text-white transition-colors">
+                        <span className="text-sm font-semibold">Explore</span>
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-2 transition-transform" />
+                      </div>
+                      <span className="text-xs font-medium text-stone-400 group-hover:text-white/65 transition-colors">
+                        Instant view
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            );
+          })}
+        </div>
+
+        <div className="mt-5 flex justify-center gap-2 md:hidden" aria-hidden="true">
+          {displayCategories.map((cat, i) => (
+            <button
+              key={cat.id}
+              onClick={() => {
+                railRef.current?.scrollTo({
+                  left: i * 310,
+                  behavior: 'smooth',
+                });
+              }}
+              aria-label={`Go to ${cat.name}`}
+              className={`h-1.5 rounded-full transition-all duration-300 ${activeCategoryId === cat.id
+                ? 'w-6 bg-primary'
+                : 'w-2 bg-stone-300 hover:bg-stone-400'
+                }`}
+            />
+          ))}
         </div>
       </div>
     </section>
@@ -834,12 +843,12 @@ export const PropertyCard = memo(({ listing, showActions = true, contextCategory
 
   const formatPrice = (price, type) => {
     if (price >= 10000000) {
-      return `₹${(price / 10000000).toFixed(2)} Cr`;
+      return `G�${(price / 10000000).toFixed(2)} Cr`;
     } else if (price >= 100000) {
-      return `₹${(price / 100000).toFixed(2)} L`;
+      return `G�${(price / 100000).toFixed(2)} L`;
     }
     const monthlySuffix = showTransactionType && type === 'rent' ? '/mo' : '';
-    return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
+    return `G�${price?.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
   return (
