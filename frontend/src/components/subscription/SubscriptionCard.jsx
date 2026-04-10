@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
-  CheckCircle,
+  Check,
   Clock,
   Crown,
   FileText,
@@ -19,68 +19,140 @@ import {
 
 const STATUS_CONFIG = {
   trial: { color: 'bg-blue-100 text-blue-700', icon: Zap, label: 'Free Trial' },
-  active: { color: 'bg-green-100 text-green-700', icon: CheckCircle, label: 'Active' },
+  active: { color: 'bg-green-100 text-green-700', icon: Check, label: 'Active' },
   expired: { color: 'bg-red-100 text-red-700', icon: AlertTriangle, label: 'Expired' },
   blocked: { color: 'bg-red-100 text-red-700', icon: AlertTriangle, label: 'Suspended' },
   pending: { color: 'bg-yellow-100 text-yellow-700', icon: Clock, label: 'Payment Pending' },
 };
 
-export default function SubscriptionCard() {
-  const { user } = useAuth();
-  const { subData, loading, fetchStatus, isCommissionModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
-  const [paying, setPaying] = useState(false);
-
-  if (loading || !subData) return null;
-
-  if (isCommissionModel) {
-    const pendingCommission = Number(subData.pending_commission_amount || 0);
-
+const PlanDetails = ({ subData, onPay, paying, role }) => {
+  const plan = subData.subscription_plan || 'basic';
+  const isPro = plan === 'pro';
+  
+  if (role === 'service_provider') {
     return (
-      <Card className="border-primary/20 bg-primary/5">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Shield className="w-5 h-5 text-primary" />
-              Commission Model
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 gap-4">
+          {/* Basic Plan */}
+          <div className={`p-4 rounded-xl border-2 transition-all ${plan === 'service_basic' ? 'border-primary bg-primary/5' : 'border-stone-100 bg-stone-50'}`}>
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h4 className="font-bold text-stone-900">Basic Plan</h4>
+                <p className="text-xs text-muted-foreground">Presence fee to stay active</p>
+              </div>
+              <span className="font-bold text-lg">₹50/mo</span>
             </div>
-            <Badge className="bg-primary/10 text-primary border border-primary/20">
-              5% per deal
-            </Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-xl border border-primary/15 bg-white/70 p-4">
-            <p className="text-sm font-medium text-stone-900">No monthly subscription</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              We deduct a 5% commission only when a deal is confirmed.
-            </p>
+            <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Listing visible</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> 1 reel upload per week</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Basic profile</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> New badge</li>
+            </ul>
+            {plan !== 'service_basic' && (
+              <Button onClick={() => onPay('service_basic')} disabled={paying} variant="outline" className="w-full text-xs h-8">
+                Choose Basic
+              </Button>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="rounded-xl bg-white p-3 border">
-              <p className="text-xs text-muted-foreground">Commission rate</p>
-              <p className="font-semibold">{subData.commission_rate || '5%'}</p>
+          {/* Verified Plan */}
+          <div className={`p-4 rounded-xl border-2 transition-all ${plan === 'service_verified' ? 'border-primary bg-primary/5' : 'border-stone-100 bg-stone-50'}`}>
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h4 className="font-bold text-stone-900">Verified Plan</h4>
+                <p className="text-xs text-muted-foreground">Build trust and credibility</p>
+              </div>
+              <span className="font-bold text-lg">₹99/mo</span>
             </div>
-            <div className="rounded-xl bg-white p-3 border">
-              <p className="text-xs text-muted-foreground">Pending commission</p>
-              <p className="font-semibold">₹{pendingCommission.toLocaleString('en-IN')}</p>
-            </div>
+            <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> 2 reel uploads per week</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Listing visible</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Verified by Gruvora badge</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Badge displayed on reels</li>
+            </ul>
+            {plan !== 'service_verified' && (
+              <Button onClick={() => onPay('service_verified')} disabled={paying} className="w-full text-xs h-8 btn-primary">
+                Choose Verified
+              </Button>
+            )}
           </div>
 
-          {Array.isArray(subData.commission_history) && subData.commission_history.length > 0 && (
-            <div className="text-xs text-muted-foreground">
-              Last recorded commission: {subData.commission_history[0].commission_id}
+          {/* Top Listing Plan */}
+          <div className={`p-4 rounded-xl border-2 transition-all ${plan === 'service_top' ? 'border-amber-500 bg-amber-50' : 'border-stone-100 bg-stone-50'}`}>
+            <div className="flex justify-between items-start mb-2">
+              <div>
+                <h4 className="font-bold text-stone-900">Top Listing Plan</h4>
+                <p className="text-xs text-muted-foreground">Maximum visibility and ranking</p>
+              </div>
+              <span className="font-bold text-lg">₹149/mo</span>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Top 5 search position</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Area priority ranking</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> 2 reel uploads per week</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Verified badge + Reel badge</li>
+            </ul>
+            {plan !== 'service_top' && (
+              <Button onClick={() => onPay('service_top')} disabled={paying} className="w-full text-xs h-8 bg-amber-500 hover:bg-amber-600 text-white">
+                Choose Top Listing
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
     );
   }
 
-  const cfg = STATUS_CONFIG[subData.status] || STATUS_CONFIG.pending;
-  const Icon = cfg.icon;
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold text-stone-900 capitalize">{plan} Plan</p>
+          <p className="text-xs text-muted-foreground">
+            {isPro ? 'Unlimited listings + Featured placement' : 'Limited listings (Up to 5)'}
+          </p>
+        </div>
+        <Badge variant={isPro ? 'default' : 'outline'} className={isPro ? 'bg-amber-100 text-amber-700 border-amber-200' : ''}>
+          {isPro && <Crown className="w-3 h-3 mr-1" />}
+          {isPro ? 'Pro' : 'Basic'}
+        </Badge>
+      </div>
 
-  const handlePay = async () => {
+      <div className="grid grid-cols-2 gap-3 text-sm">
+        <div>
+          <p className="text-xs text-muted-foreground">Monthly Fee</p>
+          <p className="font-semibold">{subData.price || (isPro ? '₹499' : '₹199')}/mo</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Next Billing</p>
+          <p className="font-semibold">
+            {subData.next_billing_date ? new Date(subData.next_billing_date).toLocaleDateString('en-IN') : 'Due Now'}
+          </p>
+        </div>
+      </div>
+
+      {subData.status !== 'active' && subData.status !== 'trial' && (
+        <Button onClick={() => onPay(isPro ? 'pro' : 'basic')} disabled={paying} className="w-full btn-primary">
+          {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+          Pay {subData.price || (isPro ? '₹499' : '₹199')}
+        </Button>
+      )}
+      
+      {subData.status === 'active' && !isPro && (
+        <Button variant="outline" onClick={() => onPay('pro')} disabled={paying} className="w-full border-amber-200 text-amber-700 hover:bg-amber-50">
+          Upgrade to Pro (₹499)
+        </Button>
+      )}
+    </div>
+  );
+};
+
+export default function SubscriptionCard() {
+  const { user } = useAuth();
+  const { subData, loading, fetchStatus, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
+  const [paying, setPaying] = useState(false);
+
+  const handlePay = async (plan = 'monthly') => {
     if (!window.Razorpay) {
       toast.error('Payment gateway not loaded');
       return;
@@ -88,7 +160,7 @@ export default function SubscriptionCard() {
 
     setPaying(true);
     try {
-      const orderRes = await subscriptionAPI.createOrder('monthly');
+      const orderRes = await subscriptionAPI.createOrder(plan);
       const { order_id, amount, key_id } = orderRes.data;
 
       await new Promise((resolve, reject) => {
@@ -139,6 +211,65 @@ export default function SubscriptionCard() {
       toast.error('Failed to update auto-renew');
     }
   };
+
+  if (loading || !subData) return null;
+
+  if (isCommissionModel || isHybridModel) {
+    const pendingCommission = Number(subData.pending_commission_amount || 0);
+
+    return (
+      <Card className="border-primary/20 bg-primary/5">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="w-5 h-5 text-primary" />
+              {isHybridModel ? 'Hybrid Model (Sub + Comm)' : 'Commission Model'}
+            </div>
+            <Badge className="bg-primary/10 text-primary border border-primary/20">
+              {subData.commission_rate || '2%'} per deal
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-xl border border-primary/15 bg-white/70 p-4">
+            <p className="text-sm font-medium text-stone-900">
+              {isHybridModel ? 'Monthly Subscription + Commission' : 'No monthly subscription'}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              We deduct a {subData.commission_rate || '2%'} commission only when a deal is confirmed.
+              {isHybridModel && ' You also pay a small monthly fee for featured placement.'}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="rounded-xl bg-white p-3 border">
+              <p className="text-xs text-muted-foreground">Commission rate</p>
+              <p className="font-semibold">{subData.commission_rate || '2%'}</p>
+            </div>
+            <div className="rounded-xl bg-white p-3 border">
+              <p className="text-xs text-muted-foreground">Pending commission</p>
+              <p className="font-semibold">₹{pendingCommission.toLocaleString('en-IN')}</p>
+            </div>
+          </div>
+          
+          {isHybridModel && (
+             <div className="pt-4 border-t">
+               <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
+             </div>
+          )}
+
+          {Array.isArray(subData.commission_history) && subData.commission_history.length > 0 && (
+            <div className="text-xs text-muted-foreground">
+              Last recorded commission: {subData.commission_history[0].commission_id}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const cfg = STATUS_CONFIG[subData.status] || STATUS_CONFIG.pending;
+  const Icon = cfg.icon;
 
   const handleViewInvoices = async () => {
     try {
@@ -198,37 +329,19 @@ export default function SubscriptionCard() {
 
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="text-xs text-muted-foreground">Monthly fee</p>
-            <p className="font-semibold">₹251/month</p>
+            <p className="text-xs text-muted-foreground">Monthly Price</p>
+            <p className="font-semibold">{subData.price || '₹999/month'}</p>
           </div>
-          {subData.next_billing_date && (
-            <div>
-              <p className="text-xs text-muted-foreground">Next billing</p>
-              <p className="font-semibold">{new Date(subData.next_billing_date).toLocaleDateString('en-IN')}</p>
-            </div>
-          )}
-          {subData.last_payment_date && (
-            <div>
-              <p className="text-xs text-muted-foreground">Last paid</p>
-              <p className="font-semibold">{new Date(subData.last_payment_date).toLocaleDateString('en-IN')}</p>
-            </div>
-          )}
-          {subData.last_invoice && (
-            <div>
-              <p className="text-xs text-muted-foreground">Last invoice</p>
-              <p className="font-mono text-xs">{subData.last_invoice.invoice_number}</p>
-            </div>
-          )}
+          <div>
+            <p className="text-xs text-muted-foreground">Next Billing</p>
+            <p className="font-semibold">
+              {subData.next_billing_date ? new Date(subData.next_billing_date).toLocaleDateString('en-IN') : 'N/A'}
+            </p>
+          </div>
         </div>
 
         {needsPayment && (
-          <Button onClick={handlePay} disabled={paying} className="w-full bg-primary hover:bg-primary/90 h-11">
-            {paying ? (
-              <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Processing...</>
-            ) : (
-              <><Crown className="w-4 h-4 mr-2" />Pay ₹251 - Activate Now</>
-            )}
-          </Button>
+          <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
         )}
 
         {subData.status === 'active' && (

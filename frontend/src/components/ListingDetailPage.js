@@ -557,7 +557,9 @@ export const ListingDetailPage = () => {
                 )}
 
                 <p className="text-center text-xs text-muted-foreground">
-                  Secure payment • Instant confirmation
+                  {(listing.category === 'home' || listing.category === 'business') 
+                    ? 'No direct booking • Connect via visit request' 
+                    : 'Secure payment • Instant confirmation'}
                 </p>
               </CardContent>
             </Card>

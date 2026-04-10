@@ -456,6 +456,11 @@ export const categoriesAPI = {
   getAll: () => api.get('/categories'),
 };
 
+// Platform API
+export const platformAPI = {
+  getFees: () => api.get('/platform/fees'),
+};
+
 // Owner APIs
 export const ownerAPI = {
   getListings: (params) => api.get('/owner/listings', { params }),
@@ -472,6 +477,9 @@ export const adminAPI = {
   verifyAadhar: (userId, status) => api.put(`/admin/users/${userId}/verify-aadhar`, null, { params: { status } }),
   getBookings: (params) => api.get('/admin/bookings', { params }),
   getStats: () => api.get('/admin/stats'),
+  getRevenue: () => api.get('/admin/revenue'),
+  getSettings: () => api.get('/admin/settings'),
+  updateSettings: (data) => api.post('/admin/settings', data),
   createAdmin: (data) => api.post('/admin/create', data),
   getMediaDeleteJobs: (params) => api.get('/admin/media-delete-jobs', { params }),
   retryMediaDeleteJob: (jobId) => api.post(`/admin/media-delete-jobs/${jobId}/retry`),

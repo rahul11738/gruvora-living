@@ -17,6 +17,7 @@ import {
   LogOut, Loader2, Bell, Ban, Trash2,
   RotateCcw, Search, ChevronLeft, ChevronRight,
   AlertTriangle, Activity, BarChart3, Mail, Phone, MapPin,
+  IndianRupee, TrendingUp, CreditCard, Settings, Save,
 } from 'lucide-react';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 
@@ -44,6 +45,8 @@ export const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  const [revenueData, setRevenueData] = useState(null);
+  const [settings, setSettings] = useState(null);
 
   const [users, setUsers] = useState([]);
   const [usersTotal, setUsersTotal] = useState(0);
@@ -93,6 +96,34 @@ export const AdminDashboard = () => {
       toast.error('Failed to load stats');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRevenue = useCallback(async () => {
+    try {
+      const res = await adminAPI.getRevenue();
+      setRevenueData(res.data);
+    } catch {
+      toast.error('Failed to load revenue data');
+    }
+  }, []);
+
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await adminAPI.getSettings();
+      setSettings(res.data);
+    } catch {
+      toast.error('Failed to load platform settings');
+    }
+  }, []);
+
+  const updateSettings = async (data) => {
+    try {
+      await adminAPI.updateSettings(data);
+      toast.success('Settings updated successfully');
+      fetchSettings();
+    } catch {
+      toast.error('Failed to update settings');
     }
   };
 
@@ -162,8 +193,10 @@ export const AdminDashboard = () => {
       fetchListings();
       fetchPendingListings();
     }
+    if (activeTab === 'revenue') fetchRevenue();
+    if (activeTab === 'settings') fetchSettings();
     if (activeTab === 'logs') fetchActivityLogs();
-  }, [activeTab, fetchUsers, fetchPendingOwners, fetchListings, fetchPendingListings, fetchActivityLogs]);
+  }, [activeTab, fetchUsers, fetchPendingOwners, fetchListings, fetchPendingListings, fetchActivityLogs, fetchRevenue, fetchSettings]);
 
   const openProfile = async (userId) => {
     setProfileModal({ userId });
@@ -293,6 +326,8 @@ export const AdminDashboard = () => {
     { id: 'users', label: 'Users', icon: Users, badge: stats?.total_users },
     { id: 'owners', label: 'Owner Requests', icon: Shield, badge: stats?.pending_aadhar, badgeColor: 'bg-red-500' },
     { id: 'listings', label: 'Listings', icon: FileText, badge: stats?.pending_listings, badgeColor: 'bg-yellow-500' },
+    { id: 'revenue', label: 'Revenue', icon: IndianRupee },
+    { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'logs', label: 'Activity Logs', icon: Activity },
   ];
@@ -410,6 +445,20 @@ export const AdminDashboard = () => {
           />
         )}
 
+        {activeTab === 'revenue' && (
+          <RevenueTab
+            data={revenueData}
+            onRefresh={fetchRevenue}
+          />
+        )}
+
+        {activeTab === 'settings' && (
+          <SettingsTab
+            settings={settings}
+            onUpdate={updateSettings}
+          />
+        )}
+
         {activeTab === 'notifications' && (
           <NotificationsTab
             target={notifTarget}
@@ -467,9 +516,22 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-stone-900">Dashboard Overview</h1>
-        <p className="text-stone-500 text-sm mt-1">Real-time platform health</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-stone-900">Dashboard Overview</h1>
+          <p className="text-stone-500 text-sm mt-1">Real-time platform health</p>
+        </div>
+        {stats.razorpay_enabled ? (
+          <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            Razorpay Active
+          </Badge>
+        ) : (
+          <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">
+            <XCircle className="w-3 h-3 mr-1" />
+            Razorpay Inactive
+          </Badge>
+        )}
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -615,8 +677,11 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
   );
 };
 
-const UsersTab = ({ users, total, page, search, roleFilter, blockStatusFilter = '', onSearch, onRoleFilter, onBlockStatusFilter = () => { }, onPageChange,
-  onVerifyEmail, onViewProfile, onBlock, onUnblock, onDelete }) => {
+const UsersTab = ({
+  users = [], total, page, search, roleFilter, blockStatusFilter = '',
+  onSearch, onRoleFilter, onBlockStatusFilter = () => { }, onPageChange,
+  onVerifyEmail, onViewProfile, onBlock, onUnblock, onDelete
+}) => {
   const totalPages = Math.ceil(total / 50);
 
   return (
@@ -757,7 +822,7 @@ const UsersTab = ({ users, total, page, search, roleFilter, blockStatusFilter = 
   );
 };
 
-const OwnersTab = ({ owners, total, onVerify, onReject, onViewProfile }) => (
+const OwnersTab = ({ owners = [], total, onVerify, onReject, onViewProfile }) => (
   <div className="space-y-6">
     <div>
       <h1 className="text-2xl font-bold">Owner Verification Requests</h1>
@@ -823,7 +888,7 @@ const OwnersTab = ({ owners, total, onVerify, onReject, onViewProfile }) => (
   </div>
 );
 
-const ListingsTab = ({ listings, pendingListings, total, page, statusFilter, onStatusFilter, onPageChange, onAction }) => {
+const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusFilter, onStatusFilter, onPageChange, onAction }) => {
   const totalPages = Math.ceil(total / 50);
 
   return (
@@ -1046,6 +1111,470 @@ const NotificationsTab = ({ target, title, message, type, sending, onTargetChang
   </div>
 );
 
+const RevenueTab = ({ data, onRefresh }) => {
+  if (!data) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+
+  const { recent_payments = [], recent_subscriptions = [], recent_boosts = [], revenue_by_type = [], daily_revenue = [] } = data;
+
+  const totalRevenue = revenue_by_type.reduce((acc, curr) => acc + curr.amount, 0);
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-stone-900">Revenue Analytics</h1>
+          <p className="text-stone-500 text-sm mt-1">Track payments, subscriptions and boosts</p>
+        </div>
+        <div className="flex gap-2">
+          {data.razorpay_enabled ? (
+            <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
+              <CheckCircle className="w-3 h-3 mr-1" />
+              Razorpay Active
+            </Badge>
+          ) : (
+            <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">
+              <XCircle className="w-3 h-3 mr-1" />
+              Razorpay Inactive
+            </Badge>
+          )}
+          <Button onClick={onRefresh} variant="outline" size="sm" className="gap-2">
+            <RotateCcw className="w-4 h-4" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-stone-500 font-medium">Total Revenue</p>
+                <p className="text-3xl font-bold text-stone-900 mt-1">₹{totalRevenue.toLocaleString()}</p>
+              </div>
+              <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
+                <IndianRupee className="w-6 h-6 text-green-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-stone-500 font-medium">Active Subscriptions</p>
+                <p className="text-3xl font-bold text-stone-900 mt-1">{recent_subscriptions.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-6 h-6 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-stone-500 font-medium">Recent Boosts</p>
+                <p className="text-3xl font-bold text-stone-900 mt-1">{recent_boosts.length}</p>
+              </div>
+              <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
+                <CreditCard className="w-6 h-6 text-purple-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Revenue by Category</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {revenue_by_type.map((item) => (
+                <div key={item.type} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="capitalize">{item.type}</Badge>
+                  </div>
+                  <p className="font-semibold text-stone-900">₹{item.amount.toLocaleString()}</p>
+                </div>
+              ))}
+              {revenue_by_type.length === 0 && <p className="text-center text-stone-400 py-8">No revenue data yet</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Recent Transactions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {recent_payments.slice(0, 10).map((pay) => (
+                <div key={pay.id} className="flex items-center justify-between p-3 border-b last:border-0 hover:bg-stone-50 transition-colors">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-stone-900 capitalize">{pay.booking_type || 'Booking'} Payment</p>
+                      {pay.user_name && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] py-0 px-1.5 h-4">
+                          {pay.user_name}
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-1.5 text-xs text-stone-500">
+                        <Mail className="w-3 h-3" />
+                        <span>{pay.user_email || 'No email'}</span>
+                        <span className="mx-1">•</span>
+                        <Phone className="w-3 h-3" />
+                        <span>{pay.user_phone || 'No phone'}</span>
+                      </div>
+                      <p className="text-[10px] text-stone-400 font-mono flex items-center gap-1">
+                        <CreditCard className="w-3 h-3" />
+                        ID: {pay.razorpay_payment_id || pay.id}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right flex flex-col items-end gap-1">
+                    <p className="text-sm font-bold text-green-600">₹{(pay.amount / 100).toLocaleString('en-IN')}</p>
+                    <p className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
+                      {new Date(pay.paid_at || pay.created_at).toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {recent_payments.length === 0 && <p className="text-center text-stone-400 py-8">No recent transactions</p>}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const SettingsTab = ({ settings, onUpdate }) => {
+  const [selectedCat, setSelectedCat] = useState('global');
+  const [formData, setFormData] = useState({
+    global_config: { platform_fee: 50, subscription_fee: 999, basic_subscription_fee: 199, pro_subscription_fee: 499, boost_fee: 199, service_fee_percent: 5, listing_fee: 0, commission_rate: 2 },
+    categories: {
+      stay: { platform_fee: 50, subscription_fee: 999, basic_subscription_fee: 199, pro_subscription_fee: 499, boost_fee: 199, service_fee_percent: 5, listing_fee: 0, commission_rate: 2 },
+      event: { platform_fee: 50, subscription_fee: 999, basic_subscription_fee: 199, pro_subscription_fee: 499, boost_fee: 199, service_fee_percent: 5, listing_fee: 0, commission_rate: 2 },
+      services: { 
+        platform_fee: 0, 
+        service_basic_fee: 50, 
+        service_verified_fee: 99, 
+        service_top_fee: 149, 
+        reel_boost_1d: 19, 
+        reel_boost_3d: 49, 
+        reel_boost_7d: 99,
+        boost_fee: 19, 
+        service_fee_percent: 0, 
+        listing_fee: 0, 
+        commission_rate: 0 
+      },
+      home: { platform_fee: 0, subscription_fee: 999, basic_subscription_fee: 999, pro_subscription_fee: 999, boost_fee: 199, service_fee_percent: 0, listing_fee: 199, commission_rate: 0 },
+      business: { platform_fee: 0, subscription_fee: 999, basic_subscription_fee: 999, pro_subscription_fee: 999, boost_fee: 199, service_fee_percent: 0, listing_fee: 199, commission_rate: 0 }
+    }
+  });
+
+  useEffect(() => {
+    if (settings) {
+      setFormData(settings);
+    }
+  }, [settings]);
+
+  const activeConfig = selectedCat === 'global' 
+    ? formData.global_config 
+    : (formData.categories && formData.categories[selectedCat]) || { 
+        platform_fee: 0, 
+        subscription_fee: 0, 
+        boost_fee: 0, 
+        service_fee_percent: 0,
+        commission_rate: 0,
+        basic_subscription_fee: 0,
+        pro_subscription_fee: 0,
+        listing_fee: 0
+      };
+
+  const updateActiveConfig = (field, rawValue) => {
+    // Safely parse number, default to 0 if invalid
+    const value = rawValue === '' ? 0 : parseFloat(rawValue);
+    const safeValue = isNaN(value) ? 0 : value;
+
+    setFormData(prev => {
+      const newData = { ...prev };
+      const updates = { [field]: safeValue };
+      
+      // Keep commission fields in sync
+      if (field === 'commission_rate') updates.service_fee_percent = safeValue;
+      if (field === 'service_fee_percent') updates.commission_rate = safeValue;
+
+      if (selectedCat === 'global') {
+        newData.global_config = { ...newData.global_config, ...updates };
+      } else {
+        // Ensure categories object exists
+        if (!newData.categories) newData.categories = {};
+        // Ensure the specific category object exists
+        if (!newData.categories[selectedCat]) {
+          newData.categories[selectedCat] = { 
+            platform_fee: 0, 
+            subscription_fee: 0, 
+            boost_fee: 0, 
+            service_fee_percent: 0,
+            commission_rate: 0,
+            basic_subscription_fee: 0,
+            pro_subscription_fee: 0,
+            listing_fee: 0
+          };
+        }
+        newData.categories[selectedCat] = { ...newData.categories[selectedCat], ...updates };
+      }
+      return newData;
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onUpdate(formData);
+  };
+
+  const categories = [
+    { id: 'global', label: 'Global Defaults', icon: Activity },
+    { id: 'stay', label: 'Stay', icon: Hotel },
+    { id: 'event', label: 'Event', icon: PartyPopper },
+    { id: 'services', label: 'Services', icon: Wrench },
+    { id: 'home', label: 'Home', icon: Home },
+    { id: 'business', label: 'Business', icon: Building2 },
+  ];
+
+  return (
+    <div className="max-w-5xl space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-stone-900">Platform Settings</h1>
+        <p className="text-stone-500 text-sm mt-1">Configure category-specific fees and platform rates</p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {categories.map((cat) => (
+          <button
+            key={cat.id}
+            onClick={() => setSelectedCat(cat.id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              selectedCat === cat.id
+                ? 'bg-primary text-white shadow-md'
+                : 'bg-white text-stone-600 hover:bg-stone-50 border border-stone-200'
+            }`}
+          >
+            <cat.icon className="w-4 h-4" />
+            {cat.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-primary" />
+                {selectedCat === 'global' ? 'Global Fee Defaults' : `${categories.find(c => c.id === selectedCat).label} Configuration`}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-stone-700">Platform Fee (₹)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm">₹</span>
+                      <Input
+                        type="number"
+                        value={activeConfig?.platform_fee || 0}
+                        onChange={(e) => updateActiveConfig('platform_fee', e.target.value)}
+                        className="pl-7"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-stone-700">Listing Fee (₹)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm">₹</span>
+                      <Input
+                        type="number"
+                        value={activeConfig?.listing_fee || 0}
+                        onChange={(e) => updateActiveConfig('listing_fee', e.target.value)}
+                        className="pl-7"
+                      />
+                    </div>
+                    <p className="text-[10px] text-stone-400">One-time fee to post a single listing</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-stone-700">Subscription Fee (₹/mo)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm">₹</span>
+                      <Input
+                        type="number"
+                        value={activeConfig?.subscription_fee || 0}
+                        onChange={(e) => updateActiveConfig('subscription_fee', e.target.value)}
+                        className="pl-7"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-stone-700">Boost Fee (₹)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm">₹</span>
+                      <Input
+                        type="number"
+                        value={activeConfig?.boost_fee || 0}
+                        onChange={(e) => updateActiveConfig('boost_fee', e.target.value)}
+                        className="pl-7"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-stone-700">Commission (%)</label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        value={activeConfig?.commission_rate || 0}
+                        onChange={(e) => updateActiveConfig('commission_rate', e.target.value)}
+                        className="pr-8"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm">%</span>
+                    </div>
+                    {(selectedCat === 'stay' || selectedCat === 'event') && (
+                      <div className="p-3 bg-stone-50 rounded-lg border border-stone-100 mt-2">
+                        <p className="text-[11px] font-bold text-stone-500 uppercase tracking-wider mb-1">Commission Example</p>
+                        <p className="text-xs text-stone-600">
+                          If a user books for <span className="font-semibold text-stone-900">₹3,000</span>:
+                        </p>
+                        <div className="flex justify-between text-xs mt-1">
+                          <span className="text-stone-500">Platform earns ({activeConfig?.commission_rate || 2}%):</span>
+                          <span className="font-bold text-emerald-600">₹{(3000 * (activeConfig?.commission_rate || 2) / 100).toFixed(0)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs mt-0.5">
+                          <span className="text-stone-500">Owner receives:</span>
+                          <span className="font-bold text-stone-900">₹{(3000 - (3000 * (activeConfig?.commission_rate || 2) / 100)).toFixed(0)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedCat === 'services' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-stone-50/50 rounded-xl border border-stone-100">
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-stone-400 uppercase tracking-wider">Service Subscription Plans</h4>
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-stone-500">Basic Plan (₹/mo)</label>
+                            <Input type="number" value={activeConfig?.service_basic_fee || 0} onChange={(e) => updateActiveConfig('service_basic_fee', e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-stone-500">Verified Plan (₹/mo)</label>
+                            <Input type="number" value={activeConfig?.service_verified_fee || 0} onChange={(e) => updateActiveConfig('service_verified_fee', e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-stone-500">Top Listing Plan (₹/mo)</label>
+                            <Input type="number" value={activeConfig?.service_top_fee || 0} onChange={(e) => updateActiveConfig('service_top_fee', e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <h4 className="text-xs font-bold text-stone-400 uppercase tracking-wider">Reel Boost Rates</h4>
+                        <div className="space-y-3">
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-stone-500">1 Day Boost (₹)</label>
+                            <Input type="number" value={activeConfig?.reel_boost_1d || 0} onChange={(e) => updateActiveConfig('reel_boost_1d', e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-stone-500">3 Days Boost (₹)</label>
+                            <Input type="number" value={activeConfig?.reel_boost_3d || 0} onChange={(e) => updateActiveConfig('reel_boost_3d', e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] font-medium text-stone-500">7 Days Boost (₹)</label>
+                            <Input type="number" value={activeConfig?.reel_boost_7d || 0} onChange={(e) => updateActiveConfig('reel_boost_7d', e.target.value)} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedCat !== 'home' && selectedCat !== 'business' && selectedCat !== 'services' && (
+                    <>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-stone-700">Basic Plan (₹/mo)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm">₹</span>
+                          <Input
+                            type="number"
+                            value={activeConfig?.basic_subscription_fee || 0}
+                            onChange={(e) => updateActiveConfig('basic_subscription_fee', e.target.value)}
+                            className="pl-7"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-stone-700">Pro Plan (₹/mo)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 text-sm">₹</span>
+                          <Input
+                            type="number"
+                            value={activeConfig?.pro_subscription_fee || 0}
+                            onChange={(e) => updateActiveConfig('pro_subscription_fee', e.target.value)}
+                            className="pl-7"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex justify-end pt-4 border-t">
+                  <Button type="submit" className="gap-2 bg-primary hover:bg-primary/90">
+                    <Save className="w-4 h-4" />
+                    Save Settings
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card className="bg-amber-50 border-amber-100">
+            <CardContent className="pt-6">
+              <div className="flex gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-amber-900">Important Note</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Specific category settings override global defaults. If a category has no settings defined, the system will use the Global Defaults.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const LogsTab = ({ logs, total, page, onPageChange }) => {
   const totalPages = Math.ceil(total / 50);
   return (
@@ -1104,7 +1633,7 @@ const ProfileModalContent = ({ data, onVerifyEmail }) => {
     </div>
   );
   const {
-    user, listings, bookings, stats, admin_logs,
+    user, listings = [], bookings = [], stats, admin_logs = [],
   } = data;
   if (!user) return <p className="text-center py-8 text-stone-400">User not found</p>;
 

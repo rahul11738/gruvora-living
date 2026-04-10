@@ -38,7 +38,8 @@ export const SubscriptionProvider = ({ children }) => {
   const isPending = subData?.status === 'pending';
   const isExpired = subData?.status === 'expired';
   const isCommissionModel = subData?.model === 'commission';
-  const needsPayment = isPending || isExpired || isBlocked;
+  const isHybridModel = subData?.model === 'hybrid';
+  const needsPayment = (isPending || isExpired || isBlocked) && !isCommissionModel;
   const trialDaysLeft = subData?.trial_days_remaining ?? null;
 
   return (
@@ -53,6 +54,7 @@ export const SubscriptionProvider = ({ children }) => {
         isPending,
         isExpired,
         isCommissionModel,
+        isHybridModel,
         needsPayment,
         trialDaysLeft,
       }}

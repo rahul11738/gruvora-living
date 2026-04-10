@@ -32,8 +32,8 @@ import {
   Loader2,
 } from 'lucide-react';
 
-const SUBSCRIPTION_ROLES = new Set(['stay_owner', 'service_provider', 'event_owner']);
-const COMMISSION_ROLES = new Set(['property_owner', 'hotel_owner']);
+const SUBSCRIPTION_ROLES = new Set(['property_owner', 'stay_owner', 'service_provider', 'event_owner']);
+const COMMISSION_ROLES = new Set(['hotel_owner']);
 
 const OWNER_TYPES = [
   {

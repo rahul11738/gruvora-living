@@ -50,6 +50,9 @@ import {
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import ListingFormRouter from './listings/ListingFormRouter';
 import SubscriptionCard from './subscription/SubscriptionCard';
+import PaymentModal from './PaymentModal';
+
+const OWNER_ROLES = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'];
 
 const categoryIcons = {
   home: Home,
@@ -71,6 +74,17 @@ export const OwnerDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentListing, setPaymentListing] = useState(null);
+  const [paymentType, setPaymentType] = useState('listing_fee');
+  const [boostDays, setBoostDays] = useState(1);
+  const [paymentInfo, setPaymentInfo] = useState(null);
+
+  const handleBoostListing = (listingId) => {
+    setPaymentListing({ id: listingId });
+    setPaymentType('reel_boost');
+    setShowPaymentModal(true);
+  };
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const showSubscriptionTab = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(user?.role);
@@ -311,14 +325,31 @@ export const OwnerDashboard = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <ListingFormRouter
-                  onSuccess={() => {
+                  onSuccess={(data) => {
                     setShowCreateDialog(false);
                     fetchDashboardData();
+                    if (data?.status === 'awaiting_payment') {
+                      setPaymentListing({ id: data.listing_id });
+                      setPaymentInfo(data);
+                      setShowPaymentModal(true);
+                    }
                   }}
                   onClose={() => setShowCreateDialog(false)}
                 />
               </DialogContent>
             </Dialog>
+            <PaymentModal
+              isOpen={showPaymentModal}
+              onClose={() => setShowPaymentModal(false)}
+              listing={paymentListing}
+              paymentType={paymentType}
+              subscriptionMonths={paymentType === 'reel_boost' ? boostDays : 1}
+              onSuccess={() => {
+                setShowPaymentModal(false);
+                fetchDashboardData();
+                toast.success(paymentType === 'reel_boost' ? 'Reel boosted successfully!' : 'Payment successful!');
+              }}
+            />
           </div>
 
           {/* Overview Tab */}
@@ -397,7 +428,12 @@ export const OwnerDashboard = () => {
                   ) : (
                     <div className="space-y-4">
                       {listings.slice(0, 5).map((listing) => (
-                        <ListingRow key={listing.id} listing={listing} onDelete={handleDeleteListing} />
+                        <ListingRow 
+                          key={listing.id} 
+                          listing={listing} 
+                          onDelete={handleDeleteListing} 
+                          onBoost={handleBoostListing}
+                        />
                       ))}
                     </div>
                   )}
@@ -499,7 +535,7 @@ export const OwnerDashboard = () => {
   );
 };
 
-const ListingRow = memo(({ listing, onDelete, showActions }) => {
+const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
   const navigate = useNavigate();
   const Icon = categoryIcons[listing.category] || Home;
 
@@ -530,6 +566,11 @@ const ListingRow = memo(({ listing, onDelete, showActions }) => {
           <Icon className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground capitalize">{listing.category}</span>
           {getStatusBadge(listing.status)}
+          {listing.category === 'services' && (
+            <Badge variant="outline" className="ml-2 bg-amber-50 text-amber-600 border-amber-100">
+              Reel Available
+            </Badge>
+          )}
         </div>
         <h4 className="font-medium truncate">{listing.title}</h4>
         <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
@@ -550,6 +591,17 @@ const ListingRow = memo(({ listing, onDelete, showActions }) => {
       <div className="text-right">
         <p className="font-bold text-primary">₹{listing.price?.toLocaleString('en-IN')}</p>
         <p className="text-sm text-muted-foreground capitalize">{listing.listing_type}</p>
+        {listing.category === 'services' && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="mt-2 text-xs border-amber-200 text-amber-600 hover:bg-amber-50"
+            onClick={() => onBoost(listing.id)}
+          >
+            <Zap className="w-3 h-3 mr-1" />
+            Boost Reel
+          </Button>
+        )}
       </div>
       {showActions && (
         <div className="flex gap-2">

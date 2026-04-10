@@ -9,7 +9,7 @@ import logging
 import re
 from pathlib import Path
 import calendar
-from pydantic import BaseModel, Field, EmailStr, ValidationError
+from pydantic import BaseModel, Field, EmailStr, ValidationError, field_validator
 from typing import List, Optional, Dict, Any, Set, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -146,6 +146,15 @@ class UserRole(str, Enum):
     EVENT_OWNER = "event_owner"
     ADMIN = "admin"
 
+class SubscriptionPlan(str, Enum):
+    BASIC = "basic"
+    PRO = "pro"
+    UNLIMITED = "unlimited"  # For Property owners (₹999)
+    # Service Provider Specific Plans
+    SERVICE_BASIC = "service_basic"      # ₹50
+    SERVICE_VERIFIED = "service_verified" # ₹99
+    SERVICE_TOP = "service_top"           # ₹149
+
 class ListingCategory(str, Enum):
     HOME = "home"
     BUSINESS = "business"
@@ -163,6 +172,7 @@ class ListingStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     BOOSTED = "boosted"
+    AWAITING_PAYMENT = "awaiting_payment"
 
 class BookingStatus(str, Enum):
     PENDING = "pending"
@@ -182,6 +192,12 @@ class VerificationStatus(str, Enum):
     REJECTED = "rejected"
 
 # ============ MODELS ============
+class PlatformSettings(BaseModel):
+    id: str = "platform_config"
+    global_config: Dict[str, float]
+    categories: Dict[str, Dict[str, float]]
+    updated_at: Optional[str] = None
+
 class UserRegister(BaseModel):
     name: str
     email: EmailStr
@@ -808,16 +824,26 @@ def verify_password(password: str, hashed: str) -> bool:
 
 
 SUBSCRIPTION_ROLES = {
+    UserRole.PROPERTY_OWNER.value,
     UserRole.STAY_OWNER.value,
     UserRole.SERVICE_PROVIDER.value,
     UserRole.EVENT_OWNER.value,
+    UserRole.HOTEL_OWNER.value,
 }
-COMMISSION_ROLES = {UserRole.PROPERTY_OWNER.value}
+COMMISSION_ROLES = {
+    UserRole.STAY_OWNER.value,
+    UserRole.HOTEL_OWNER.value,
+    UserRole.EVENT_OWNER.value,
+}
 VALID_COUPONS = {
     "GRUVORA5M": {"free_months": 5, "description": "First 5 months free"},
 }
-SUBSCRIPTION_AMOUNT_PAISE = 25100
-COMMISSION_RATE = 0.05
+SUBSCRIPTION_AMOUNT_PAISE = 99900  # Default ₹999/month (Property)
+STAY_EVENT_BASIC_SUB_PAISE = 19900  # ₹199/month
+STAY_EVENT_PRO_SUB_PAISE = 49900    # ₹499/month
+PROPERTY_LISTING_FEE_PAISE = 19900  # Default ₹199 per property
+COMMISSION_RATE = 0.02  # 2% per successful booking
+BASIC_PLAN_LISTING_LIMIT = 5
 BILLING_GRACE_DAYS = 5
 BLOCK_DURATION_DAYS = 7
 
@@ -962,6 +988,12 @@ def enforce_subscription(user: Dict[str, Any]) -> None:
     role = str(user.get("role") or "")
     if role == UserRole.ADMIN.value:
         return
+    
+    # Property owners can create listings even without a subscription, but they must pay per listing.
+    # So we don't block them here; create_listing will set status to 'awaiting_payment' if needed.
+    if role == UserRole.PROPERTY_OWNER.value:
+        return
+
     if role in COMMISSION_ROLES:
         return
     if role not in SUBSCRIPTION_ROLES:
@@ -1516,6 +1548,17 @@ async def create_listing(payload: Dict[str, Any] = Body(...), user: dict = Depen
     except HTTPException:
         specific_fields = raw_specific
 
+    # Check listing limit for non-property owners on basic plan
+    if role in (UserRole.STAY_OWNER.value, UserRole.EVENT_OWNER.value, UserRole.SERVICE_PROVIDER.value, UserRole.HOTEL_OWNER.value):
+        sub_plan = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
+        if sub_plan == SubscriptionPlan.BASIC.value:
+            existing_count = await db.listings.count_documents({"owner_id": user["id"], "category": category})
+            if existing_count >= BASIC_PLAN_LISTING_LIMIT:
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"Basic plan limit reached ({BASIC_PLAN_LISTING_LIMIT} listings). Upgrade to Pro for unlimited listings."
+                )
+
     listing_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     base_data = base.model_dump(exclude={"pricing", "media"})
@@ -1537,6 +1580,10 @@ async def create_listing(payload: Dict[str, Any] = Body(...), user: dict = Depen
         or category
     )
     amenities = specific_fields.get("amenities") or payload.get("amenities") or []
+    
+    # Set subscription plan and featured status for listing
+    sub_plan = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
+    is_pro = sub_plan == SubscriptionPlan.PRO.value
     
     listing_doc = {
         "id": listing_id,
@@ -1578,15 +1625,48 @@ async def create_listing(payload: Dict[str, Any] = Body(...), user: dict = Depen
         "price_history": [{"price": pricing_data.get("amount"), "date": now}],
         "boost_expires": None,
         "fresh_priority_until": build_fresh_priority_until(datetime.now(timezone.utc)),
-        "featured": False,
+        "featured": is_pro,
+        "subscription_plan": sub_plan,
         "created_at": now,
         "updated_at": now,
     }
     
+    # Monetization for Property (Home/Business)
+    final_status = ListingStatus.PENDING
+    payment_info = {}
+    
+    if role == UserRole.PROPERTY_OWNER.value:
+        # Check for active subscription
+        sub_status = str(user.get("subscription_status") or "").lower()
+        if sub_status != "active" and sub_status != "trial":
+            # Fetch dynamic listing fee from settings
+            settings = await db.settings.find_one({"id": "platform_config"})
+            listing_fee = PROPERTY_LISTING_FEE_PAISE
+            if settings and "categories" in settings and category in settings["categories"]:
+                listing_fee = int(settings["categories"][category].get("listing_fee", 0) * 100)
+            elif settings and "global_config" in settings:
+                listing_fee = int(settings["global_config"].get("listing_fee", 0) * 100)
+            
+            if listing_fee > 0:
+                # No active subscription, mark as awaiting listing fee payment
+                final_status = ListingStatus.AWAITING_PAYMENT
+                payment_info = {
+                    "payment_required": "listing_fee",
+                    "fee_amount_paise": listing_fee
+                }
+    
+    listing_doc["status"] = final_status
+    listing_doc.update(payment_info)
+    
     await db.listings.insert_one(listing_doc)
     await db.users.update_one({"id": user["id"]}, {"$push": {"listings": listing_id}})
     
-    return {"message": "Listing created", "listing_id": listing_id, "status": "pending"}
+    return {
+        "message": "Listing created", 
+        "listing_id": listing_id, 
+        "status": final_status,
+        **payment_info
+    }
 
 @api_router.get("/listings")
 async def get_listings(
@@ -1721,6 +1801,8 @@ async def get_listings(
     priority_conditions = [
         {"status": ListingStatus.BOOSTED.value, "boost_expires": {"$gt": now_iso}},
         {"fresh_priority_until": {"$gt": now_iso}},
+        {"featured": True},
+        {"subscription_plan": SubscriptionPlan.PRO.value},
     ]
 
     priority_query: Dict[str, Any] = dict(base_query)
@@ -1913,8 +1995,15 @@ async def lock_listing(payload: LockListingRequest, user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail="Owner cannot lock own listing")
 
     current_lock_owner = str(listing.get("locked_by") or "").strip()
-    if listing.get("is_locked") and current_lock_owner and current_lock_owner != user["id"]:
-        raise HTTPException(status_code=409, detail="Already in process")
+    lock_at = listing.get("locked_at")
+    is_locked = listing.get("is_locked", False)
+    
+    # If locked by someone else within the last 15 minutes, deny
+    if is_locked and current_lock_owner and current_lock_owner != user["id"]:
+        if lock_at:
+            locked_dt = datetime.fromisoformat(lock_at.replace('Z', '+00:00'))
+            if (datetime.now(timezone.utc) - locked_dt).total_seconds() < 900: # 15 min
+                raise HTTPException(status_code=409, detail="Already in process by another user")
 
     await db.listings.update_one(
         {"id": listing_id},
@@ -5572,6 +5661,19 @@ async def get_admin_chat_conversation(
 async def get_admin_stats(user: dict = Depends(get_admin_user)):
     cached_stats = await get_cached_admin_stats()
     if cached_stats:
+        # Check if we should inject settings into cached stats
+        settings = await db.settings.find_one({"id": "platform_config"}, {"_id": 0})
+        if not settings:
+            settings = {
+                "id": "platform_config",
+                "platform_fee": 50.0,
+                "subscription_fee": 999.0,
+                "boost_fee": 199.0,
+                "service_fee_percent": 5.0,
+                "updated_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.settings.insert_one(settings)
+        cached_stats["settings"] = settings
         return cached_stats
 
     now = datetime.now(timezone.utc)
@@ -5728,9 +5830,225 @@ async def get_admin_stats(user: dict = Depends(get_admin_user)):
         "daily_growth": [{"date": d.get("_id"), "users": d.get("users", 0), "owners": d.get("owners", 0)} for d in daily_growth_docs],
         "category_stats": category_stats,
         "top_cities": [{"city": c["_id"], "count": c["count"]} for c in top_cities],
+        "razorpay_enabled": bool(razorpay_client)
     }
     await set_cached_admin_stats(response_payload)
     return response_payload
+
+@api_router.get("/admin/revenue")
+async def get_admin_revenue(user: dict = Depends(get_admin_user)):
+    """Get detailed revenue statistics for admin dashboard"""
+    # Recent payments
+    payments = await db.payments.find(
+        {"status": "paid"},
+        {"_id": 0}
+    ).sort("paid_at", -1).limit(50).to_list(50)
+
+    # Recent subscriptions
+    subscriptions = await db.subscriptions.find(
+        {"status": "active"},
+        {"_id": 0}
+    ).sort("created_at", -1).limit(50).to_list(50)
+
+    # Revenue by type
+    pipeline = [
+        {"$group": {"_id": "$booking_type", "total": {"$sum": "$amount"}}}
+    ]
+    revenue_by_type = await db.payments.aggregate(pipeline).to_list(10)
+
+    # Daily revenue (last 30 days)
+    start_date = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+    daily_pipeline = [
+        {"$match": {"status": "paid", "paid_at": {"$gte": start_date}}},
+        {"$group": {"_id": {"$substr": ["$paid_at", 0, 10]}, "total": {"$sum": "$amount"}}},
+        {"$sort": {"_id": 1}}
+    ]
+    daily_revenue = await db.payments.aggregate(daily_pipeline).to_list(30)
+
+    # Recent boost payments
+    boosts = await db.boosts.find(
+        {"status": "paid"},
+        {"_id": 0}
+    ).sort("paid_at", -1).limit(50).to_list(50)
+
+    return {
+        "recent_payments": payments,
+        "recent_subscriptions": subscriptions,
+        "recent_boosts": boosts,
+        "revenue_by_type": [{"type": r["_id"] or "other", "amount": r["total"] / 100} for r in revenue_by_type],
+        "daily_revenue": [{"date": r["_id"], "amount": r["total"] / 100} for r in daily_revenue],
+        "razorpay_enabled": bool(razorpay_client)
+    }
+
+import math
+
+class CategorySettings(BaseModel):
+    platform_fee: Optional[float] = 0.0
+    subscription_fee: Optional[float] = 0.0
+    basic_subscription_fee: Optional[float] = 199.0
+    pro_subscription_fee: Optional[float] = 499.0
+    # Service specific fees
+    service_basic_fee: Optional[float] = 50.0
+    service_verified_fee: Optional[float] = 99.0
+    service_top_fee: Optional[float] = 149.0
+    # Reel Boost fees
+    reel_boost_1d: Optional[float] = 19.0
+    reel_boost_3d: Optional[float] = 49.0
+    reel_boost_7d: Optional[float] = 99.0
+    
+    boost_fee: Optional[float] = 0.0
+    service_fee_percent: Optional[float] = 0.0
+    listing_fee: Optional[float] = 0.0
+    commission_rate: Optional[float] = 2.0
+    
+    @field_validator('*', mode='before')
+    @classmethod
+    def validate_floats(cls, v):
+        if v is None or (isinstance(v, float) and math.isnan(v)):
+            return 0.0
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return 0.0
+
+    class Config:
+        extra = "allow"
+
+class PlatformSettings(BaseModel):
+    id: Optional[str] = "platform_config"
+    global_config: Optional[CategorySettings] = None
+    categories: Optional[Dict[str, CategorySettings]] = Field(default_factory=dict)
+    updated_at: Optional[str] = None
+    
+    class Config:
+        extra = "allow"
+
+@api_router.get("/platform/fees")
+async def get_platform_fees():
+    """Public endpoint to get platform fees for different categories"""
+    try:
+        # Ultimate fallback defaults
+        default_fee = {
+            "platform_fee": 50.0,
+            "subscription_fee": 999.0,
+            "basic_subscription_fee": 199.0,
+            "pro_subscription_fee": 499.0,
+            "listing_fee": 199.0,
+            "commission_rate": 2.0
+        }
+
+        settings = await db.settings.find_one({"id": "platform_config"}, {"_id": 0})
+        
+        if not settings:
+            return {"global_config": default_fee, "categories": {}}
+
+        def sanitize(config):
+            if not isinstance(config, dict):
+                return default_fee
+            return {
+                "platform_fee": float(config.get("platform_fee") if config.get("platform_fee") is not None else 50.0),
+                "subscription_fee": float(config.get("subscription_fee") if config.get("subscription_fee") is not None else 999.0),
+                "basic_subscription_fee": float(config.get("basic_subscription_fee") if config.get("basic_subscription_fee") is not None else 199.0),
+                "pro_subscription_fee": float(config.get("pro_subscription_fee") if config.get("pro_subscription_fee") is not None else 499.0),
+                "listing_fee": float(config.get("listing_fee") if config.get("listing_fee") is not None else 199.0),
+                "commission_rate": float(config.get("commission_rate") if config.get("commission_rate") is not None else 2.0)
+            }
+
+        global_cfg = settings.get("global_config")
+        categories_raw = settings.get("categories") or {}
+        
+        return {
+            "global_config": sanitize(global_cfg),
+            "categories": {cat: sanitize(cfg) for cat, cfg in categories_raw.items() if isinstance(cfg, dict)}
+        }
+    except Exception as e:
+        logger.error(f"CRITICAL: get_platform_fees failed: {e}", exc_info=True)
+        return {
+            "global_config": {
+                "platform_fee": 50.0,
+                "subscription_fee": 999.0,
+                "basic_subscription_fee": 199.0,
+                "pro_subscription_fee": 499.0,
+                "listing_fee": 199.0,
+                "commission_rate": 2.0
+            },
+            "categories": {}
+        }
+
+@api_router.get("/admin/settings")
+async def get_platform_settings(user: dict = Depends(get_admin_user)):
+    settings = await db.settings.find_one({"id": "platform_config"}, {"_id": 0})
+    if not settings:
+        default_cat = {
+            "platform_fee": 50.0,
+            "subscription_fee": 999.0,
+            "basic_subscription_fee": 199.0,
+            "pro_subscription_fee": 499.0,
+            "boost_fee": 199.0,
+            "service_fee_percent": 5.0,
+            "listing_fee": 0.0,
+            "commission_rate": 2.0
+        }
+        property_cat = {
+            "platform_fee": 0.0,
+            "subscription_fee": 999.0,
+            "basic_subscription_fee": 999.0,
+            "pro_subscription_fee": 999.0,
+            "boost_fee": 199.0,
+            "service_fee_percent": 0.0,
+            "listing_fee": 199.0,
+            "commission_rate": 0.0
+        }
+        settings = {
+            "id": "platform_config",
+            "global_config": default_cat,
+            "categories": {
+                "stay": default_cat,
+                "event": default_cat,
+                "services": default_cat,
+                "home": property_cat,
+                "business": property_cat
+            },
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.settings.insert_one(settings)
+    return settings
+
+@api_router.post("/admin/settings")
+async def update_platform_settings(settings: PlatformSettings, user: dict = Depends(get_admin_user)):
+    """Update platform-wide and category-specific configuration"""
+    try:
+        update_data = settings.model_dump()
+        update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+        
+        # Remove MongoDB specific fields if present
+        update_data.pop("_id", None)
+        
+        await db.settings.update_one(
+            {"id": "platform_config"},
+            {"$set": update_data},
+            upsert=True
+        )
+        
+        # Try to clear cache if function exists, else ignore
+        try:
+            await delete_cached_admin_stats()
+        except NameError:
+            pass
+        except Exception as e:
+            logger.warning(f"Failed to clear cache: {e}")
+            
+        return {
+            "message": "Settings updated successfully", 
+            "status": "success",
+            "updated_at": update_data["updated_at"]
+        }
+    except Exception as e:
+        logger.error(f"Error updating platform settings: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Failed to update settings: {str(e)}"
+        )
 
 @api_router.post("/admin/create")
 async def create_admin(admin_data: UserRegister):
@@ -6016,11 +6334,14 @@ if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
 
 class PaymentOrderRequest(BaseModel):
     amount: int = Field(..., description="Amount in paise (1 INR = 100 paise)")
-    listing_id: str
-    booking_type: str = Field(..., description="stay, event, services")
+    listing_id: Optional[str] = None
+    booking_type: Optional[str] = "stay"
     booking_date: Optional[str] = None
     guests: Optional[int] = 1
     notes: Optional[str] = None
+    payment_type: str = "booking"  # booking, listing_fee, subscription
+    subscription_months: int = 1
+    plan: Optional[str] = "basic"
 
 class PaymentVerifyRequest(BaseModel):
     razorpay_order_id: str
@@ -6032,63 +6353,156 @@ async def create_payment_order(
     request: PaymentOrderRequest,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Create Razorpay payment order for booking"""
-    user = await get_current_user(credentials)
-    user_id = user["id"]
-    
-    if not razorpay_client:
-        raise HTTPException(status_code=500, detail="Payment gateway not configured")
-
-    listing = await db.listings.find_one(
-        {"id": request.listing_id},
-        {"_id": 0, "id": 1, "owner_id": 1, "is_locked": 1, "locked_by": 1},
-    )
-    if not listing:
-        raise HTTPException(status_code=404, detail="Listing not found")
-
-    lock_owner = str(listing.get("locked_by") or "").strip()
-    if listing.get("is_locked") and lock_owner and lock_owner != user_id:
-        raise HTTPException(status_code=409, detail="Already in process")
-
-    await db.listings.update_one(
-        {"id": request.listing_id},
-        {
-            "$set": {
-                "is_locked": True,
-                "locked_by": user_id,
-                "locked_at": datetime.now(timezone.utc).isoformat(),
-                "updated_at": datetime.now(timezone.utc).isoformat(),
-            }
-        },
-    )
-    
+    """Create Razorpay payment order for booking, listing fee, or subscription"""
     try:
-        # Create Razorpay order
+        user = await get_current_user(credentials)
+        user_id = user["id"]
+        
+        if not razorpay_client:
+            logger.error("RAZORPAY ERROR: Client not initialized")
+            raise HTTPException(status_code=500, detail="Payment gateway not configured")
+
+        # 1. Determination of Booking Type and Category
+        booking_type = request.booking_type or "stay"
+        listing = None
+        
+        if request.payment_type == "booking":
+            if not request.listing_id:
+                raise HTTPException(status_code=400, detail="Listing ID required for booking")
+            listing = await db.listings.find_one({"id": request.listing_id})
+            if not listing:
+                raise HTTPException(status_code=404, detail="Listing not found")
+            
+            # Locking Logic
+            lock_owner = str(listing.get("locked_by") or "").strip()
+            lock_at = listing.get("locked_at")
+            is_locked = listing.get("is_locked", False)
+            if is_locked and lock_owner and lock_owner != user_id and lock_at:
+                try:
+                    locked_dt = datetime.fromisoformat(lock_at.replace('Z', '+00:00'))
+                    if (datetime.now(timezone.utc) - locked_dt).total_seconds() < 900: # 15 min
+                        raise HTTPException(status_code=409, detail="This listing is currently being booked by another user.")
+                except (ValueError, TypeError):
+                    pass # Handle invalid dates gracefully
+
+            await db.listings.update_one(
+                {"id": request.listing_id},
+                {
+                    "$set": {
+                        "is_locked": True,
+                        "locked_by": user_id,
+                        "locked_at": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                }
+            )
+            booking_type = listing.get("category") or booking_type
+            
+        elif request.payment_type == "listing_fee":
+            if not request.listing_id:
+                raise HTTPException(status_code=400, detail="Listing ID required")
+            listing = await db.listings.find_one({"id": request.listing_id})
+            if not listing:
+                raise HTTPException(status_code=404, detail="Listing not found")
+            booking_type = listing.get("category") or "home"
+            
+        elif request.payment_type == "subscription":
+            booking_type = "subscription"
+
+        # 2. Dynamic Fee Retrieval with Triple-Layer Fallback
+        settings_doc = await db.settings.find_one({"id": "platform_config"})
+        
+        def get_fee(cat_id, fee_key, default_val):
+            if not settings_doc: return default_val
+            cat_cfg = settings_doc.get("categories", {}).get(cat_id.lower())
+            if isinstance(cat_cfg, dict) and cat_cfg.get(fee_key) is not None:
+                return float(cat_cfg[fee_key])
+            global_cfg = settings_doc.get("global_config")
+            if isinstance(global_cfg, dict) and global_cfg.get(fee_key) is not None:
+                return float(global_cfg[fee_key])
+            return default_val
+
+        # 3. Final Amount Calculation
+        total_amount_paise = 0
+        platform_fee_paise = 0
+        
+        if request.payment_type == "booking":
+            fee_val = get_fee(booking_type, "platform_fee", 50.0)
+            platform_fee_paise = int(fee_val * 100)
+            total_amount_paise = int(request.amount + platform_fee_paise)
+            
+        elif request.payment_type == "listing_fee":
+            fee_val = get_fee(booking_type, "listing_fee", 199.0)
+            total_amount_paise = int(fee_val * 100)
+            
+        elif request.payment_type == "subscription":
+            booking_type = "subscription"
+            # Determine plan and amount
+            plan_name = (request.plan or "basic").lower()
+            if plan_name == "pro":
+                fee_val = get_fee("stay", "pro_subscription_fee", 499.0)
+            elif plan_name == "basic":
+                fee_val = get_fee("stay", "basic_subscription_fee", 199.0)
+            elif plan_name == "service_basic":
+                fee_val = get_fee("services", "service_basic_fee", 50.0)
+            elif plan_name == "service_verified":
+                fee_val = get_fee("services", "service_verified_fee", 99.0)
+            elif plan_name == "service_top":
+                fee_val = get_fee("services", "service_top_fee", 149.0)
+            else:
+                fee_val = get_fee("home", "subscription_fee", 999.0)
+            total_amount_paise = int(fee_val * 100 * (request.subscription_months or 1))
+        
+        elif request.payment_type == "reel_boost":
+            booking_type = "services"
+            days = int(request.subscription_months or 1)
+            if days == 1:
+                fee_val = get_fee("services", "reel_boost_1d", 19.0)
+            elif days == 3:
+                fee_val = get_fee("services", "reel_boost_3d", 49.0)
+            elif days == 7:
+                fee_val = get_fee("services", "reel_boost_7d", 99.0)
+            else:
+                fee_val = 19.0 * days # fallback
+            total_amount_paise = int(fee_val * 100)
+        
+        else:
+            total_amount_paise = int(request.amount)
+
+        if total_amount_paise <= 0:
+            raise HTTPException(status_code=400, detail="Invalid payment amount calculated")
+
+        # 4. Create Razorpay Order
         order_data = {
-            'amount': request.amount,  # Amount in paise
+            'amount': total_amount_paise,
             'currency': 'INR',
             'receipt': f'order_{uuid.uuid4().hex[:12]}',
             'notes': {
                 'user_id': user_id,
-                'listing_id': request.listing_id,
-                'booking_type': request.booking_type
+                'listing_id': request.listing_id or "",
+                'booking_type': booking_type,
+                'payment_type': request.payment_type,
+                'plan': request.plan or ""
             }
         }
         
         order = razorpay_client.order.create(data=order_data)
         
-        # Save payment order to database
+        # 5. Persistent Record Saving
         payment_record = {
             'id': str(uuid.uuid4()),
             'user_id': user_id,
+            'user_name': user.get("name"),
+            'user_email': user.get("email"),
             'listing_id': request.listing_id,
             'razorpay_order_id': order['id'],
-            'amount': request.amount,
+            'amount': total_amount_paise,
             'currency': 'INR',
-            'booking_type': request.booking_type,
+            'booking_type': booking_type,
+            'payment_type': request.payment_type,
+            'plan': request.plan if request.payment_type == "subscription" else None,
+            'subscription_months': request.subscription_months if request.payment_type == "subscription" else 1,
             'booking_date': request.booking_date,
-            'guests': request.guests,
-            'notes': request.notes,
             'status': 'created',
             'created_at': datetime.now(timezone.utc).isoformat()
         }
@@ -6097,26 +6511,34 @@ async def create_payment_order(
         
         return {
             'order_id': order['id'],
-            'amount': request.amount,
-            'currency': 'INR',
+            'amount': total_amount_paise,
             'key_id': RAZORPAY_KEY_ID,
-            'payment_id': payment_record['id']
+            'payment_id': payment_record['id'],
+            'payment_type': request.payment_type,
+            'user_details': {
+                'name': user.get("name"),
+                'phone': user.get("phone"),
+                'email': user.get("email")
+            }
         }
-        
+
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Razorpay order creation failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Payment order creation failed: {str(e)}")
+        logger.error(f"CRITICAL PAYMENT ERROR: create_payment_order failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="A professional server error occurred while initiating payment. Our team has been notified.")
 
 @api_router.post("/payments/verify")
 async def verify_payment(
     request: PaymentVerifyRequest,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Verify Razorpay payment and confirm booking"""
+    """Verify Razorpay payment and confirm booking or subscription"""
     user = await get_current_user(credentials)
     user_id = user["id"]
     
     if not razorpay_client:
+        logger.error("RAZORPAY ERROR: Client not initialized")
         raise HTTPException(status_code=500, detail="Payment gateway not configured")
     
     try:
@@ -6133,52 +6555,177 @@ async def verify_payment(
         payment = await db.payments.find_one({'razorpay_order_id': request.razorpay_order_id})
         
         if not payment:
+            logger.error(f"VERIFY ERROR: Payment not found for order {request.razorpay_order_id}")
             raise HTTPException(status_code=404, detail="Payment record not found")
         
+        now_iso = datetime.now(timezone.utc).isoformat()
         await db.payments.update_one(
             {'razorpay_order_id': request.razorpay_order_id},
             {'$set': {
                 'razorpay_payment_id': request.razorpay_payment_id,
                 'razorpay_signature': request.razorpay_signature,
                 'status': 'paid',
-                'paid_at': datetime.now(timezone.utc).isoformat()
+                'paid_at': now_iso
             }}
         )
         
-        # Create booking
-        booking = {
-            'id': str(uuid.uuid4()),
-            'user_id': user_id,
-            'listing_id': payment['listing_id'],
-            'payment_id': payment['id'],
-            'booking_date': payment.get('booking_date'),
-            'guests': payment.get('guests', 1),
-            'amount_paid': payment['amount'],
-            'status': 'confirmed',
-            'created_at': datetime.now(timezone.utc).isoformat()
-        }
+        payment_type = payment.get('payment_type', 'booking')
         
-        await db.bookings.insert_one(booking)
+        if payment_type == 'booking':
+            booking_id = str(uuid.uuid4())
+            booking = {
+                'id': booking_id,
+                'user_id': user_id,
+                'user_name': user.get("name"),
+                'user_phone': user.get("phone"),
+                'listing_id': payment['listing_id'],
+                'payment_id': payment['id'],
+                'razorpay_order_id': request.razorpay_order_id,
+                'razorpay_payment_id': request.razorpay_payment_id,
+                'booking_date': payment.get('booking_date'),
+                'amount_paid': payment['amount'],
+                'status': 'confirmed',
+                'created_at': now_iso
+            }
+            await db.bookings.insert_one(booking)
 
-        await db.listings.update_one(
-            {"id": payment["listing_id"]},
-            {
-                "$set": {
-                    "is_locked": False,
-                    "locked_by": None,
-                    "locked_at": None,
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
-                },
-                "$addToSet": {"contact_unlocked_user_ids": user_id},
-            },
-        )
+            # Dynamic Commission Recording
+            listing = await db.listings.find_one({"id": payment["listing_id"]})
+            if listing and listing.get("category") in {ListingCategory.STAY.value, ListingCategory.EVENT.value}:
+                # Fetch rate from settings or use default 2.0
+                settings = await db.settings.find_one({"id": "platform_config"})
+                cat_id = listing.get("category").lower()
+                rate_val = 2.0
+                if settings:
+                    cat_cfg = settings.get("categories", {}).get(cat_id)
+                    if isinstance(cat_cfg, dict) and cat_cfg.get("commission_rate") is not None:
+                        rate_val = float(cat_cfg["commission_rate"])
+                    else:
+                        rate_val = float(settings.get("global_config", {}).get("commission_rate", 2.0))
+                
+                commission_amount = int(payment['amount'] * (rate_val / 100))
+                await db.commissions.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "booking_id": booking_id,
+                    "owner_id": listing["owner_id"],
+                    "listing_id": listing["id"],
+                    "total_amount": payment['amount'],
+                    "commission_rate": rate_val,
+                    "commission_amount": commission_amount,
+                    "status": "pending",
+                    "created_at": now_iso
+                })
+
+            await db.listings.update_one(
+                {"id": payment["listing_id"]},
+                {"$set": {
+                    "is_locked": False, 
+                    "locked_by": None, 
+                    "locked_at": None, 
+                    "updated_at": now_iso
+                }, "$addToSet": {"contact_unlocked_user_ids": user_id}}
+            )
+            return {'success': True, 'message': 'Booking confirmed!', 'booking_id': booking_id}
+
+        elif payment_type == 'listing_fee':
+            await db.listings.update_one(
+                {"id": payment["listing_id"]},
+                {"$set": {"status": ListingStatus.PENDING, "payment_status": "paid", "listing_fee_paid": True, "updated_at": now_iso}}
+            )
+            return {'success': True, 'message': 'Listing fee paid successfully!'}
+
+        elif payment_type == 'subscription':
+            months = int(payment.get('subscription_months', 1))
+            plan = payment.get('plan', SubscriptionPlan.BASIC.value)
+            
+            # Smart Billing Date Calculation
+            current_next_billing = user.get("next_billing_date")
+            start_date = datetime.now(timezone.utc)
+            if current_next_billing:
+                try:
+                    parsed_date = datetime.fromisoformat(current_next_billing.replace('Z', '+00:00'))
+                    if parsed_date > start_date:
+                        start_date = parsed_date
+                except:
+                    pass
+            
+            expiry_date = _add_months(start_date, months)
+            
+            # Map features based on plan
+            featured = False
+            verified = user.get("verified", False)
+            
+            if plan == SubscriptionPlan.SERVICE_TOP.value:
+                featured = True
+                verified = True
+            elif plan == SubscriptionPlan.SERVICE_VERIFIED.value:
+                verified = True
+            elif plan == SubscriptionPlan.PRO.value:
+                featured = True
+            
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {
+                    "subscription_status": "active",
+                    "subscription_plan": plan,
+                    "next_billing_date": expiry_date.isoformat(),
+                    "last_payment_date": now_iso,
+                    "subscription_start_date": user.get("subscription_start_date") or now_iso,
+                    "verified": verified
+                }}
+            )
+
+            # Propagate visibility boost to all listings
+            await db.listings.update_many(
+                {"owner_id": user_id},
+                {"$set": {
+                    "subscription_plan": plan, 
+                    "featured": featured,
+                    "owner_verified": verified
+                }}
+            )
+            
+            await db.subscriptions.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "payment_id": payment['id'],
+                "amount": payment['amount'],
+                "plan": plan,
+                "status": "active",
+                "paid_at": now_iso,
+                "expires_at": expiry_date.isoformat(),
+            })
+            return {'success': True, 'message': f'{plan.replace("service_", "").capitalize()} Plan activated!'}
+
+        elif payment_type == 'reel_boost':
+            # Handle Reel Boost payment verification
+            days = int(payment.get('subscription_months', 1))
+            listing_id = payment.get('listing_id')
+            
+            boost_expiry = datetime.now(timezone.utc) + timedelta(days=days)
+            
+            if listing_id:
+                await db.listings.update_one(
+                    {"id": listing_id},
+                    {"$set": {
+                        "status": ListingStatus.BOOSTED.value,
+                        "boost_expires": boost_expiry.isoformat(),
+                        "featured": True
+                    }}
+                )
+            
+            return {'success': True, 'message': f'Reel boosted for {days} days!'}
+
+        return {'success': True, 'message': 'Payment verified'}
+
+    except razorpay.errors.SignatureVerificationError:
+        logger.error(f"VERIFY ERROR: Signature mismatch for order {request.razorpay_order_id}")
+        raise HTTPException(status_code=400, detail="Security verification failed. Please contact support.")
+    except Exception as e:
+        logger.error(f"VERIFY ERROR: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Professional error during verification. Please do not worry, your payment is recorded.")
         
-        return {
-            'success': True,
-            'message': 'Payment verified and booking confirmed!',
-            'booking_id': booking['id'],
-            'contact_unlocked': True,
-        }
+        return {'success': True, 'message': 'Payment verified'}
         
     except razorpay.errors.SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Invalid payment signature")
@@ -6769,24 +7316,38 @@ async def create_subscription_order(
     request: SubscriptionRequest,
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
-    """Create Razorpay order for subscription-based owner roles (₹251/month)"""
+    """Create Razorpay order for subscription-based owner roles"""
     user = await get_current_user(credentials)
     
     if str(user.get("role") or "") not in SUBSCRIPTION_ROLES:
-        raise HTTPException(status_code=403, detail="Only service providers, stay owners, and event owners can subscribe")
+        raise HTTPException(status_code=403, detail="Only owners and service providers can subscribe")
     
     if not razorpay_client:
         raise HTTPException(status_code=500, detail="Payment gateway not configured")
     
+    # Fetch dynamic subscription amount from settings
+    settings = await db.settings.find_one({"id": "platform_config"})
+    subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
+    
+    plan = request.plan.lower()
+    if plan == SubscriptionPlan.BASIC.value:
+        subscription_amount = STAY_EVENT_BASIC_SUB_PAISE
+    elif plan == SubscriptionPlan.PRO.value:
+        subscription_amount = STAY_EVENT_PRO_SUB_PAISE
+        
+    if settings and "global_config" in settings:
+        # Fallback to global if specific plan amounts aren't in settings
+        pass
+
     try:
         order_data = {
-            'amount': SUBSCRIPTION_AMOUNT,
+            'amount': subscription_amount,
             'currency': 'INR',
             'receipt': f'sub_{uuid.uuid4().hex[:12]}',
             'notes': {
                 'user_id': user["id"],
                 'type': 'subscription',
-                'plan': request.plan
+                'plan': plan
             }
         }
         
@@ -6796,8 +7357,8 @@ async def create_subscription_order(
             'id': str(uuid.uuid4()),
             'user_id': user["id"],
             'razorpay_order_id': order['id'],
-            'amount': SUBSCRIPTION_AMOUNT,
-            'plan': request.plan,
+            'amount': subscription_amount,
+            'plan': plan,
             'status': 'pending',
             'created_at': datetime.now(timezone.utc).isoformat()
         }
@@ -6806,16 +7367,16 @@ async def create_subscription_order(
         
         return {
             'order_id': order['id'],
-            'amount': SUBSCRIPTION_AMOUNT,
+            'amount': subscription_amount,
             'currency': 'INR',
             'key_id': RAZORPAY_KEY_ID,
             'subscription_id': subscription_record['id'],
             'plan_details': {
-                'name': 'Monthly Subscription',
-                'price': '₹251/month',
+                'name': f'{plan.capitalize()} Subscription',
+                'price': f'₹{subscription_amount // 100}/month',
                 'features': [
-                    'List unlimited services',
-                    'Priority in search results',
+                    'Featured placement' if plan == SubscriptionPlan.PRO.value else 'Normal visibility',
+                    'Unlimited properties and services' if plan == SubscriptionPlan.PRO.value else f'Up to {BASIC_PLAN_LISTING_LIMIT} listings',
                     'Verified badge',
                     'Analytics dashboard',
                     'Direct customer inquiries'
@@ -6879,11 +7440,15 @@ async def verify_subscription_payment(
         )
         
         # Update user subscription status
+        plan = subscription.get('plan', SubscriptionPlan.BASIC.value)
+        is_pro = plan == SubscriptionPlan.PRO.value
+        
         await db.users.update_one(
             {'id': user["id"]},
             {'$set': {
                 'subscription': 'active',
                 'subscription_status': 'active',
+                'subscription_plan': plan,
                 'subscription_expires': expiry_date.isoformat(),
                 'next_billing_date': expiry_date.isoformat(),
                 'last_payment_date': now.isoformat(),
@@ -6891,6 +7456,12 @@ async def verify_subscription_payment(
                 'block_status': None,
                 'block_until': None,
             }}
+        )
+
+        # Update all owner's listings visibility based on the plan
+        await db.listings.update_many(
+            {"owner_id": user["id"]},
+            {"$set": {"subscription_plan": plan, "featured": is_pro}}
         )
         
         return {
@@ -6940,6 +7511,17 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
     user = await get_current_user(credentials)
 
     role = str(user.get("role") or "")
+    
+    # Check for hybrid roles (Subscription + Commission)
+    is_hybrid = role in COMMISSION_ROLES and role in SUBSCRIPTION_ROLES
+    
+    # Initialize response data
+    response_data = {
+        "has_subscription": False,
+        "status": "pending",
+        "model": "subscription",
+    }
+
     if role in COMMISSION_ROLES:
         pending_commission = await db.commissions.aggregate([
             {"$match": {"owner_id": user["id"], "status": "pending"}},
@@ -6947,15 +7529,18 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
         ]).to_list(1)
 
         pending_total = pending_commission[0]["total"] if pending_commission else 0
-        return {
-            "model": "commission",
+        response_data.update({
+            "model": "hybrid" if is_hybrid else "commission",
             "commission_rate": f"{int(COMMISSION_RATE * 100)}%",
             "pending_commission_amount": pending_total,
-            "message": "You pay 5% commission per confirmed deal. No monthly fee.",
-        }
+            "message": f"You pay {int(COMMISSION_RATE * 100)}% commission per confirmed deal.",
+        })
+        
+        if not is_hybrid:
+            return response_data
 
     if role not in SUBSCRIPTION_ROLES:
-        return {'has_subscription': False, 'message': 'Not a service provider'}
+        return {'has_subscription': False, 'message': 'Subscription not applicable'}
 
     status = str(user.get("subscription_status") or "pending")
     trial_end = user.get("trial_end_date")
@@ -6974,11 +7559,27 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
         sort=[("paid_at", -1)],
     )
 
-    return {
-        "model": "subscription",
+    # Fetch dynamic subscription amounts from settings
+    settings = await db.settings.find_one({"id": "platform_config"})
+    subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
+    basic_fee = STAY_EVENT_BASIC_SUB_PAISE
+    pro_fee = STAY_EVENT_PRO_SUB_PAISE
+    
+    if settings:
+        global_config = settings.get("global_config", {})
+        subscription_amount = int(global_config.get("subscription_fee", 999.0) * 100)
+        # Use category specific fees if available
+        # (Assuming the settings structure will be updated later)
+    
+    plan = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
+    plan_amount = basic_fee if plan == SubscriptionPlan.BASIC.value else pro_fee
+    if role == UserRole.PROPERTY_OWNER.value:
+        plan_amount = subscription_amount
+
+    response_data.update({
         "status": status,
         "has_subscription": status in {"active", "trial"},
-        "amount_monthly": f"₹{SUBSCRIPTION_AMOUNT // 100}",
+        "amount_monthly": f"₹{plan_amount // 100}",
         "coupon_used": user.get("coupon_used"),
         "trial_end_date": trial_end,
         "trial_days_remaining": trial_days_remaining,
@@ -6988,16 +7589,23 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
         "auto_renew": user.get("auto_renew", True),
         "block_until": user.get("block_until"),
         "subscription_start_date": user.get("subscription_start_date"),
-        "message": "Active subscription" if status in {"active", "trial"} else "No active subscription",
-        "price": '₹251/month',
+        "subscription_plan": plan,
+        "price": f"₹{plan_amount // 100}/month",
         "features": [
-            'List unlimited services',
-            'Priority in search results',
+            'Featured placement' if plan == SubscriptionPlan.PRO.value else 'Normal visibility',
+            'Unlimited listings' if plan == SubscriptionPlan.PRO.value or role == UserRole.PROPERTY_OWNER.value else 'Limited listings',
             'Verified badge',
             'Analytics dashboard',
             'Direct customer inquiries'
         ]
-    }
+    })
+    
+    if status in {"active", "trial"}:
+        response_data["message"] = "Active subscription"
+    else:
+        response_data["message"] = "No active subscription"
+
+    return response_data
 # ============ RATE LIMITING MIDDLEWARE ============
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse

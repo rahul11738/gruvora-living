@@ -45,10 +45,23 @@ export function useListingForm({ category, role, buildPayload, onSuccess }) {
     setSubmitting(true);
     try {
       const payload = buildPayload(baseData, specificData, category);
-      await listingsAPI.create(payload);
+      const response = await listingsAPI.create(payload);
       localStorage.removeItem(DRAFT_KEY(role));
-      toast.success('Listing created! Pending admin approval.');
-      onSuccess?.();
+      
+      const { status, payment_required, fee_amount_paise, listing_id } = response.data;
+      
+      if (status === 'awaiting_payment' || status === 'AWAITING_PAYMENT') {
+        toast.success('Listing created! Please complete payment to publish.');
+        onSuccess?.({ 
+          status: 'awaiting_payment', 
+          payment_required, 
+          fee_amount_paise, 
+          listing_id 
+        });
+      } else {
+        toast.success('Listing created! Pending admin approval.');
+        onSuccess?.({ status });
+      }
     } catch (err) {
       const detail = err.response?.data?.detail;
       if (detail?.category_specific_errors) {

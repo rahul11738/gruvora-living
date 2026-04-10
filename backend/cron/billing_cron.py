@@ -13,10 +13,10 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 logger = logging.getLogger(__name__)
 
-SUBSCRIPTION_ROLES = {"stay_owner", "service_provider", "event_owner"}
+SUBSCRIPTION_ROLES = {"property_owner", "stay_owner", "service_provider", "event_owner"}
 BLOCK_DURATION_DAYS = 7
 BILLING_GRACE_DAYS = 5
-SUBSCRIPTION_AMOUNT_PAISE = 25100
+SUBSCRIPTION_AMOUNT_PAISE = 99900
 
 _scheduler_task: Optional[asyncio.Task] = None
 
