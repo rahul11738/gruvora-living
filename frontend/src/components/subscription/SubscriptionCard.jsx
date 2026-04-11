@@ -118,10 +118,19 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
             <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Priority customer leads</li>
           </ul>
           
-          <Button onClick={() => onPay('unlimited')} disabled={paying} className="w-full btn-primary h-11">
+          <Button 
+            onClick={() => onPay('unlimited')} 
+            disabled={paying || subData.status === 'active'} 
+            className="w-full btn-primary h-11"
+          >
             {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-            {subData.status === 'trial' ? 'Upgrade Now (₹999)' : 'Activate Now (₹999)'}
+            {subData.status === 'active' ? 'Plan Active' : (subData.status === 'trial' ? 'Activate Professional Plan (₹999)' : 'Pay Now (₹999)')}
           </Button>
+          {subData.status === 'trial' && (
+            <p className="text-[10px] text-center text-muted-foreground mt-2 italic">
+              * Activating now will secure your featured placement immediately.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -394,7 +403,7 @@ export default function SubscriptionCard() {
           </div>
         </div>
 
-        {needsPayment && (
+        {(needsPayment || subData.status === 'trial') && (
           <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
         )}
 
