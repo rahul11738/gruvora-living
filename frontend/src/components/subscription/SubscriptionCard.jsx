@@ -178,7 +178,7 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole }) => {
 
 export default function SubscriptionCard() {
   const { user } = useAuth();
-  const { subData, loading, fetchStatus, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
+  const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
   const [paying, setPaying] = useState(false);
 
   const handlePay = async (plan = 'monthly') => {
@@ -202,16 +202,35 @@ export default function SubscriptionCard() {
           order_id,
           handler: async (response) => {
             try {
-              await subscriptionAPI.verify({
+              const verifyRes = await subscriptionAPI.verify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
               });
-              toast.success('Subscription activated!');
-              await fetchStatus();
+
+              // ✅ CRITICAL FIX: Immediately update context with active status.
+              // This removes the "Pay" button RIGHT NOW without waiting for a
+              // potentially CORS-blocked network refetch.
+              const updatedSub = verifyRes?.data?.subscription;
+              if (updatedSub && updatedSub.status === 'active') {
+                updateSubData(updatedSub);
+              } else {
+                // Fallback: at minimum mark as active so UI refreshes immediately
+                updateSubData({
+                  status: 'active',
+                  has_subscription: true,
+                  subscription_plan: plan,
+                });
+              }
+
+              toast.success('🎉 Subscription activated! You can now list properties.');
+
+              // Background refresh to sync full state from server (best-effort)
+              fetchStatus().catch(() => {}); 
+
               resolve();
             } catch (error) {
-              toast.error('Payment verification failed');
+              toast.error('Payment verification failed. Contact support if payment was deducted.');
               reject(error);
             }
           },
@@ -224,7 +243,7 @@ export default function SubscriptionCard() {
       });
     } catch (error) {
       if (error?.message !== 'dismissed') {
-        toast.error('Payment failed');
+        toast.error('Payment failed. Please try again.');
       }
     } finally {
       setPaying(false);

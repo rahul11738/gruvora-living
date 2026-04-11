@@ -5879,23 +5879,65 @@ async def get_admin_stats(user: dict = Depends(get_admin_user)):
 @api_router.get("/admin/revenue")
 async def get_admin_revenue(user: dict = Depends(get_admin_user)):
     """Get detailed revenue statistics for admin dashboard"""
-    # Recent payments
+    # Recent payments (listing fees, boosts, etc.)
     payments = await db.payments.find(
         {"status": "paid"},
         {"_id": 0}
     ).sort("paid_at", -1).limit(50).to_list(50)
 
-    # Recent subscriptions
+    # Recent subscriptions (these ARE the subscription payments)
     subscriptions = await db.subscriptions.find(
         {"status": "active"},
         {"_id": 0}
     ).sort("created_at", -1).limit(50).to_list(50)
+
+    # ✅ FIX: Enrich subscription records with owner info and merge into payments
+    # so admin dashboard "Recent Transactions" shows subscription payments too
+    owner_ids = list({s.get("user_id") for s in subscriptions if s.get("user_id")})
+    owner_map = {}
+    if owner_ids:
+        owners_cursor = db.users.find(
+            {"id": {"$in": owner_ids}},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1}
+        )
+        async for o in owners_cursor:
+            owner_map[o["id"]] = o
+
+    enriched_subscriptions = []
+    for sub in subscriptions:
+        owner = owner_map.get(sub.get("user_id"), {})
+        enriched_subscriptions.append({
+            **sub,
+            "user_name": owner.get("name", "Owner"),
+            "user_email": owner.get("email", ""),
+            "owner_role": owner.get("role", ""),
+            "booking_type": f"Subscription ({sub.get('plan', 'basic').replace('_', ' ').title()})",
+            "paid_at": sub.get("activated_at") or sub.get("created_at"),
+        })
+
+    # Merge subscription payments into recent_payments for unified admin view
+    all_payments = list(payments) + enriched_subscriptions
+    all_payments.sort(key=lambda x: x.get("paid_at") or x.get("created_at") or "", reverse=True)
+    all_payments = all_payments[:50]
 
     # Revenue by type
     pipeline = [
         {"$group": {"_id": "$booking_type", "total": {"$sum": "$amount"}}}
     ]
     revenue_by_type = await db.payments.aggregate(pipeline).to_list(10)
+
+    # ✅ Also compute subscription revenue from subscriptions collection
+    sub_revenue_pipeline = [
+        {"$match": {"status": "active"}},
+        {"$group": {"_id": "subscription", "total": {"$sum": "$amount"}}}
+    ]
+    sub_revenue = await db.subscriptions.aggregate(sub_revenue_pipeline).to_list(5)
+    # Merge subscription revenue into revenue_by_type list
+    sub_revenue_map = {r["_id"]: r["total"] for r in sub_revenue}
+    merged_revenue = {r["_id"] or "other": r["total"] for r in revenue_by_type}
+    for k, v in sub_revenue_map.items():
+        merged_revenue[k] = merged_revenue.get(k, 0) + v
+    revenue_by_type_final = [{"type": k, "amount": v / 100} for k, v in merged_revenue.items()]
 
     # Daily revenue (last 30 days)
     start_date = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
@@ -5906,13 +5948,32 @@ async def get_admin_revenue(user: dict = Depends(get_admin_user)):
     ]
     daily_revenue = await db.payments.aggregate(daily_pipeline).to_list(30)
 
+    # Daily subscription revenue (last 30 days)
+    daily_sub_pipeline = [
+        {"$match": {"status": "active", "activated_at": {"$gte": start_date}}},
+        {"$group": {"_id": {"$substr": ["$activated_at", 0, 10]}, "total": {"$sum": "$amount"}}},
+        {"$sort": {"_id": 1}}
+    ]
+    daily_sub_revenue = await db.subscriptions.aggregate(daily_sub_pipeline).to_list(30)
+    # Merge daily revenues
+    daily_map: dict = {}
+    for r in daily_revenue:
+        daily_map[r["_id"]] = daily_map.get(r["_id"], 0) + r["total"]
+    for r in daily_sub_revenue:
+        if r["_id"]:
+            daily_map[r["_id"]] = daily_map.get(r["_id"], 0) + r["total"]
+    daily_revenue_final = sorted(
+        [{"date": k, "amount": v / 100} for k, v in daily_map.items()],
+        key=lambda x: x["date"]
+    )
+
     # Recent boost payments
     boosts = await db.boosts.find(
         {"status": "paid"},
         {"_id": 0}
     ).sort("paid_at", -1).limit(50).to_list(50)
 
-    # Owner subscription status summary
+    # Owner subscription status summary (enriched with last payment info)
     owners_summary_pipeline = [
         {"$match": {"role": {"$in": list(SUBSCRIPTION_ROLES)}}},
         {"$group": {
@@ -5924,19 +5985,21 @@ async def get_admin_revenue(user: dict = Depends(get_admin_user)):
                 "email": "$email",
                 "role": "$role",
                 "status": "$subscription_status",
-                "next_billing": "$next_billing_date"
+                "next_billing": "$next_billing_date",
+                "last_payment_date": "$last_payment_date",
+                "subscription_plan": "$subscription_plan",
             }}
         }}
     ]
     owners_summary = await db.users.aggregate(owners_summary_pipeline).to_list(100)
 
     return {
-        "recent_payments": payments,
-        "recent_subscriptions": subscriptions,
+        "recent_payments": all_payments,
+        "recent_subscriptions": enriched_subscriptions,
         "recent_boosts": boosts,
         "owners_subscription_summary": owners_summary,
-        "revenue_by_type": [{"type": r["_id"] or "other", "amount": r["total"] / 100} for r in revenue_by_type],
-        "daily_revenue": [{"date": r["_id"], "amount": r["total"] / 100} for r in daily_revenue],
+        "revenue_by_type": revenue_by_type_final,
+        "daily_revenue": daily_revenue_final,
         "razorpay_enabled": bool(razorpay_client)
     }
 

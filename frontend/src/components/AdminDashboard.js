@@ -1296,7 +1296,7 @@ const RevenueTab = ({ data, onRefresh }) => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Owner Subscription Details</CardTitle>
+          <CardTitle className="text-lg">Owner Subscription Details & Payment Tracker</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -1305,12 +1305,14 @@ const RevenueTab = ({ data, onRefresh }) => {
                 <TableRow>
                   <TableHead>Owner</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Plan</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Last Payment</TableHead>
                   <TableHead>Next Billing</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {owners_subscription_summary.flatMap(group => group.total_users).slice(0, 20).map((owner) => (
+                {owners_subscription_summary.flatMap(group => group.total_users).slice(0, 30).map((owner) => (
                   <TableRow key={owner.id}>
                     <TableCell>
                       <div className="flex flex-col">
@@ -1320,15 +1322,21 @@ const RevenueTab = ({ data, onRefresh }) => {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className="capitalize text-[10px]">
-                        {owner.role?.replace('_', ' ')}
+                        {owner.role?.replace(/_/g, ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge 
+                      <span className="text-xs font-medium text-stone-700 capitalize">
+                        {owner.subscription_plan?.replace(/_/g, ' ') || 'Basic'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
                         className={
-                          owner.status === 'active' ? 'bg-green-100 text-green-700' : 
-                          owner.status === 'trial' ? 'bg-blue-100 text-blue-700' : 
-                          owner.status === 'expired' ? 'bg-red-100 text-red-700' : 
+                          owner.status === 'active' ? 'bg-green-100 text-green-700' :
+                          owner.status === 'trial' ? 'bg-blue-100 text-blue-700' :
+                          owner.status === 'expired' ? 'bg-red-100 text-red-700' :
+                          owner.status === 'blocked' ? 'bg-red-200 text-red-800' :
                           'bg-stone-100 text-stone-700'
                         }
                       >
@@ -1336,13 +1344,19 @@ const RevenueTab = ({ data, onRefresh }) => {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-stone-600 text-sm">
-                      {owner.next_billing ? new Date(owner.next_billing).toLocaleDateString() : 'N/A'}
+                      {owner.last_payment_date
+                        ? <span className="text-green-700 font-semibold">{new Date(owner.last_payment_date).toLocaleDateString('en-IN')}</span>
+                        : <span className="text-stone-400 italic">No payment yet</span>
+                      }
+                    </TableCell>
+                    <TableCell className="text-stone-600 text-sm">
+                      {owner.next_billing ? new Date(owner.next_billing).toLocaleDateString('en-IN') : 'N/A'}
                     </TableCell>
                   </TableRow>
                 ))}
                 {owners_subscription_summary.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-stone-400 py-8">
+                    <TableCell colSpan={6} className="text-center text-stone-400 py-8">
                       No owners found
                     </TableCell>
                   </TableRow>

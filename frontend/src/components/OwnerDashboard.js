@@ -62,7 +62,7 @@ const categoryIcons = {
 
 export const OwnerDashboard = () => {
   const { user, logout } = useAuth();
-  const { subData, loading: subscriptionStatusLoading, isBlocked, needsPayment } = useSubscription();
+  const { subData, loading: subscriptionStatusLoading, isBlocked, needsPayment, isActive } = useSubscription();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState(null);
@@ -91,13 +91,15 @@ export const OwnerDashboard = () => {
       toast.info('Checking subscription status...');
       return;
     }
-    if (isBlocked || needsPayment) {
+    // Allow listing if subscription is active (isActive) OR if not a subscription role
+    const blocked = !isActive && (isBlocked || needsPayment);
+    if (blocked) {
       toast.error('Activate your subscription to create listings');
       setActiveTab('subscription');
       return;
     }
     setShowCreateDialog(true);
-  }, [isBlocked, needsPayment, subscriptionStatusLoading, showSubscriptionTab, subData]);
+  }, [isActive, isBlocked, needsPayment, subscriptionStatusLoading, showSubscriptionTab, subData]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -269,7 +271,7 @@ export const OwnerDashboard = () => {
                 >
                   <Crown className="w-5 h-5" />
                   Subscription
-                  {subData?.model === 'commission' || subData?.has_subscription ? (
+                  {isActive || subData?.model === 'commission' ? (
                     <Badge className="ml-auto bg-green-500">Active</Badge>
                   ) : needsPayment ? (
                     <Badge className="ml-auto bg-red-500">Due</Badge>

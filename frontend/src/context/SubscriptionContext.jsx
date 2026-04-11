@@ -11,6 +11,9 @@ export const SubscriptionProvider = ({ children }) => {
   const [subData, setSubData] = useState(null);
   const [loading, setLoading] = useState(false);
 
+  // Allow direct update from payment callback (avoids CORS-prone refetch)
+  const updateSubData = (newData) => setSubData(prev => ({ ...prev, ...newData }));
+
   const fetchStatus = useCallback(async () => {
     if (!isAuthenticated || !isOwner || user?.role === 'admin') {
       setSubData(null);
@@ -58,6 +61,7 @@ export const SubscriptionProvider = ({ children }) => {
         subData,
         loading,
         fetchStatus,
+        updateSubData,
         isBlocked,
         isTrial,
         isActive,
