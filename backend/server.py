@@ -7669,6 +7669,62 @@ async def migrate_owner_subscriptions(credentials: HTTPAuthorizationCredentials 
     }
 
 
+@api_router.post("/admin/subscriptions/fix-user")
+async def fix_user_subscription(
+    request: Dict[str, Any],
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """
+    Admin endpoint to manually fix a user's subscription status.
+    Use this when a user has paid but subscription still shows as inactive.
+
+    Body: { "user_id": "xxx", "status": "active" | "trial" | "expired" | "pending" }
+    """
+    admin_user = await get_current_user(credentials)
+    if normalize_role(admin_user.get("role")) != UserRole.ADMIN.value:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    user_id = request.get("user_id")
+    new_status = request.get("status", "active")
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+
+    target_user = await db.users.find_one({"id": user_id})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    now = datetime.now(timezone.utc)
+    expiry_date = _add_months(now, 1)
+
+    update_doc = {
+        "subscription_status": new_status,
+        "last_payment_date": now.isoformat(),
+        "next_billing_date": expiry_date.isoformat(),
+        "block_status": None,
+        "block_until": None,
+        "auto_renew": True,
+    }
+
+    if new_status == "active":
+        update_doc["subscription_start_date"] = now.isoformat()
+        update_doc["subscription_expires"] = expiry_date.isoformat()
+
+    await db.users.update_one({"id": user_id}, {"$set": update_doc})
+
+    logger.info(f"Admin fixed subscription for user {user_id}: status={new_status}")
+
+    return {
+        "success": True,
+        "message": f"Subscription status set to '{new_status}' for user {target_user.get('email')}",
+        "user": {
+            "email": target_user.get("email"),
+            "role": target_user.get("role"),
+            "subscription_status": new_status
+        }
+    }
+
+
 @api_router.get("/subscriptions/invoices")
 async def get_subscription_invoices(credentials: HTTPAuthorizationCredentials = Depends(security)):
     user = await get_current_user(credentials)
