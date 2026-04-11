@@ -8994,6 +8994,9 @@ async def verify_subscription_payment(
             SubscriptionPlan.SERVICE_TOP.value,
         }
 
+        # CRITICAL FIX: First refresh user data from DB to get latest subscription status
+        fresh_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+
         await db.users.update_one(
             {"id": user["id"]},
             {
@@ -9004,10 +9007,11 @@ async def verify_subscription_payment(
                     "subscription_expires": expiry_date.isoformat(),
                     "next_billing_date": expiry_date.isoformat(),
                     "last_payment_date": now.isoformat(),
-                    "subscription_start_date": user.get("subscription_start_date")
+                    "subscription_start_date": fresh_user.get("subscription_start_date")
                     or now.isoformat(),
                     "block_status": None,
                     "block_until": None,
+                    "auto_renew": True,
                 }
             },
         )
@@ -9278,11 +9282,15 @@ async def get_subscription_status(
         if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
             init_doc = build_subscription_init_doc(role=role)
             await db.users.update_one({"id": user["id"]}, {"$set": init_doc})
-            # Update local user object for the rest of the function
-            user.update(init_doc)
             logger.info(
                 f"Auto-initialized 5-month trial for owner: {user.get('email')}"
             )
+            # CRITICAL FIX: Re-fetch user from DB to get the updated subscription data
+            user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+            if not user:
+                raise HTTPException(
+                    status_code=404, detail="User not found after initialization"
+                )
 
         # FORCE FIX: If user is an owner but somehow still has no trial data, force return a trial status
         # This is a fail-safe to ensure "Subscription data unavailable" NEVER appears for owners.
@@ -9404,6 +9412,7 @@ async def get_subscription_status(
                 "status": status,
                 "has_subscription": status in {"active", "trial"},
                 "amount_monthly": f"₹{plan_amount // 100}",
+                "subscription_amount_paise": plan_amount,
                 "coupon_used": user.get("coupon_used"),
                 "trial_end_date": trial_end,
                 "trial_days_remaining": trial_days_remaining,
