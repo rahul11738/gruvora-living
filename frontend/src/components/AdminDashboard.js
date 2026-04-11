@@ -1306,6 +1306,7 @@ const RevenueTab = ({ data, onRefresh }) => {
                   <TableHead>Owner</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Plan</TableHead>
+                  <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last Payment</TableHead>
                   <TableHead>Next Billing</TableHead>
@@ -1329,6 +1330,11 @@ const RevenueTab = ({ data, onRefresh }) => {
                       <span className="text-xs font-medium text-stone-700 capitalize">
                         {owner.subscription_plan?.replace(/_/g, ' ') || 'Basic'}
                       </span>
+                    </TableCell>
+                    <TableCell className="text-stone-600 text-sm font-medium">
+                      {owner.subscription_amount_paise 
+                        ? `₹${(owner.subscription_amount_paise / 100).toLocaleString('en-IN')}` 
+                        : '₹999'}
                     </TableCell>
                     <TableCell>
                       <Badge

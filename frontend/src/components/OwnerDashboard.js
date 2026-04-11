@@ -62,7 +62,7 @@ const categoryIcons = {
 
 export const OwnerDashboard = () => {
   const { user, logout } = useAuth();
-  const { subData, loading: subscriptionStatusLoading, isBlocked, needsPayment, isActive } = useSubscription();
+  const { subData, loading: subscriptionStatusLoading, isBlocked, needsPayment, isActive, isTrial } = useSubscription();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState(null);
@@ -91,15 +91,15 @@ export const OwnerDashboard = () => {
       toast.info('Checking subscription status...');
       return;
     }
-    // Allow listing if subscription is active (isActive) OR if not a subscription role
-    const blocked = !isActive && (isBlocked || needsPayment);
+    // Allow listing if subscription is active (isActive) OR if on trial (isTrial) OR if not a subscription role
+    const blocked = !isActive && !isTrial && (isBlocked || needsPayment);
     if (blocked) {
       toast.error('Activate your subscription to create listings');
       setActiveTab('subscription');
       return;
     }
     setShowCreateDialog(true);
-  }, [isActive, isBlocked, needsPayment, subscriptionStatusLoading, showSubscriptionTab, subData]);
+  }, [isActive, isTrial, isBlocked, needsPayment, subscriptionStatusLoading, showSubscriptionTab, subData]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
