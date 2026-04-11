@@ -20,9 +20,14 @@ export const SubscriptionProvider = ({ children }) => {
     setLoading(true);
     try {
       const response = await subscriptionAPI.getStatus();
-      setSubData(response.data);
+      // Always set the response data even if status is expired/pending/blocked
+      // The response should contain has_subscription, status, model fields
+      setSubData(response.data || { status: 'pending', has_subscription: false, model: 'subscription' });
     } catch (error) {
-      setSubData(null);
+      // On error, set a default fallback object instead of null
+      // This prevents "Subscription data unavailable" from showing for valid users
+      console.error('Subscription fetch error:', error);
+      setSubData({ status: 'pending', has_subscription: false, model: 'subscription', error: true });
     } finally {
       setLoading(false);
     }

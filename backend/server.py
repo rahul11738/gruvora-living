@@ -1088,11 +1088,16 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # PROFESSIONAL FIX: Normalize role at the source to prevent "Unavailable" errors
-    # This ensures "Property Owner" from DB becomes "property_owner" in the app logic
+    # PROFESSIONAL FIX: Normalize role at the source AND persist to DB
+    # This ensures "Property Owner" from DB becomes "property_owner" permanently
     raw_role = user.get("role")
     normalized_role = normalize_role(raw_role)
     user["role"] = normalized_role
+
+    # Persist the normalized role back to MongoDB if it was different
+    # This fixes the root cause: old users with "Property Owner" format get permanently updated
+    if raw_role != normalized_role:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"role": normalized_role}})
 
     if user.get("deleted"):
         raise HTTPException(status_code=403, detail="Account no longer exists.")
