@@ -1647,9 +1647,13 @@ async def create_listing(payload: Dict[str, Any] = Body(...), user: dict = Depen
     payment_info = {}
     
     if role == UserRole.PROPERTY_OWNER.value:
-        # Check for active subscription
+        # Check for active subscription or trial
         sub_status = str(user.get("subscription_status") or "").lower()
-        if sub_status != "active" and sub_status != "trial":
+        if sub_status in ("active", "trial"):
+            # Owners with active sub/trial get free listings
+            final_status = ListingStatus.APPROVED
+            logger.info(f"Free listing approved for owner {user.get('email')} during {sub_status}")
+        else:
             # Fetch dynamic listing fee from settings
             settings = await db.settings.find_one({"id": "platform_config"})
             listing_fee = PROPERTY_LISTING_FEE_PAISE
@@ -7555,11 +7559,21 @@ async def get_subscription_invoices(credentials: HTTPAuthorizationCredentials = 
 
 @api_router.get("/subscriptions/status")
 async def get_subscription_status(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    """Get current user's subscription status"""
+    """Get current user's subscription status with auto-initialization for owners."""
     user = await get_current_user(credentials)
-
     role = normalize_role(user.get("role"))
     
+    # Auto-initialize subscription for owners if missing
+    if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
+        init_doc = build_subscription_init_doc(role=role)
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": init_doc}
+        )
+        # Update local user object for the rest of the function
+        user.update(init_doc)
+        logger.info(f"Auto-initialized 5-month trial for owner: {user.get('email')}")
+
     # Check for hybrid roles (Subscription + Commission)
     is_hybrid = role in COMMISSION_ROLES and role in SUBSCRIPTION_ROLES
     
@@ -7584,6 +7598,22 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
             "message": f"You pay {int(COMMISSION_RATE * 100)}% commission per confirmed deal.",
         })
         
+        # PROACTIVE NOTIFICATION: Send trial end warning if applicable
+        if user.get("subscription_status") == "trial":
+            trial_end = user.get("trial_end_date")
+            if trial_end:
+                trial_end_dt = _parse_iso_datetime(trial_end)
+                if trial_end_dt:
+                    days_left = (trial_end_dt - datetime.now(timezone.utc)).days
+                    if days_left <= 7:
+                        await create_system_notification(
+                            user_id=user["id"],
+                            title="Free Trial Ending Soon",
+                            message=f"Professional Reminder: Your 5-month free trial ends in {days_left} days. Set up payment to maintain your premium benefits.",
+                            type="warning",
+                            link="/owner/dashboard"
+                        )
+
         if not is_hybrid:
             return response_data
 
