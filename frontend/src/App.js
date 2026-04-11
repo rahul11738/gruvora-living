@@ -22,25 +22,44 @@ import {
 } from "./components/HomeComponents";
 import { LoginPage, RegisterPage, VerifyEmailPage } from "./components/AuthPages";
 
-const CategoryPage = lazy(() => import("./components/CategoryPage").then((m) => ({ default: m.CategoryPage })));
-const ListingDetailPage = lazy(() => import("./components/ListingDetailPage").then((m) => ({ default: m.ListingDetailPage })));
-const ReelsPage = lazy(() => import("./components/ReelsPage").then((m) => ({ default: m.ReelsPage })));
-const UserDashboard = lazy(() => import("./components/UserDashboard").then((m) => ({ default: m.UserDashboard })));
-const WishlistPage = lazy(() => import("./components/UserDashboard").then((m) => ({ default: m.WishlistPage })));
-const OwnerDashboard = lazy(() => import("./components/OwnerDashboard").then((m) => ({ default: m.OwnerDashboard })));
-const OwnerProfilePage = lazy(() => import("./components/OwnerProfilePage").then((m) => ({ default: m.OwnerProfilePage })));
-const DiscoverSearchPage = lazy(() => import("./components/DiscoverSearchPage").then((m) => ({ default: m.DiscoverSearchPage })));
-const SettingsPage = lazy(() => import("./components/SettingsPage"));
-const ChatPage = lazy(() => import("./components/ChatPage.jsx"));
-const NotificationsPage = lazy(() => import("./components/NotificationsPage.jsx"));
-const AdminDashboard = lazy(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
-const TermsConditionsPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.TermsConditionsPage })));
-const PrivacyPolicyPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.PrivacyPolicyPage })));
-const RefundCancellationPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.RefundCancellationPage })));
-const DisclaimerPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.DisclaimerPage })));
-const AboutUsPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.AboutUsPage })));
-const UserVerificationPolicyPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.UserVerificationPolicyPage })));
-const CommunityGuidelinesPage = lazy(() => import("./components/PolicyPages").then((m) => ({ default: m.CommunityGuidelinesPage })));
+const lazyWithRetry = (componentImport) =>
+  lazy(async () => {
+    const pageHasAlreadyBeenForceRefreshed = JSON.parse(
+      window.localStorage.getItem("page-has-been-force-refreshed") || "false",
+    );
+
+    try {
+      const component = await componentImport();
+      window.localStorage.setItem("page-has-been-force-refreshed", "false");
+      return component;
+    } catch (error) {
+      if (!pageHasAlreadyBeenForceRefreshed) {
+        window.localStorage.setItem("page-has-been-force-refreshed", "true");
+        return window.location.reload();
+      }
+      throw error;
+    }
+  });
+
+const CategoryPage = lazyWithRetry(() => import("./components/CategoryPage").then((m) => ({ default: m.CategoryPage })));
+const ListingDetailPage = lazyWithRetry(() => import("./components/ListingDetailPage").then((m) => ({ default: m.ListingDetailPage })));
+const ReelsPage = lazyWithRetry(() => import("./components/ReelsPage").then((m) => ({ default: m.ReelsPage })));
+const UserDashboard = lazyWithRetry(() => import("./components/UserDashboard").then((m) => ({ default: m.UserDashboard })));
+const WishlistPage = lazyWithRetry(() => import("./components/UserDashboard").then((m) => ({ default: m.WishlistPage })));
+const OwnerDashboard = lazyWithRetry(() => import("./components/OwnerDashboard").then((m) => ({ default: m.OwnerDashboard })));
+const OwnerProfilePage = lazyWithRetry(() => import("./components/OwnerProfilePage").then((m) => ({ default: m.OwnerProfilePage })));
+const DiscoverSearchPage = lazyWithRetry(() => import("./components/DiscoverSearchPage").then((m) => ({ default: m.DiscoverSearchPage })));
+const SettingsPage = lazyWithRetry(() => import("./components/SettingsPage"));
+const ChatPage = lazyWithRetry(() => import("./components/ChatPage.jsx"));
+const NotificationsPage = lazyWithRetry(() => import("./components/NotificationsPage.jsx"));
+const AdminDashboard = lazyWithRetry(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
+const TermsConditionsPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.TermsConditionsPage })));
+const PrivacyPolicyPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.PrivacyPolicyPage })));
+const RefundCancellationPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.RefundCancellationPage })));
+const DisclaimerPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.DisclaimerPage })));
+const AboutUsPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.AboutUsPage })));
+const UserVerificationPolicyPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.UserVerificationPolicyPage })));
+const CommunityGuidelinesPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.CommunityGuidelinesPage })));
 
 const RouteLoader = () => (
   <div className="min-h-screen flex items-center justify-center bg-stone-50">

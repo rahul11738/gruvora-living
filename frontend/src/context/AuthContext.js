@@ -1,8 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+import { authAPI } from '../lib/api';
 
 const AuthContext = createContext(null);
 
@@ -27,9 +24,7 @@ export const AuthProvider = ({ children }) => {
 
   const fetchUser = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await authAPI.getMe();
       setUser(response.data);
     } catch (error) {
       const status = error?.response?.status;
@@ -42,7 +37,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [logout, token]);
+  }, [logout]);
 
   useEffect(() => {
     if (token) {
@@ -53,7 +48,7 @@ export const AuthProvider = ({ children }) => {
   }, [fetchUser, token]);
 
   const login = async (email, password) => {
-    const response = await axios.post(`${API}/auth/login`, { email, password });
+    const response = await authAPI.login({ email, password });
     const { token: newToken, user: userData } = response.data;
     localStorage.setItem('gharsetu_token', newToken);
     setToken(newToken);
@@ -62,7 +57,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const register = async (userData) => {
-    const response = await axios.post(`${API}/auth/register`, userData);
+    const response = await authAPI.register(userData);
     const { token: newToken, user: newUser } = response.data;
     localStorage.setItem('gharsetu_token', newToken);
     setToken(newToken);
@@ -71,7 +66,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const registerOwner = async (ownerData) => {
-    const response = await axios.post(`${API}/auth/register/owner`, ownerData);
+    const response = await authAPI.registerOwner(ownerData);
     const { token: newToken, user: newUser } = response.data;
     localStorage.setItem('gharsetu_token', newToken);
     setToken(newToken);
@@ -80,9 +75,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateProfile = async (updates) => {
-    await axios.put(`${API}/auth/profile`, updates, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    await authAPI.updateProfile(updates);
     await fetchUser();
   };
 

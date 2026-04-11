@@ -96,26 +96,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-default_origins = [
-    "https://gruvora.com",
-    "https://www.gruvora.com",
-    "https://api.gruvora.com",
-    "https://gruvora-living-ewir9bpkg-rahul11738s-projects.vercel.app",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-
-env_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-origins = list(dict.fromkeys(default_origins + env_origins))
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_origin_regex=r"https://([a-z0-9-]+\.)?gruvora\.com|https://.*\.vercel\.app",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 
@@ -7818,6 +7798,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data: https:; "
             "media-src 'self' https://res.cloudinary.com; "
             "connect-src 'self' https://gruvora.com https://www.gruvora.com "
+            "https://api.gruvora.com "
             "https://gruvora-living-production.up.railway.app wss:; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
@@ -7830,13 +7811,36 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
         response.headers["Content-Security-Policy"] = csp
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+        # Cross-Origin-Opener-Policy: same-origin can break popups and cross-site navigations.
+        # Relaxing it to 'same-origin-allow-popups' if needed, or keeping 'same-origin' if safe.
+        response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
         response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
         if request.url.scheme == "https":
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
         return response
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+# CORS configuration added LAST to be the outermost middleware (handling responses from all other middlewares).
+default_origins = [
+    "https://gruvora.com",
+    "https://www.gruvora.com",
+    "https://api.gruvora.com",
+    "https://gruvora-living-ewir9bpkg-rahul11738s-projects.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+env_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+origins = list(dict.fromkeys(default_origins + env_origins))
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_origin_regex=r"https://([a-z0-9-]+\.)?gruvora\.com|https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(api_router)
 
