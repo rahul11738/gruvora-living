@@ -5912,10 +5912,29 @@ async def get_admin_revenue(user: dict = Depends(get_admin_user)):
         {"_id": 0}
     ).sort("paid_at", -1).limit(50).to_list(50)
 
+    # Owner subscription status summary
+    owners_summary_pipeline = [
+        {"$match": {"role": {"$in": list(SUBSCRIPTION_ROLES)}}},
+        {"$group": {
+            "_id": "$subscription_status",
+            "count": {"$sum": 1},
+            "total_users": {"$push": {
+                "id": "$id",
+                "name": "$name",
+                "email": "$email",
+                "role": "$role",
+                "status": "$subscription_status",
+                "next_billing": "$next_billing_date"
+            }}
+        }}
+    ]
+    owners_summary = await db.users.aggregate(owners_summary_pipeline).to_list(100)
+
     return {
         "recent_payments": payments,
         "recent_subscriptions": subscriptions,
         "recent_boosts": boosts,
+        "owners_subscription_summary": owners_summary,
         "revenue_by_type": [{"type": r["_id"] or "other", "amount": r["total"] / 100} for r in revenue_by_type],
         "daily_revenue": [{"date": r["_id"], "amount": r["total"] / 100} for r in daily_revenue],
         "razorpay_enabled": bool(razorpay_client)
@@ -8114,6 +8133,8 @@ default_origins = [
     "https://gruvora-living-ewir9bpkg-rahul11738s-projects.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "https://www.gruvora.com/",
+    "https://gruvora.com/",
 ]
 env_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 origins = list(dict.fromkeys(default_origins + env_origins))
@@ -8121,10 +8142,11 @@ origins = list(dict.fromkeys(default_origins + env_origins))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://([a-z0-9-]+\.)?gruvora\.com|https://.*\.vercel\.app",
+    allow_origin_regex=r"https://([a-z0-9-]+\.)?gruvora\.com|https://.*\.vercel\.app|https://.*\.up\.railway\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(api_router)

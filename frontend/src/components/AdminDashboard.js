@@ -1114,7 +1114,13 @@ const NotificationsTab = ({ target, title, message, type, sending, onTargetChang
 const RevenueTab = ({ data, onRefresh }) => {
   if (!data) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
-  const { recent_payments = [], recent_subscriptions = [], recent_boosts = [], revenue_by_type = [] } = data;
+  const { 
+    recent_payments = [], 
+    recent_subscriptions = [], 
+    recent_boosts = [], 
+    revenue_by_type = [],
+    owners_subscription_summary = []
+  } = data;
 
   const totalRevenue = revenue_by_type.reduce((acc, curr) => acc + curr.amount, 0);
 
@@ -1144,16 +1150,16 @@ const RevenueTab = ({ data, onRefresh }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-stone-500 font-medium">Total Revenue</p>
-                <p className="text-3xl font-bold text-stone-900 mt-1">₹{totalRevenue.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-stone-900 mt-1">₹{totalRevenue.toLocaleString()}</p>
               </div>
-              <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center">
-                <IndianRupee className="w-6 h-6 text-green-600" />
+              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
+                <IndianRupee className="w-5 h-5 text-green-600" />
               </div>
             </div>
           </CardContent>
@@ -1164,10 +1170,26 @@ const RevenueTab = ({ data, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-stone-500 font-medium">Active Subscriptions</p>
-                <p className="text-3xl font-bold text-stone-900 mt-1">{recent_subscriptions.length}</p>
+                <p className="text-2xl font-bold text-stone-900 mt-1">{recent_subscriptions.length}</p>
               </div>
-              <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-blue-600" />
+              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-stone-500 font-medium">Total Owners</p>
+                <p className="text-2xl font-bold text-stone-900 mt-1">
+                  {owners_subscription_summary.reduce((acc, curr) => acc + curr.count, 0)}
+                </p>
+              </div>
+              <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
+                <Users className="w-5 h-5 text-orange-600" />
               </div>
             </div>
           </CardContent>
@@ -1178,18 +1200,48 @@ const RevenueTab = ({ data, onRefresh }) => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-stone-500 font-medium">Recent Boosts</p>
-                <p className="text-3xl font-bold text-stone-900 mt-1">{recent_boosts.length}</p>
+                <p className="text-2xl font-bold text-stone-900 mt-1">{recent_boosts.length}</p>
               </div>
-              <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center">
-                <CreditCard className="w-6 h-6 text-purple-600" />
+              <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-purple-600" />
               </div>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <Card>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-lg">Owner Status Summary</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {owners_subscription_summary.map((group) => (
+                <div key={group._id || 'unknown'} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      className={
+                        group._id === 'active' ? 'bg-green-100 text-green-700' : 
+                        group._id === 'trial' ? 'bg-blue-100 text-blue-700' : 
+                        group._id === 'expired' ? 'bg-red-100 text-red-700' : 
+                        'bg-stone-100 text-stone-700'
+                      }
+                    >
+                      {group._id || 'Pending'}
+                    </Badge>
+                  </div>
+                  <p className="font-bold text-stone-900">{group.count} Owners</p>
+                </div>
+              ))}
+              {owners_subscription_summary.length === 0 && (
+                <p className="text-center text-stone-400 py-8 text-sm">No owner data available</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-lg">Revenue by Category</CardTitle>
           </CardHeader>
@@ -1208,55 +1260,88 @@ const RevenueTab = ({ data, onRefresh }) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="text-lg">Recent Transactions</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recent_payments.slice(0, 10).map((pay) => (
-                <div key={pay.id} className="flex items-center justify-between p-3 border-b last:border-0 hover:bg-stone-50 transition-colors">
+              {recent_payments.slice(0, 5).map((pay) => (
+                <div key={pay.id} className="flex items-center justify-between p-2 border-b last:border-0 hover:bg-stone-50 transition-colors">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-bold text-stone-900 capitalize">{pay.booking_type || 'Booking'} Payment</p>
-                      {pay.user_name && (
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100 text-[10px] py-0 px-1.5 h-4">
-                          {pay.user_name}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1.5 text-xs text-stone-500">
-                        <Mail className="w-3 h-3" />
-                        <span>{pay.user_email || 'No email'}</span>
-                        <span className="mx-1">•</span>
-                        <Phone className="w-3 h-3" />
-                        <span>{pay.user_phone || 'No phone'}</span>
-                      </div>
-                      <p className="text-[10px] text-stone-400 font-mono flex items-center gap-1">
-                        <CreditCard className="w-3 h-3" />
-                        ID: {pay.razorpay_payment_id || pay.id}
-                      </p>
-                    </div>
+                    <p className="text-xs font-bold text-stone-900 capitalize truncate w-32">{pay.user_name || 'Owner'}</p>
+                    <p className="text-[10px] text-stone-500">{pay.booking_type || 'Subscription'}</p>
                   </div>
-                  <div className="text-right flex flex-col items-end gap-1">
-                    <p className="text-sm font-bold text-green-600">₹{(pay.amount / 100).toLocaleString('en-IN')}</p>
-                    <p className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
-                      {new Date(pay.paid_at || pay.created_at).toLocaleString('en-IN', {
-                        day: '2-digit',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                      })}
-                    </p>
+                  <div className="text-right">
+                    <p className="text-xs font-bold text-green-600">₹{(pay.amount / 100).toLocaleString('en-IN')}</p>
+                    <p className="text-[9px] text-stone-400">{new Date(pay.paid_at || pay.created_at).toLocaleDateString()}</p>
                   </div>
                 </div>
               ))}
-              {recent_payments.length === 0 && <p className="text-center text-stone-400 py-8">No recent transactions</p>}
+              {recent_payments.length === 0 && <p className="text-center text-stone-400 py-8 text-sm">No recent transactions</p>}
             </div>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Owner Subscription Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Next Billing</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {owners_subscription_summary.flatMap(group => group.total_users).slice(0, 20).map((owner) => (
+                  <TableRow key={owner.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-stone-900">{owner.name}</span>
+                        <span className="text-xs text-stone-500">{owner.email}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize text-[10px]">
+                        {owner.role?.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge 
+                        className={
+                          owner.status === 'active' ? 'bg-green-100 text-green-700' : 
+                          owner.status === 'trial' ? 'bg-blue-100 text-blue-700' : 
+                          owner.status === 'expired' ? 'bg-red-100 text-red-700' : 
+                          'bg-stone-100 text-stone-700'
+                        }
+                      >
+                        {owner.status || 'Pending'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-stone-600 text-sm">
+                      {owner.next_billing ? new Date(owner.next_billing).toLocaleDateString() : 'N/A'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {owners_subscription_summary.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-stone-400 py-8">
+                      No owners found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
