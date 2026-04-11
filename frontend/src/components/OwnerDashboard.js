@@ -62,7 +62,7 @@ const categoryIcons = {
 
 export const OwnerDashboard = () => {
   const { user, logout } = useAuth();
-  const { subData, loading: subscriptionStatusLoading, isBlocked, needsPayment, isActive, isTrial } = useSubscription();
+  const { subData, loading: subscriptionStatusLoading, isBlocked, needsPayment, isActive, isTrial, fetchStatus } = useSubscription();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [stats, setStats] = useState(null);
@@ -87,11 +87,8 @@ export const OwnerDashboard = () => {
   const showSubscriptionTab = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(user?.role);
 
   const handleOpenCreateDialog = useCallback(() => {
-    if (showSubscriptionTab && (subscriptionStatusLoading || !subData)) {
-      toast.info('Checking subscription status...');
-      return;
-    }
     // Allow listing if subscription is active (isActive) OR if on trial (isTrial) OR if not a subscription role
+    // Don't block on loading - just check current status
     const blocked = !isActive && !isTrial && (isBlocked || needsPayment);
     if (blocked) {
       toast.error('Activate your subscription to create listings');
@@ -99,7 +96,7 @@ export const OwnerDashboard = () => {
       return;
     }
     setShowCreateDialog(true);
-  }, [isActive, isTrial, isBlocked, needsPayment, subscriptionStatusLoading, showSubscriptionTab, subData]);
+  }, [isActive, isTrial, isBlocked, needsPayment, showSubscriptionTab]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -271,7 +268,7 @@ export const OwnerDashboard = () => {
                 >
                   <Crown className="w-5 h-5" />
                   Subscription
-                  {isActive || subData?.model === 'commission' ? (
+                  {isActive || isTrial || subData?.model === 'commission' ? (
                     <Badge className="ml-auto bg-green-500">Active</Badge>
                   ) : needsPayment ? (
                     <Badge className="ml-auto bg-red-500">Due</Badge>
@@ -516,7 +513,7 @@ export const OwnerDashboard = () => {
           {/* Subscription Tab */}
           {activeTab === 'subscription' && showSubscriptionTab && (
             <div className="max-w-lg">
-              <SubscriptionCard />
+              <SubscriptionCard onPaymentSuccess={fetchStatus} />
             </div>
           )}
         </main>

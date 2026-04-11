@@ -176,7 +176,7 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole }) => {
   );
 };
 
-export default function SubscriptionCard() {
+export default function SubscriptionCard({ onPaymentSuccess }) {
   const { user } = useAuth();
   const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
   const [paying, setPaying] = useState(false);
@@ -208,14 +208,21 @@ export default function SubscriptionCard() {
                 razorpay_signature: response.razorpay_signature,
               });
 
-              // ✅ CRITICAL FIX: Immediately update context with active status.
-              // This removes the "Pay" button RIGHT NOW without waiting for a
-              // potentially CORS-blocked network refetch.
+              // CRITICAL FIX: Force fetch fresh subscription status from server after payment
+              // This ensures we get the actual 'active' status from the DB, not cached data
+              await fetchStatus();
+
+              // Get the updated subscription data from the fresh fetch
               const updatedSub = verifyRes?.data?.subscription;
               if (updatedSub && updatedSub.status === 'active') {
-                updateSubData(updatedSub);
+                updateSubData({
+                  status: 'active',
+                  has_subscription: true,
+                  subscription_plan: updatedSub.subscription_plan || plan,
+                  subscription_amount_paise: updatedSub.subscription_amount_paise,
+                });
               } else {
-                // Fallback: at minimum mark as active so UI refreshes immediately
+                // Still mark as active to allow listing immediately
                 updateSubData({
                   status: 'active',
                   has_subscription: true,
@@ -225,11 +232,14 @@ export default function SubscriptionCard() {
 
               toast.success('🎉 Subscription activated! You can now list properties.');
 
-              // Background refresh to sync full state from server (best-effort)
-              fetchStatus().catch(() => {}); 
+              // Notify parent component to refresh subscription status
+              if (onPaymentSuccess) {
+                onPaymentSuccess();
+              }
 
               resolve();
             } catch (error) {
+              console.error('Payment verification error:', error);
               toast.error('Payment verification failed. Contact support if payment was deducted.');
               reject(error);
             }
