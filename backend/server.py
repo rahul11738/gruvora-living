@@ -802,6 +802,11 @@ def hash_password(password: str) -> str:
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
+def normalize_role(role: Optional[str]) -> str:
+    """Normalize role strings to lowercase with underscores (e.g. 'Property Owner' -> 'property_owner')."""
+    if not role:
+        return ""
+    return str(role).lower().strip().replace(" ", "_")
 
 SUBSCRIPTION_ROLES = {
     UserRole.PROPERTY_OWNER.value,
@@ -847,23 +852,13 @@ def compute_next_billing_date(from_date: datetime) -> datetime:
 
 def build_subscription_init_doc(role: str, coupon: Optional[str] = None) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
-
-    if role in COMMISSION_ROLES:
-        return {
-            "subscription_model": "commission",
-            "subscription_status": None,
-            "commission_rate": COMMISSION_RATE,
-            "total_commission_owed": 0.0,
-            "total_commission_paid": 0.0,
-            "block_status": None,
-            "block_until": None,
-        }
+    norm_role = normalize_role(role)
 
     validated_coupon = None
     free_months = 0
     
-    # Automatically give 5 months free to Property Owners (Home/Business)
-    if role == UserRole.PROPERTY_OWNER.value:
+    # Universal 5-month free trial for ALL owner categories (Property, Stay, Hotel, Event, Service)
+    if norm_role in SUBSCRIPTION_ROLES:
         validated_coupon = "GRUVORA5"
         free_months = 5
     elif coupon:
@@ -875,7 +870,8 @@ def build_subscription_init_doc(role: str, coupon: Optional[str] = None) -> Dict
     if free_months > 0:
         trial_end = _add_months(now, free_months)
         next_billing = trial_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        return {
+        
+        doc = {
             "subscription_model": "subscription",
             "subscription_status": "trial",
             "trial_months_remaining": free_months,
@@ -888,6 +884,28 @@ def build_subscription_init_doc(role: str, coupon: Optional[str] = None) -> Dict
             "block_status": None,
             "block_until": None,
             "subscription_amount_paise": SUBSCRIPTION_AMOUNT_PAISE,
+        }
+        
+        # Add commission fields for hybrid roles
+        if norm_role in COMMISSION_ROLES:
+            doc.update({
+                "subscription_model": "hybrid",
+                "commission_rate": COMMISSION_RATE,
+                "total_commission_owed": 0.0,
+                "total_commission_paid": 0.0,
+            })
+            
+        return doc
+
+    if norm_role in COMMISSION_ROLES:
+        return {
+            "subscription_model": "commission",
+            "subscription_status": None,
+            "commission_rate": COMMISSION_RATE,
+            "total_commission_owed": 0.0,
+            "total_commission_paid": 0.0,
+            "block_status": None,
+            "block_until": None,
         }
 
     return {
@@ -929,7 +947,7 @@ def _parse_iso_datetime(value: Any) -> Optional[datetime]:
 
 
 async def check_and_resolve_block(user: Dict[str, Any], database) -> Dict[str, Any]:
-    role = str(user.get("role") or "")
+    role = normalize_role(user.get("role"))
     if role not in SUBSCRIPTION_ROLES:
         return user
 
@@ -974,7 +992,7 @@ async def check_and_resolve_block(user: Dict[str, Any], database) -> Dict[str, A
 
 
 def enforce_subscription(user: Dict[str, Any]) -> None:
-    role = str(user.get("role") or "")
+    role = normalize_role(user.get("role"))
     if role == UserRole.ADMIN.value:
         return
     
@@ -2853,6 +2871,22 @@ async def reset_retry_media_delete_job(
         "message": "Attempts reset and retry queued",
         "job_id": job_id,
     }
+
+async def create_system_notification(user_id: str, title: str, message: str, type: str = "info", link: Optional[str] = None):
+    """Create a professional system notification for an owner."""
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "title": title,
+        "message": message,
+        "type": type,
+        "link": link,
+        "read": False,
+        "is_read": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.notifications.insert_one(notification)
+    return notification
 
 @api_router.get("/admin/audit-logs")
 async def get_admin_audit_logs(
@@ -7468,6 +7502,15 @@ async def verify_subscription_payment(
             {"owner_id": user["id"]},
             {"$set": {"subscription_plan": plan, "featured": is_featured}}
         )
+
+        # Notify user of successful activation
+        await create_system_notification(
+            user_id=user["id"],
+            title="Subscription Activated!",
+            message=f"Your {plan.replace('_', ' ').capitalize()} plan is now active. Enjoy your 5-month free trial!",
+            type="success",
+            link="/owner/dashboard"
+        )
         
         return {
             'success': True,
@@ -7515,7 +7558,7 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
     """Get current user's subscription status"""
     user = await get_current_user(credentials)
 
-    role = str(user.get("role") or "")
+    role = normalize_role(user.get("role"))
     
     # Check for hybrid roles (Subscription + Commission)
     is_hybrid = role in COMMISSION_ROLES and role in SUBSCRIPTION_ROLES
@@ -7607,8 +7650,29 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
     
     if status in {"active", "trial"}:
         response_data["message"] = "Active subscription"
+        
+        # Check if trial is ending soon (within 7 days)
+        if status == "trial" and trial_days_remaining is not None and trial_days_remaining <= 7:
+            await create_system_notification(
+                user_id=user["id"],
+                title="Free Trial Ending Soon",
+                message=f"Your free trial ends in {trial_days_remaining} days. Please set up your payment to avoid any interruption.",
+                type="warning",
+                link="/owner/dashboard"
+            )
     else:
         response_data["message"] = "No active subscription"
+        
+        # Notify about subscription requirement if they have listings but no sub
+        listing_count = await db.listings.count_documents({"owner_id": user["id"]})
+        if listing_count > 0:
+            await create_system_notification(
+                user_id=user["id"],
+                title="Subscription Required",
+                message="You have active listings but no active subscription. Please activate your plan to stay visible.",
+                type="error",
+                link="/owner/dashboard"
+            )
 
     return response_data
 # ============ RATE LIMITING MIDDLEWARE ============
