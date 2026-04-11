@@ -75,7 +75,7 @@ export const OwnerDashboard = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentListing, setPaymentListing] = useState(null);
   const [paymentType, setPaymentType] = useState('listing_fee');
-  const [boostDays, setBoostDays] = useState(1);
+  const [boostDays] = useState(1);
 
   const handleBoostListing = (listingId) => {
     setPaymentListing({ id: listingId });
@@ -327,7 +327,6 @@ export const OwnerDashboard = () => {
                     fetchDashboardData();
                     if (data?.status === 'awaiting_payment') {
                       setPaymentListing({ id: data.listing_id });
-                      setPaymentInfo(data);
                       setShowPaymentModal(true);
                     }
                   }}
