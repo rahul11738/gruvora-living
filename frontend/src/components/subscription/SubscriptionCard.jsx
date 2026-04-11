@@ -257,7 +257,7 @@ export default function SubscriptionCard() {
     );
   }
 
-  if (!subData) {
+  if (!subData || (!subData.status && !subData.model && !subData.has_subscription)) {
     return (
       <Card className="border-dashed border-2">
         <CardContent className="py-10 text-center">

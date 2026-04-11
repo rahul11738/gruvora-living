@@ -846,8 +846,7 @@ def _add_months(source_date: datetime, months: int) -> datetime:
 
 
 def compute_next_billing_date(from_date: datetime) -> datetime:
-    next_month = _add_months(from_date.replace(day=1), 1)
-    return next_month.replace(hour=0, minute=0, second=0, microsecond=0)
+    return _add_months(from_date, 1)
 
 
 def build_subscription_init_doc(role: str, coupon: Optional[str] = None) -> Dict[str, Any]:
@@ -7515,7 +7514,7 @@ async def verify_subscription_payment(
         # Update all owner's listings visibility based on the plan
         await db.listings.update_many(
             {"owner_id": user["id"]},
-            {"$set": {"subscription_plan": plan, "featured": is_featured}}
+            {"$set": {"subscription_plan": plan, "featured": is_featured, "status": "approved"}}
         )
 
         # Notify user of successful activation
@@ -7556,6 +7555,114 @@ async def toggle_subscription_auto_renew(credentials: HTTPAuthorizationCredentia
         {"$set": {"auto_renew": not current}},
     )
     return {"auto_renew": not current}
+
+@api_router.post("/admin/subscriptions/migrate-owners")
+async def migrate_owner_subscriptions(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """
+    ONE-TIME ADMIN MIGRATION: Fixes all existing owners in DB.
+    - Normalizes role strings (e.g. 'Property Owner' -> 'property_owner')
+    - Initializes missing subscription data (gives 5-month trial from their join date)
+    - Resets owners stuck in bad states
+    Run this once after deploying. Safe to run multiple times (idempotent).
+    """
+    admin_user = await get_current_user(credentials)
+    if normalize_role(admin_user.get("role")) != UserRole.ADMIN.value:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    now = datetime.now(timezone.utc)
+    results = {"normalized_roles": 0, "initialized_trials": 0, "already_ok": 0, "errors": []}
+
+    # Step 1: Normalize all role strings in the DB
+    role_mapping = {
+        "Property Owner": "property_owner",
+        "Stay Owner": "stay_owner",
+        "Service Provider": "service_provider",
+        "Hotel Owner": "hotel_owner",
+        "Event Owner": "event_owner",
+    }
+    for bad_role, good_role in role_mapping.items():
+        update_result = await db.users.update_many(
+            {"role": bad_role},
+            {"$set": {"role": good_role}}
+        )
+        if update_result.modified_count:
+            results["normalized_roles"] += update_result.modified_count
+            logger.info(f"Normalized {update_result.modified_count} users from '{bad_role}' to '{good_role}'")
+
+    # Step 2: Find all owners missing subscription data or stuck in bad states
+    owner_cursor = db.users.find({
+        "role": {"$in": list(SUBSCRIPTION_ROLES)},
+        "$or": [
+            {"subscription_status": {"$exists": False}},
+            {"subscription_status": None},
+            {"subscription_status": ""},
+        ]
+    }, {"_id": 0})
+
+    async for owner in owner_cursor:
+        try:
+            user_id = owner.get("id")
+            role = normalize_role(owner.get("role"))
+            if not user_id or role not in SUBSCRIPTION_ROLES:
+                continue
+
+            # Use their join date to calculate trial — they joined 5 months ago? trial may be ending soon
+            join_date_str = owner.get("created_at")
+            join_date = _parse_iso_datetime(join_date_str) or now
+            trial_end = _add_months(join_date, 5)
+            next_billing = trial_end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            # If trial already expired from their join date, set status to expired so they can pay
+            if trial_end <= now:
+                sub_status = "expired"
+                trial_months_remaining = 0
+            else:
+                sub_status = "trial"
+                trial_months_remaining = max(0, round((trial_end - now).days / 30))
+
+            init_doc = {
+                "subscription_model": "subscription",
+                "subscription_status": sub_status,
+                "trial_months_remaining": trial_months_remaining,
+                "trial_end_date": trial_end.isoformat(),
+                "subscription_start_date": None,
+                "next_billing_date": next_billing.isoformat(),
+                "last_payment_date": None,
+                "auto_renew": True,
+                "coupon_used": "GRUVORA5",
+                "block_status": None,
+                "block_until": None,
+                "subscription_amount_paise": SUBSCRIPTION_AMOUNT_PAISE,
+            }
+
+            if role in COMMISSION_ROLES:
+                init_doc["subscription_model"] = "hybrid"
+                init_doc["commission_rate"] = COMMISSION_RATE
+
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": init_doc}
+            )
+            results["initialized_trials"] += 1
+            logger.info(f"Migrated owner {owner.get('email')} -> status={sub_status}, trial_end={trial_end.date()}")
+
+        except Exception as e:
+            results["errors"].append({"user_id": owner.get("id"), "error": str(e)})
+
+    # Step 3: Count how many are already OK
+    ok_count = await db.users.count_documents({
+        "role": {"$in": list(SUBSCRIPTION_ROLES)},
+        "subscription_status": {"$in": ["active", "trial", "expired", "pending"]}
+    })
+    results["already_ok"] = ok_count - results["initialized_trials"]
+
+    logger.info(f"Migration complete: {results}")
+    return {
+        "success": True,
+        "message": "Migration complete. All existing owners have been fixed.",
+        "results": results
+    }
+
 
 @api_router.get("/subscriptions/invoices")
 async def get_subscription_invoices(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -7711,17 +7818,6 @@ async def get_subscription_status(credentials: HTTPAuthorizationCredentials = De
             )
     else:
         response_data["message"] = "No active subscription"
-        
-        # Notify about subscription requirement if they have listings but no sub
-        listing_count = await db.listings.count_documents({"owner_id": user["id"]})
-        if listing_count > 0:
-            await create_system_notification(
-                user_id=user["id"],
-                title="Subscription Required",
-                message="You have active listings but no active subscription. Please activate your plan to stay visible.",
-                type="error",
-                link="/owner/dashboard"
-            )
 
     return response_data
 # ============ RATE LIMITING MIDDLEWARE ============
