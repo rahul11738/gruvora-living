@@ -52,8 +52,6 @@ import ListingFormRouter from './listings/ListingFormRouter';
 import SubscriptionCard from './subscription/SubscriptionCard';
 import PaymentModal from './PaymentModal';
 
-const OWNER_ROLES = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'];
-
 const categoryIcons = {
   home: Home,
   business: Building2,
@@ -78,7 +76,6 @@ export const OwnerDashboard = () => {
   const [paymentListing, setPaymentListing] = useState(null);
   const [paymentType, setPaymentType] = useState('listing_fee');
   const [boostDays, setBoostDays] = useState(1);
-  const [paymentInfo, setPaymentInfo] = useState(null);
 
   const handleBoostListing = (listingId) => {
     setPaymentListing({ id: listingId });

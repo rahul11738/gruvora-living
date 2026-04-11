@@ -837,6 +837,7 @@ COMMISSION_ROLES = {
 }
 VALID_COUPONS = {
     "GRUVORA5M": {"free_months": 5, "description": "First 5 months free"},
+    "GRUVORA5": {"free_months": 5, "description": "Welcome Offer: 5 Months Free"},
 }
 SUBSCRIPTION_AMOUNT_PAISE = 99900  # Default ₹999/month (Property)
 STAY_EVENT_BASIC_SUB_PAISE = 19900  # ₹199/month
@@ -877,7 +878,12 @@ def build_subscription_init_doc(role: str, coupon: Optional[str] = None) -> Dict
 
     validated_coupon = None
     free_months = 0
-    if coupon:
+    
+    # Automatically give 5 months free to Property Owners (Home/Business)
+    if role == UserRole.PROPERTY_OWNER.value:
+        validated_coupon = "GRUVORA5"
+        free_months = 5
+    elif coupon:
         coupon_upper = coupon.strip().upper()
         if coupon_upper in VALID_COUPONS:
             validated_coupon = coupon_upper
@@ -1279,8 +1285,12 @@ async def register_owner(owner: OwnerRegister):
     await db.users.insert_one(user_doc)
     token = create_token(user_id, owner.role)
     
+    success_msg = "Owner registration successful. Pending Aadhaar verification."
+    if owner.role == UserRole.PROPERTY_OWNER.value:
+        success_msg = "Welcome! You have received 5 months of free subscription. Payment will start after the trial period."
+
     return {
-        "message": "Owner registration successful. Pending Aadhaar verification.",
+        "message": success_msg,
         "token": token,
         "user": {
             "id": user_id,

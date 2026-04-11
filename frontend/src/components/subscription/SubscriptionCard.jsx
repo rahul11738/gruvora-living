@@ -297,13 +297,17 @@ export default function SubscriptionCard() {
       </CardHeader>
       <CardContent className="space-y-4">
         {subData.status === 'trial' && trialDaysLeft !== null && (
-          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-700 font-medium">
-              {trialDaysLeft > 0 ? `${trialDaysLeft} days left in your free trial` : 'Trial ends today!'}
+          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <p className="text-sm font-medium text-blue-900">
+              {trialDaysLeft > 0 
+                ? `You are on a 5-month free trial. Enjoy full access!` 
+                : 'Your free trial has ended today.'}
             </p>
-            {subData.coupon_used && (
-              <p className="text-xs text-blue-600 mt-0.5">Coupon applied: {subData.coupon_used}</p>
-            )}
+            <p className="text-xs text-blue-700 mt-1">
+              {trialDaysLeft > 0 
+                ? `Subscription payments will begin in ${trialDaysLeft} days.`
+                : 'Please upgrade to continue using the platform.'}
+            </p>
           </div>
         )}
 

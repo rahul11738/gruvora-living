@@ -1114,7 +1114,7 @@ const NotificationsTab = ({ target, title, message, type, sending, onTargetChang
 const RevenueTab = ({ data, onRefresh }) => {
   if (!data) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
-  const { recent_payments = [], recent_subscriptions = [], recent_boosts = [], revenue_by_type = [], daily_revenue = [] } = data;
+  const { recent_payments = [], recent_subscriptions = [], recent_boosts = [], revenue_by_type = [] } = data;
 
   const totalRevenue = revenue_by_type.reduce((acc, curr) => acc + curr.amount, 0);
 
