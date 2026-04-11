@@ -27,7 +27,7 @@ const STATUS_CONFIG = {
 
 const PlanDetails = ({ subData, onPay, paying, role }) => {
   const plan = subData.subscription_plan || 'basic';
-  const isPro = plan === 'pro';
+  const isPro = plan === 'pro' || plan === 'unlimited';
   
   if (role === 'service_provider') {
     return (
@@ -38,15 +38,14 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h4 className="font-bold text-stone-900">Basic Plan</h4>
-                <p className="text-xs text-muted-foreground">Presence fee to stay active</p>
+                <p className="text-xs text-muted-foreground">Stay active on the platform</p>
               </div>
               <span className="font-bold text-lg">₹50/mo</span>
             </div>
             <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
               <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Listing visible</li>
               <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> 1 reel upload per week</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Basic profile</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> New badge</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Basic profile badge</li>
             </ul>
             {plan !== 'service_basic' && (
               <Button onClick={() => onPay('service_basic')} disabled={paying} variant="outline" className="w-full text-xs h-8">
@@ -60,19 +59,18 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h4 className="font-bold text-stone-900">Verified Plan</h4>
-                <p className="text-xs text-muted-foreground">Build trust and credibility</p>
+                <p className="text-xs text-muted-foreground">Build trust with customers</p>
               </div>
               <span className="font-bold text-lg">₹99/mo</span>
             </div>
             <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> 2 reel uploads per week</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Listing visible</li>
               <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Verified by Gruvora badge</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Badge displayed on reels</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> 2 reel uploads per week</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Higher search visibility</li>
             </ul>
             {plan !== 'service_verified' && (
               <Button onClick={() => onPay('service_verified')} disabled={paying} className="w-full text-xs h-8 btn-primary">
-                Choose Verified
+                Upgrade to Verified
               </Button>
             )}
           </div>
@@ -82,15 +80,14 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h4 className="font-bold text-stone-900">Top Listing Plan</h4>
-                <p className="text-xs text-muted-foreground">Maximum visibility and ranking</p>
+                <p className="text-xs text-muted-foreground">Maximum visibility & ranking</p>
               </div>
               <span className="font-bold text-lg">₹149/mo</span>
             </div>
             <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
               <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Top 5 search position</li>
               <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Area priority ranking</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> 2 reel uploads per week</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Verified badge + Reel badge</li>
+              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Priority support</li>
             </ul>
             {plan !== 'service_top' && (
               <Button onClick={() => onPay('service_top')} disabled={paying} className="w-full text-xs h-8 bg-amber-500 hover:bg-amber-600 text-white">
@@ -103,13 +100,43 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
     );
   }
 
+  if (role === 'property_owner') {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 rounded-xl border-2 border-primary bg-primary/5">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h4 className="font-bold text-stone-900">Professional Owner Plan</h4>
+              <p className="text-xs text-muted-foreground">Unlimited listings + Featured visibility</p>
+            </div>
+            <span className="font-bold text-lg">₹999/mo</span>
+          </div>
+          <ul className="text-sm space-y-2 text-stone-600 mb-6 mt-4">
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Post unlimited listings</li>
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Featured placement in search</li>
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Verified owner badge</li>
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Priority customer leads</li>
+          </ul>
+          
+          {(subData.status === 'expired' || subData.status === 'blocked' || subData.status === 'pending') && (
+            <Button onClick={() => onPay('unlimited')} disabled={paying} className="w-full btn-primary h-11">
+              {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+              Activate Now (₹999)
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Default for others (Stay, Hotel, Event - if they are not in commission or hybrid)
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between p-4 bg-stone-50 rounded-xl border border-stone-200">
         <div>
           <p className="text-sm font-semibold text-stone-900 capitalize">{plan} Plan</p>
           <p className="text-xs text-muted-foreground">
-            {isPro ? 'Unlimited listings + Featured placement' : 'Limited listings (Up to 5)'}
+            {isPro ? 'Unlimited listings + Featured placement' : 'Basic listing visibility'}
           </p>
         </div>
         <Badge variant={isPro ? 'default' : 'outline'} className={isPro ? 'bg-amber-100 text-amber-700 border-amber-200' : ''}>
@@ -119,11 +146,11 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <div>
+        <div className="p-3 bg-white rounded-lg border">
           <p className="text-xs text-muted-foreground">Monthly Fee</p>
           <p className="font-semibold">{subData.price || (isPro ? '₹499' : '₹199')}/mo</p>
         </div>
-        <div>
+        <div className="p-3 bg-white rounded-lg border">
           <p className="text-xs text-muted-foreground">Next Billing</p>
           <p className="font-semibold">
             {subData.next_billing_date ? new Date(subData.next_billing_date).toLocaleDateString('en-IN') : 'Due Now'}
@@ -131,16 +158,10 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
         </div>
       </div>
 
-      {subData.status !== 'active' && subData.status !== 'trial' && (
-        <Button onClick={() => onPay(isPro ? 'pro' : 'basic')} disabled={paying} className="w-full btn-primary">
+      {(subData.status !== 'active' && subData.status !== 'trial') && (
+        <Button onClick={() => onPay(isPro ? 'pro' : 'basic')} disabled={paying} className="w-full btn-primary h-11">
           {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
           Pay {subData.price || (isPro ? '₹499' : '₹199')}
-        </Button>
-      )}
-      
-      {subData.status === 'active' && !isPro && (
-        <Button variant="outline" onClick={() => onPay('pro')} disabled={paying} className="w-full border-amber-200 text-amber-700 hover:bg-amber-50">
-          Upgrade to Pro (₹499)
         </Button>
       )}
     </div>
@@ -212,7 +233,38 @@ export default function SubscriptionCard() {
     }
   };
 
-  if (loading || !subData) return null;
+  if (loading) {
+    return (
+      <Card className="animate-pulse">
+        <CardHeader>
+          <div className="h-6 w-1/3 bg-stone-200 rounded" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="h-20 bg-stone-100 rounded-xl" />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="h-12 bg-stone-100 rounded-lg" />
+            <div className="h-12 bg-stone-100 rounded-lg" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!subData) {
+    return (
+      <Card className="border-dashed border-2">
+        <CardContent className="py-10 text-center">
+          <AlertTriangle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="font-semibold text-lg mb-2">Subscription data unavailable</h3>
+          <p className="text-muted-foreground mb-6">We couldn't load your subscription details. This might happen if your role doesn't require a subscription or if there's a connection issue.</p>
+          <Button onClick={fetchStatus} variant="outline" className="gap-2">
+            <RefreshCw className="w-4 h-4" />
+            Retry Loading
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (isCommissionModel || isHybridModel) {
     const pendingCommission = Number(subData.pending_commission_amount || 0);

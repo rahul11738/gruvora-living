@@ -80,9 +80,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Role checks
-  const isOwner = user?.role && ['property_owner', 'service_provider', 'hotel_owner', 'event_owner', 'admin'].includes(user.role);
+  const isOwner = user?.role && ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner', 'admin'].includes(user.role);
   const isAdmin = user?.role === 'admin';
   const isPropertyOwner = user?.role === 'property_owner';
+  const isStayOwner = user?.role === 'stay_owner';
   const isServiceProvider = user?.role === 'service_provider';
   const isHotelOwner = user?.role === 'hotel_owner';
   const isEventOwner = user?.role === 'event_owner';
@@ -95,6 +96,7 @@ export const AuthProvider = ({ children }) => {
     isOwner,
     isAdmin,
     isPropertyOwner,
+    isStayOwner,
     isServiceProvider,
     isHotelOwner,
     isEventOwner,

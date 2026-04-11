@@ -822,6 +822,9 @@ VALID_COUPONS = {
 SUBSCRIPTION_AMOUNT_PAISE = 99900  # Default ₹999/month (Property)
 STAY_EVENT_BASIC_SUB_PAISE = 19900  # ₹199/month
 STAY_EVENT_PRO_SUB_PAISE = 49900    # ₹499/month
+SERVICE_BASIC_SUB_PAISE = 5000      # ₹50/month
+SERVICE_VERIFIED_SUB_PAISE = 9900   # ₹99/month
+SERVICE_TOP_SUB_PAISE = 14900      # ₹149/month
 PROPERTY_LISTING_FEE_PAISE = 19900  # Default ₹199 per property
 COMMISSION_RATE = 0.02  # 2% per successful booking
 BASIC_PLAN_LISTING_LIMIT = 5
@@ -7324,6 +7327,14 @@ async def create_subscription_order(
         subscription_amount = STAY_EVENT_BASIC_SUB_PAISE
     elif plan == SubscriptionPlan.PRO.value:
         subscription_amount = STAY_EVENT_PRO_SUB_PAISE
+    elif plan == SubscriptionPlan.UNLIMITED.value:
+        subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
+    elif plan == SubscriptionPlan.SERVICE_BASIC.value:
+        subscription_amount = SERVICE_BASIC_SUB_PAISE
+    elif plan == SubscriptionPlan.SERVICE_VERIFIED.value:
+        subscription_amount = SERVICE_VERIFIED_SUB_PAISE
+    elif plan == SubscriptionPlan.SERVICE_TOP.value:
+        subscription_amount = SERVICE_TOP_SUB_PAISE
         
     if settings and "global_config" in settings:
         # Fallback to global if specific plan amounts aren't in settings
@@ -7431,7 +7442,11 @@ async def verify_subscription_payment(
         
         # Update user subscription status
         plan = subscription.get('plan', SubscriptionPlan.BASIC.value)
-        is_pro = plan == SubscriptionPlan.PRO.value
+        is_featured = plan in {
+            SubscriptionPlan.PRO.value,
+            SubscriptionPlan.UNLIMITED.value,
+            SubscriptionPlan.SERVICE_TOP.value
+        }
         
         await db.users.update_one(
             {'id': user["id"]},
@@ -7451,7 +7466,7 @@ async def verify_subscription_payment(
         # Update all owner's listings visibility based on the plan
         await db.listings.update_many(
             {"owner_id": user["id"]},
-            {"$set": {"subscription_plan": plan, "featured": is_pro}}
+            {"$set": {"subscription_plan": plan, "featured": is_featured}}
         )
         
         return {
