@@ -260,7 +260,7 @@ export const OwnerDashboard = () => {
                   <Badge className="ml-auto bg-blue-500">{leads.length}</Badge>
                 )}
               </button>
-              {showSubscriptionTab && (
+                  {showSubscriptionTab && (
                 <button
                   onClick={() => { setActiveTab('subscription'); setSidebarOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'subscription' ? 'bg-primary text-white' : 'hover:bg-stone-100'
@@ -268,11 +268,13 @@ export const OwnerDashboard = () => {
                 >
                   <Crown className="w-5 h-5" />
                   Subscription
-                  {isActive || isTrial || subData?.model === 'commission' ? (
+                  {subData?.has_subscription || subData?.model === 'commission' ? (
                     <Badge className="ml-auto bg-green-500">Active</Badge>
                   ) : needsPayment ? (
                     <Badge className="ml-auto bg-red-500">Due</Badge>
-                  ) : null}
+                  ) : (
+                    <Badge className="ml-auto bg-blue-500">Trial</Badge>
+                  )}
                 </button>
               )}
             </nav>

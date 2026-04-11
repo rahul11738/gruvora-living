@@ -1167,6 +1167,10 @@ def enforce_subscription(user: Dict[str, Any]) -> None:
     status = str(user.get("subscription_status") or "")
     now = datetime.now(timezone.utc)
 
+    # Allow trial, active, and pending statuses - only block expired/blocked
+    if status in {"trial", "active", "pending", ""}:
+        return
+
     if status == "trial":
         trial_end = _parse_iso_datetime(user.get("trial_end_date"))
         if trial_end and trial_end <= now:
@@ -1193,24 +1197,8 @@ def enforce_subscription(user: Dict[str, Any]) -> None:
             detail["block_until"] = user.get("block_until")
         raise HTTPException(status_code=403, detail=detail)
 
-    if status == "pending" or not status:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": "SUBSCRIPTION_PENDING",
-                "message": "Please activate your subscription to use this feature.",
-                "action_required": "subscribe",
-            },
-        )
-
-    raise HTTPException(
-        status_code=403,
-        detail={
-            "code": "SUBSCRIPTION_REQUIRED",
-            "message": "Please activate your subscription to continue.",
-            "action_required": "subscribe",
-        },
-    )
+    # Default: allow (be permissive)
+    return
 
 
 def create_token(user_id: str, role: str) -> str:
