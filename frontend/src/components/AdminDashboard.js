@@ -10,6 +10,16 @@ import { Textarea } from './ui/textarea';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from './ui/dialog';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+} from './ui/table';
 import { toast } from 'sonner';
 import {
   Users, FileText, Home, Building2, Hotel,

@@ -25,10 +25,11 @@ const STATUS_CONFIG = {
   pending: { color: 'bg-yellow-100 text-yellow-700', icon: Clock, label: 'Payment Pending' },
 };
 
-const PlanDetails = ({ subData, onPay, paying, role }) => {
-  const plan = subData.subscription_plan || 'basic';
+const PlanDetails = ({ subData, onPay, paying, role: rawRole }) => {
+  const role = rawRole?.toLowerCase()?.replace(/\s+/g, '_') || '';
+  const plan = subData?.subscription_plan || 'basic';
   const isPro = plan === 'pro' || plan === 'unlimited';
-  
+
   if (role === 'service_provider') {
     return (
       <div className="space-y-6">
