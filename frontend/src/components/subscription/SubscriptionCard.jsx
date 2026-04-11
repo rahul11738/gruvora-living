@@ -118,12 +118,10 @@ const PlanDetails = ({ subData, onPay, paying, role }) => {
             <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Priority customer leads</li>
           </ul>
           
-          {(subData.status === 'expired' || subData.status === 'blocked' || subData.status === 'pending') && (
-            <Button onClick={() => onPay('unlimited')} disabled={paying} className="w-full btn-primary h-11">
-              {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-              Activate Now (₹999)
-            </Button>
-          )}
+          <Button onClick={() => onPay('unlimited')} disabled={paying} className="w-full btn-primary h-11">
+            {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
+            {subData.status === 'trial' ? 'Upgrade Now (₹999)' : 'Activate Now (₹999)'}
+          </Button>
         </div>
       </div>
     );
