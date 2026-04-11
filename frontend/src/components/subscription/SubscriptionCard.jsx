@@ -403,7 +403,7 @@ export default function SubscriptionCard() {
           </div>
         </div>
 
-        {(needsPayment || subData.status === 'trial') && (
+        {((needsPayment || subData.status === 'trial') && subData.status !== 'active') && (
           <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
         )}
 
