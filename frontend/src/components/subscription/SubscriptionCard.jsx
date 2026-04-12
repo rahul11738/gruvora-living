@@ -28,7 +28,6 @@ const STATUS_CONFIG = {
 const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) => {
   const role = rawRole?.toLowerCase()?.replace(/\s+/g, '_') || '';
   const plan = subData?.subscription_plan || 'basic';
-  const isPro = plan === 'pro' || plan === 'unlimited';
   const isActive = subData?.status === 'active';
 
   // Professional Owner Plans (Property, Stay, Event, etc.)
