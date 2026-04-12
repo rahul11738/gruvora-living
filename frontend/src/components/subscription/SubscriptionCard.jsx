@@ -208,26 +208,14 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
                 razorpay_signature: response.razorpay_signature,
               });
 
-              // Mark payment as successful immediately
+              // Mark payment as successful immediately (optimistic update)
               setPaymentSuccess(true);
-              
-              // Update subscription data with the actual response from server
-              if (verifyRes.data?.subscription) {
-                updateSubData(verifyRes.data.subscription);
-              } else {
-                // Fallback force update
-                updateSubData({
-                  status: 'active',
-                  has_subscription: true,
-                  subscription_plan: plan,
-                });
-              }
 
-              // Also fetch fresh status and user from server to ensure everything is in sync
-              await Promise.all([
-                fetchStatus(),
-                refreshUser ? refreshUser() : Promise.resolve()
-              ]);
+              // Force-set active status immediately so UI unblocks right away
+              const activeSub = verifyRes.data?.subscription?.status === 'active'
+                ? verifyRes.data.subscription
+                : { status: 'active', has_subscription: true, subscription_plan: plan };
+              updateSubData(activeSub);
 
               toast.success('🎉 Subscription activated! You can now list properties.');
 
@@ -235,6 +223,15 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
               if (onPaymentSuccess) {
                 onPaymentSuccess();
               }
+
+              // Fetch fresh status after a short delay to let DB propagate,
+              // but only if the server confirms active - don't downgrade optimistic state
+              setTimeout(async () => {
+                try {
+                  await fetchStatus();
+                  if (refreshUser) await refreshUser();
+                } catch (_) { /* silent - optimistic state already set */ }
+              }, 1500);
 
               resolve();
             } catch (error) {

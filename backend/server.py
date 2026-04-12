@@ -9094,15 +9094,23 @@ async def verify_subscription_payment(
             link="/owner/dashboard",
         )
 
-        # Professional Fix: Return the full updated subscription status to the frontend
-        # This prevents the need for a separate status fetch if it's already updated here
-        updated_status = await get_subscription_status(credentials)
-        logger.info(f"PAYMENT VERIFY SUCCESS: Returning updated status for {email}")
+        # Return a guaranteed-active status directly (avoids read-after-write race condition
+        # that could occur if get_subscription_status re-fetches before DB propagates)
+        logger.info(f"PAYMENT VERIFY SUCCESS: Returning active status for {email}")
 
         return {
             "success": True,
             "message": "Subscription activated successfully!",
-            "subscription": updated_status,
+            "subscription": {
+                "status": "active",
+                "has_subscription": True,
+                "subscription_plan": plan,
+                "model": "subscription",
+                "next_billing_date": expiry_date.isoformat(),
+                "last_payment_date": now.isoformat(),
+                "price": f"₹{subscription.get('amount', SUBSCRIPTION_AMOUNT_PAISE) // 100}/month",
+                "amount_monthly": f"₹{subscription.get('amount', SUBSCRIPTION_AMOUNT_PAISE) // 100}",
+            },
         }
 
     except razorpay.errors.SignatureVerificationError:

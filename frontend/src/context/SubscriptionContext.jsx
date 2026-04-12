@@ -25,16 +25,18 @@ export const SubscriptionProvider = ({ children }) => {
       const response = await subscriptionAPI.getStatus();
       if (response.data?.error) {
         console.warn('Backend subscription status warning:', response.data.error);
-        // Still set the data but handle the error flag if needed
       }
-      // Always set the response data even if status is expired/pending/blocked
-      setSubData(response.data || { status: 'pending', has_subscription: false, model: 'subscription' });
+      const incoming = response.data || { status: 'pending', has_subscription: false, model: 'subscription' };
+      // Never downgrade an already-active status from an optimistic update
+      // (can happen if DB read-after-write returns stale data right after payment)
+      setSubData(prev => {
+        if (prev?.status === 'active' && incoming.status !== 'active') {
+          return prev;
+        }
+        return incoming;
+      });
     } catch (error) {
-      // On error, set a default fallback object instead of null
-      // This prevents "Subscription data unavailable" from showing for valid users
       console.error('Subscription fetch error (CORS or 500):', error);
-      
-      // If we have an existing subData, keep it rather than setting to pending
       setSubData(prev => prev || { status: 'pending', has_subscription: false, model: 'subscription', error: true });
     } finally {
       setLoading(false);
