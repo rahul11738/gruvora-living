@@ -6,7 +6,6 @@ import { useSubscription } from '../context/SubscriptionContext';
 import { ownerAPI, listingsAPI, bookingsAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import {
   Dialog,
@@ -14,9 +13,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from './ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import {
@@ -33,15 +30,10 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Edit,
   Trash2,
-  Image,
-  Video,
-  MapPin,
   IndianRupee,
   FileText,
   LayoutDashboard,
-  Settings,
   LogOut,
   Menu,
   X,
@@ -57,7 +49,6 @@ import {
   Shield,
   Loader2,
 } from 'lucide-react';
-import { Header } from './Layout';
 import ListingFormRouter from './listings/ListingFormRouter';
 import SubscriptionCard from './subscription/SubscriptionCard';
 import PaymentModal from './PaymentModal';
@@ -94,7 +85,6 @@ export const OwnerDashboard = () => {
     setShowPaymentModal(true);
   };
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   const showSubscriptionTab = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(user?.role);
   const shouldVirtualizeListings = listings.length > 20;
@@ -1037,104 +1027,6 @@ const LeadsSection = ({ leads, subscription }) => {
           )}
         </CardContent>
       </Card>
-    </div>
-  );
-};
-
-// Subscription Section Component
-const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
-  const hasSubscription = subscription?.has_subscription;
-  const expiresAt = subscription?.subscription?.expires_at;
-
-  const features = [
-    { icon: Star, text: 'Priority in search results' },
-    { icon: Shield, text: 'Verified badge on profile' },
-    { icon: Users, text: 'See full customer contact details' },
-    { icon: BarChart3, text: 'Advanced analytics dashboard' },
-    { icon: Zap, text: 'Boost your listings' },
-    { icon: MessageCircle, text: 'Direct customer inquiries' },
-  ];
-
-  return (
-    <div className="max-w-2xl mx-auto space-y-6" data-testid="subscription-section">
-      {hasSubscription ? (
-        <Card className="border-green-200 bg-gradient-to-br from-green-50 to-emerald-50">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Crown className="w-8 h-8 text-green-600" />
-              </div>
-              <h2 className="font-heading text-2xl font-bold text-green-800">Premium Active</h2>
-              <p className="text-green-600 mt-2">
-                Your subscription is active until{' '}
-                <span className="font-semibold">
-                  {expiresAt ? new Date(expiresAt).toLocaleDateString() : 'N/A'}
-                </span>
-              </p>
-
-              <div className="mt-6 p-4 bg-white rounded-xl">
-                <h3 className="font-semibold text-stone-700 mb-3">Your Premium Benefits:</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {features.map((feature, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-sm text-stone-600">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      {feature.text}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
-          <CardContent className="pt-6">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Crown className="w-8 h-8 text-primary" />
-              </div>
-              <Badge className="bg-primary text-white mb-4">Service Provider Plan</Badge>
-              <h2 className="font-heading text-3xl font-bold">₹251<span className="text-lg font-normal text-muted-foreground">/month</span></h2>
-              <p className="text-muted-foreground mt-2">
-                Grow your business with premium features
-              </p>
-
-              <div className="mt-8 space-y-3 text-left">
-                {features.map((feature, idx) => (
-                  <div key={idx} className="flex items-center gap-3 p-3 bg-white rounded-lg">
-                    <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                      <feature.icon className="w-4 h-4 text-primary" />
-                    </div>
-                    <span className="font-medium">{feature.text}</span>
-                  </div>
-                ))}
-              </div>
-
-              <Button
-                onClick={onSubscribe}
-                disabled={loading}
-                className="w-full btn-primary mt-8 h-12 text-lg"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <Crown className="w-5 h-5 mr-2" />
-                    Subscribe Now - ₹251/month
-                  </>
-                )}
-              </Button>
-
-              <p className="text-xs text-muted-foreground mt-4">
-                Secure payment via Razorpay. Cancel anytime.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };
