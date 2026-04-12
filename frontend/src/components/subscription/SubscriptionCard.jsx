@@ -25,7 +25,7 @@ const STATUS_CONFIG = {
   pending: { color: 'bg-yellow-100 text-yellow-700', icon: Clock, label: 'Payment Pending' },
 };
 
-const PlanDetails = ({ subData, onPay, paying, role: rawRole }) => {
+const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) => {
   const role = rawRole?.toLowerCase()?.replace(/\s+/g, '_') || '';
   const plan = subData?.subscription_plan || 'basic';
   const isPro = plan === 'pro' || plan === 'unlimited';
@@ -121,11 +121,11 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole }) => {
           
           <Button 
             onClick={() => onPay('unlimited')} 
-            disabled={paying || subData.status === 'active'} 
+            disabled={paying || subData.status === 'active' || paymentSuccess} 
             className="w-full btn-primary h-11"
           >
             {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-            {subData.status === 'active' ? 'Plan Active' : (subData.status === 'trial' ? 'Activate Professional Plan (₹999)' : 'Pay Now (₹999)')}
+            {subData.status === 'active' || paymentSuccess ? 'Plan Active' : (subData.status === 'trial' ? 'Activate Professional Plan (₹999)' : 'Pay Now (₹999)')}
           </Button>
           {subData.status === 'trial' && (
             <p className="text-[10px] text-center text-muted-foreground mt-2 italic">
@@ -166,7 +166,7 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole }) => {
         </div>
       </div>
 
-      {(subData.status !== 'active' && subData.status !== 'trial') && (
+      {(subData.status !== 'active' && subData.status !== 'trial' && !paymentSuccess) && (
         <Button onClick={() => onPay(isPro ? 'pro' : 'basic')} disabled={paying} className="w-full btn-primary h-11">
           {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
           Pay {subData.price || (isPro ? '₹499' : '₹199')}
@@ -180,6 +180,7 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
   const { user } = useAuth();
   const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
   const [paying, setPaying] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   const handlePay = async (plan = 'monthly') => {
     if (!window.Razorpay) {
@@ -208,27 +209,18 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
                 razorpay_signature: response.razorpay_signature,
               });
 
-              // CRITICAL FIX: Force fetch fresh subscription status from server after payment
-              // This ensures we get the actual 'active' status from the DB, not cached data
-              await fetchStatus();
+              // Mark payment as successful immediately
+              setPaymentSuccess(true);
+              
+              // Force update subscription data to active
+              updateSubData({
+                status: 'active',
+                has_subscription: true,
+                subscription_plan: plan,
+              });
 
-              // Get the updated subscription data from the fresh fetch
-              const updatedSub = verifyRes?.data?.subscription;
-              if (updatedSub && updatedSub.status === 'active') {
-                updateSubData({
-                  status: 'active',
-                  has_subscription: true,
-                  subscription_plan: updatedSub.subscription_plan || plan,
-                  subscription_amount_paise: updatedSub.subscription_amount_paise,
-                });
-              } else {
-                // Still mark as active to allow listing immediately
-                updateSubData({
-                  status: 'active',
-                  has_subscription: true,
-                  subscription_plan: plan,
-                });
-              }
+              // Also fetch fresh status from server
+              await fetchStatus();
 
               toast.success('🎉 Subscription activated! You can now list properties.');
 
@@ -343,7 +335,7 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
           
           {isHybridModel && (
              <div className="pt-4 border-t">
-               <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
+               <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} paymentSuccess={paymentSuccess} />
              </div>
           )}
 
@@ -434,7 +426,7 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
         </div>
 
         {((needsPayment || subData.status === 'trial') && subData.status !== 'active') && (
-          <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
+          <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} paymentSuccess={paymentSuccess} />
         )}
 
         {subData.status === 'active' && (
