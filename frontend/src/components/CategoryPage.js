@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { categoriesAPI } from '../lib/api';
+import { listingsAPI, categoriesAPI } from '../lib/api';
 import { prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
@@ -17,11 +17,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
+import { Slider } from './ui/slider';
 import { toast } from 'sonner';
 import {
   MapPin,
   Heart,
   Eye,
+  Filter,
   Grid,
   List,
   Home,
@@ -29,7 +31,9 @@ import {
   Hotel,
   PartyPopper,
   Wrench,
+  X,
   SlidersHorizontal,
+  ChevronDown,
   Video,
   Compass,
 } from 'lucide-react';
@@ -282,6 +286,7 @@ export const CategoryPage = () => {
 
   const currentCategory = categories.find((c) => c.id === category);
   const Icon = categoryIcons[category] || Home;
+  const bgColor = categoryColors[category] || 'bg-primary';
   const theme = categoryThemes[category] || categoryThemes.default;
   const title = categoryTitles[category] || { en: 'Listings', gu: '' };
   const description =

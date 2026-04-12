@@ -2,8 +2,10 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { ownerAPI, listingsAPI, bookingsAPI, boostAPI } from '../lib/api';
+import { ownerAPI, listingsAPI, bookingsAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import {
   Dialog,
@@ -11,7 +13,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from './ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Badge } from './ui/badge';
 import { toast } from 'sonner';
 import {
@@ -28,10 +32,15 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  Edit,
   Trash2,
+  Image,
+  Video,
+  MapPin,
   IndianRupee,
   FileText,
   LayoutDashboard,
+  Settings,
   LogOut,
   Menu,
   X,
@@ -47,7 +56,7 @@ import {
   Shield,
   Loader2,
 } from 'lucide-react';
-import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
+import { Header } from './Layout';
 import ListingFormRouter from './listings/ListingFormRouter';
 import SubscriptionCard from './subscription/SubscriptionCard';
 import PaymentModal from './PaymentModal';
@@ -83,6 +92,7 @@ export const OwnerDashboard = () => {
     setShowPaymentModal(true);
   };
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   const showSubscriptionTab = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(user?.role);
 
@@ -184,7 +194,7 @@ export const OwnerDashboard = () => {
       <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
         <div className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
           <img
-            src={gruvoraLogo}
+            src="/gruvoraLogo.jpeg"
             alt="Gruvora"
             className="h-8 w-auto max-w-[140px] object-contain"
           />
@@ -200,7 +210,7 @@ export const OwnerDashboard = () => {
           <div className="p-6">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
               <img
-                src={gruvoraLogo}
+                src="/gruvoraLogo.jpeg"
                 alt="Gruvora"
                 className="h-10 w-auto max-w-[180px] object-contain"
               />
@@ -965,7 +975,7 @@ const LeadsSection = ({ leads, subscription }) => {
 };
 
 // Subscription Section Component
-export const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
+const SubscriptionSection = ({ subscription, onSubscribe, loading }) => {
   const hasSubscription = subscription?.has_subscription;
   const expiresAt = subscription?.subscription?.expires_at;
 
@@ -1154,14 +1164,14 @@ export const BoostListingModal = ({ listing, isOpen, onClose, user }) => {
                 key={option.id}
                 onClick={() => setSelectedDuration(option.id)}
                 className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedDuration === option.id
-                  ? 'border-primary bg-primary/5'
-                  : 'border-stone-200 hover:border-stone-300'
+                    ? 'border-primary bg-primary/5'
+                    : 'border-stone-200 hover:border-stone-300'
                   }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedDuration === option.id
-                    ? 'border-primary bg-primary'
-                    : 'border-stone-300'
+                      ? 'border-primary bg-primary'
+                      : 'border-stone-300'
                     }`}>
                     {selectedDuration === option.id && (
                       <CheckCircle className="w-3 h-3 text-white" />
