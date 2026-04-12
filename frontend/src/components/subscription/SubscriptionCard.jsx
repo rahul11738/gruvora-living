@@ -29,7 +29,50 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
   const role = rawRole?.toLowerCase()?.replace(/\s+/g, '_') || '';
   const plan = subData?.subscription_plan || 'basic';
   const isPro = plan === 'pro' || plan === 'unlimited';
+  const isActive = subData?.status === 'active';
 
+  // Professional Owner Plans (Property, Stay, Event, etc.)
+  if (['property_owner', 'stay_owner', 'event_owner', 'hotel_owner'].includes(role)) {
+    const isPropertyOwner = role === 'property_owner';
+    const planName = isPropertyOwner ? "Professional Owner Plan" : "Professional Partner Plan";
+    const planPrice = isPropertyOwner ? "₹999" : "₹199";
+    const payPlan = isPropertyOwner ? "unlimited" : "basic";
+
+    return (
+      <div className="space-y-4">
+        <div className="p-4 rounded-xl border-2 border-primary bg-primary/5">
+          <div className="flex justify-between items-start mb-2">
+            <div>
+              <h4 className="font-bold text-stone-900">{planName}</h4>
+              <p className="text-xs text-muted-foreground">Unlimited listings + Featured visibility</p>
+            </div>
+            <span className="font-bold text-lg">{planPrice}/mo</span>
+          </div>
+          <ul className="text-sm space-y-2 text-stone-600 mb-6 mt-4">
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Post unlimited listings</li>
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Featured placement in search</li>
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Verified owner badge</li>
+            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Priority customer leads</li>
+          </ul>
+          
+          <Button 
+            onClick={() => onPay(payPlan)} 
+            disabled={paying || isActive || paymentSuccess} 
+            className="w-full btn-primary h-11 shadow-md hover:shadow-lg transition-all"
+          >
+            {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : (isActive || paymentSuccess ? <Check className="w-4 h-4 mr-2" /> : <Zap className="w-4 h-4 mr-2" />)}
+            {isActive || paymentSuccess ? 'Plan Active' : (subData?.status === 'trial' ? `Activate ${planName} (${planPrice})` : `Pay Now (${planPrice})`)}
+          </Button>
+          
+          <p className="text-[10px] text-center text-muted-foreground mt-3">
+            Secure payment powered by Razorpay. 100% money-back guarantee within 24 hours.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Service Provider Plans
   if (role === 'service_provider') {
     return (
       <div className="space-y-6">
@@ -101,83 +144,39 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
     );
   }
 
-  if (role === 'property_owner') {
-    return (
-      <div className="space-y-4">
-        <div className="p-4 rounded-xl border-2 border-primary bg-primary/5">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h4 className="font-bold text-stone-900">Professional Owner Plan</h4>
-              <p className="text-xs text-muted-foreground">Unlimited listings + Featured visibility</p>
-            </div>
-            <span className="font-bold text-lg">₹999/mo</span>
-          </div>
-          <ul className="text-sm space-y-2 text-stone-600 mb-6 mt-4">
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Post unlimited listings</li>
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Featured placement in search</li>
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Verified owner badge</li>
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Priority customer leads</li>
-          </ul>
-          
-          <Button 
-            onClick={() => onPay('unlimited')} 
-            disabled={paying || subData.status === 'active' || paymentSuccess} 
-            className="w-full btn-primary h-11"
-          >
-            {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-            {subData.status === 'active' || paymentSuccess ? 'Plan Active' : (subData.status === 'trial' ? 'Activate Professional Plan (₹999)' : 'Pay Now (₹999)')}
-          </Button>
-          {subData.status === 'trial' && (
-            <p className="text-[10px] text-center text-muted-foreground mt-2 italic">
-              * Activating now will secure your featured placement immediately.
-            </p>
-          )}
-        </div>
-      </div>
-    );
-  }
 
-  // Default for others (Stay, Hotel, Event - if they are not in commission or hybrid)
+
+  // Default fallback for any other owner roles not explicitly handled
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between p-4 bg-stone-50 rounded-xl border border-stone-200">
-        <div>
-          <p className="text-sm font-semibold text-stone-900 capitalize">{plan} Plan</p>
-          <p className="text-xs text-muted-foreground">
-            {isPro ? 'Unlimited listings + Featured placement' : 'Basic listing visibility'}
-          </p>
+      <div className="p-4 rounded-xl border-2 border-stone-100 bg-stone-50">
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <h4 className="font-bold text-stone-900">Standard Plan</h4>
+            <p className="text-xs text-muted-foreground">Standard listing visibility</p>
+          </div>
+          <span className="font-bold text-lg">₹199/mo</span>
         </div>
-        <Badge variant={isPro ? 'default' : 'outline'} className={isPro ? 'bg-amber-100 text-amber-700 border-amber-200' : ''}>
-          {isPro && <Crown className="w-3 h-3 mr-1" />}
-          {isPro ? 'Pro' : 'Basic'}
-        </Badge>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="p-3 bg-white rounded-lg border">
-          <p className="text-xs text-muted-foreground">Monthly Fee</p>
-          <p className="font-semibold">{subData.price || (isPro ? '₹499' : '₹199')}/mo</p>
-        </div>
-        <div className="p-3 bg-white rounded-lg border">
-          <p className="text-xs text-muted-foreground">Next Billing</p>
-          <p className="font-semibold">
-            {subData.next_billing_date ? new Date(subData.next_billing_date).toLocaleDateString('en-IN') : 'Due Now'}
-          </p>
-        </div>
-      </div>
-
-      {(subData.status !== 'active' && subData.status !== 'trial' && !paymentSuccess) && (
-        <Button onClick={() => onPay(isPro ? 'pro' : 'basic')} disabled={paying} className="w-full btn-primary h-11">
-          {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
-          Pay {subData.price || (isPro ? '₹499' : '₹199')}
+        <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
+          <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Normal visibility</li>
+          <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Standard listing limit</li>
+          <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Verified badge</li>
+        </ul>
+        <Button 
+          onClick={() => onPay('basic')} 
+          disabled={paying || isActive || paymentSuccess} 
+          variant="outline" 
+          className="w-full text-xs h-8"
+        >
+          {isActive || paymentSuccess ? 'Plan Active' : 'Pay ₹199'}
         </Button>
-      )}
+      </div>
     </div>
   );
 };
 
 export default function SubscriptionCard({ onPaymentSuccess }) {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
   const [paying, setPaying] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
@@ -203,8 +202,8 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
           order_id,
           handler: async (response) => {
             try {
-              // Verify payment with backend - we don't need the response, we update UI immediately
-              await subscriptionAPI.verify({
+              // Verify payment with backend
+              const verifyRes = await subscriptionAPI.verify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
@@ -213,15 +212,23 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
               // Mark payment as successful immediately
               setPaymentSuccess(true);
               
-              // Force update subscription data to active
-              updateSubData({
-                status: 'active',
-                has_subscription: true,
-                subscription_plan: plan,
-              });
+              // Update subscription data with the actual response from server
+              if (verifyRes.data?.subscription) {
+                updateSubData(verifyRes.data.subscription);
+              } else {
+                // Fallback force update
+                updateSubData({
+                  status: 'active',
+                  has_subscription: true,
+                  subscription_plan: plan,
+                });
+              }
 
-              // Also fetch fresh status from server
-              await fetchStatus();
+              // Also fetch fresh status and user from server to ensure everything is in sync
+              await Promise.all([
+                fetchStatus(),
+                refreshUser ? refreshUser() : Promise.resolve()
+              ]);
 
               toast.success('🎉 Subscription activated! You can now list properties.');
 

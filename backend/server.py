@@ -8983,12 +8983,18 @@ async def verify_subscription_payment(
 ):
     """Verify subscription payment and activate subscription"""
     user = await get_current_user(credentials)
+    user_id = user.get("id")
+    email = user.get("email")
+
+    logger.info(f"PAYMENT VERIFY START: User={email} ({user_id}), Order={request.razorpay_order_id}")
 
     if not razorpay_client:
+        logger.error("PAYMENT VERIFY ERROR: Razorpay client not configured")
         raise HTTPException(status_code=500, detail="Payment gateway not configured")
 
     try:
         # Verify signature
+        logger.info(f"PAYMENT VERIFY: Verifying signature for order {request.razorpay_order_id}")
         razorpay_client.utility.verify_payment_signature(
             {
                 "razorpay_order_id": request.razorpay_order_id,
@@ -8996,18 +9002,21 @@ async def verify_subscription_payment(
                 "razorpay_signature": request.razorpay_signature,
             }
         )
+        logger.info(f"PAYMENT VERIFY: Signature valid for order {request.razorpay_order_id}")
 
         # Update subscription status
         subscription = await db.subscriptions.find_one(
             {"razorpay_order_id": request.razorpay_order_id}
         )
         if not subscription:
+            logger.error(f"PAYMENT VERIFY ERROR: Subscription record not found for order {request.razorpay_order_id}")
             raise HTTPException(status_code=404, detail="Subscription not found")
 
         now = datetime.now(timezone.utc)
         expiry_date = compute_next_billing_date(now)
 
-        await db.subscriptions.update_one(
+        logger.info(f"PAYMENT VERIFY: Updating subscription {subscription['id']} to active")
+        sub_update = await db.subscriptions.update_one(
             {"id": subscription["id"]},
             {
                 "$set": {
@@ -9018,6 +9027,7 @@ async def verify_subscription_payment(
                 }
             },
         )
+        logger.info(f"PAYMENT VERIFY: Subscription update result: modified={sub_update.modified_count}")
 
         # Update user subscription status
         plan = subscription.get("plan", SubscriptionPlan.BASIC.value)
@@ -9028,10 +9038,14 @@ async def verify_subscription_payment(
         }
 
         # CRITICAL FIX: First refresh user data from DB to get latest subscription status
-        fresh_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+        fresh_user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not fresh_user:
+            logger.error(f"PAYMENT VERIFY ERROR: User {user_id} not found in DB during verification")
+            raise HTTPException(status_code=404, detail="User not found")
 
-        await db.users.update_one(
-            {"id": user["id"]},
+        logger.info(f"PAYMENT VERIFY: Updating user {email} status to active, plan={plan}")
+        user_update = await db.users.update_one(
+            {"id": user_id},
             {
                 "$set": {
                     "subscription": "active",
@@ -9040,19 +9054,19 @@ async def verify_subscription_payment(
                     "subscription_expires": expiry_date.isoformat(),
                     "next_billing_date": expiry_date.isoformat(),
                     "last_payment_date": now.isoformat(),
-                    "subscription_start_date": fresh_user.get("subscription_start_date")
-                    or now.isoformat(),
+                    "subscription_start_date": fresh_user.get("subscription_start_date") or now.isoformat(),
                     "block_status": None,
                     "block_until": None,
                     "auto_renew": True,
                 }
             },
         )
+        logger.info(f"PAYMENT VERIFY: User update result: modified={user_update.modified_count}")
 
         # Update all owner's listings visibility based on the plan
-        # Also approve any listings that were awaiting payment
-        await db.listings.update_many(
-            {"owner_id": user["id"]},
+        logger.info(f"PAYMENT VERIFY: Updating visibility for all listings of owner {user_id}")
+        listings_update = await db.listings.update_many(
+            {"owner_id": user_id},
             {
                 "$set": {
                     "subscription_plan": plan,
@@ -9063,18 +9077,19 @@ async def verify_subscription_payment(
                 }
             },
         )
+        logger.info(f"PAYMENT VERIFY: Listings update result: modified={listings_update.modified_count}")
 
         # Approve any listings that were awaiting payment
         await db.listings.update_many(
-            {"owner_id": user["id"], "status": "awaiting_payment"},
+            {"owner_id": user_id, "status": "awaiting_payment"},
             {"$set": {"status": "approved"}},
         )
 
         # Notify user of successful activation
         await create_system_notification(
-            user_id=user["id"],
+            user_id=user_id,
             title="Subscription Activated!",
-            message=f"Your {plan.replace('_', ' ').capitalize()} plan is now active. Enjoy your 5-month free trial!",
+            message=f"Your {plan.replace('_', ' ').capitalize()} plan is now active. Thank you for your payment!",
             type="success",
             link="/owner/dashboard",
         )
@@ -9082,6 +9097,7 @@ async def verify_subscription_payment(
         # Professional Fix: Return the full updated subscription status to the frontend
         # This prevents the need for a separate status fetch if it's already updated here
         updated_status = await get_subscription_status(credentials)
+        logger.info(f"PAYMENT VERIFY SUCCESS: Returning updated status for {email}")
 
         return {
             "success": True,
@@ -9090,9 +9106,10 @@ async def verify_subscription_payment(
         }
 
     except razorpay.errors.SignatureVerificationError:
+        logger.error(f"PAYMENT VERIFY ERROR: Invalid signature for order {request.razorpay_order_id}")
         raise HTTPException(status_code=400, detail="Invalid payment signature")
     except Exception as e:
-        logger.error(f"Subscription verification failed: {str(e)}")
+        logger.error(f"PAYMENT VERIFY CRITICAL ERROR for user {email}: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -9318,7 +9335,35 @@ async def get_subscription_status(
     """Get current user's subscription status with auto-initialization for owners."""
     try:
         user = await get_current_user(credentials)
+        user_id = user.get("id")
         role = user.get("role")  # Already normalized in get_current_user
+
+        # SELF-HEALING: Check if user has an active subscription record but status is not active in user doc
+        if role in SUBSCRIPTION_ROLES and user.get("subscription_status") != "active":
+            latest_active_sub = await db.subscriptions.find_one(
+                {"user_id": user_id, "status": "active"},
+                sort=[("activated_at", -1)]
+            )
+            if latest_active_sub:
+                logger.info(f"SELF-HEALING: Found active sub for {user_id} but status was {user.get('subscription_status')}. Fixing user doc...")
+                expiry_date = latest_active_sub.get("expires_at")
+                plan = latest_active_sub.get("plan", SubscriptionPlan.BASIC.value)
+                
+                await db.users.update_one(
+                    {"id": user_id},
+                    {
+                        "$set": {
+                            "subscription": "active",
+                            "subscription_status": "active",
+                            "subscription_plan": plan,
+                            "subscription_expires": expiry_date,
+                            "next_billing_date": expiry_date,
+                            "last_payment_date": latest_active_sub.get("activated_at"),
+                        }
+                    }
+                )
+                # Re-fetch updated user
+                user = await db.users.find_one({"id": user_id}, {"_id": 0})
 
         # Auto-initialize subscription for owners if missing
         if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
