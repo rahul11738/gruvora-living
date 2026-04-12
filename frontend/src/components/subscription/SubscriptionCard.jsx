@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useAuth } from '../../context/AuthContext';
 import { subscriptionAPI } from '../../lib/api';
+import { generateInvoicePDF } from '../../lib/generateInvoicePDF';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -11,6 +12,7 @@ import {
   Check,
   Clock,
   Crown,
+  Download,
   FileText,
   RefreshCw,
   Shield,
@@ -179,6 +181,9 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
   const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
   const [paying, setPaying] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [invoices, setInvoices] = useState(null);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [showInvoices, setShowInvoices] = useState(false);
 
   const handlePay = async (plan = 'monthly') => {
     if (!window.Razorpay) {
@@ -263,6 +268,29 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
       await fetchStatus();
     } catch (error) {
       toast.error('Failed to update auto-renew');
+    }
+  };
+
+  const handleViewInvoices = async () => {
+    if (showInvoices) { setShowInvoices(false); return; }
+    setLoadingInvoices(true);
+    try {
+      const response = await subscriptionAPI.getInvoices();
+      setInvoices(response.data.invoices || []);
+      setShowInvoices(true);
+    } catch {
+      toast.error('Failed to load invoices');
+    } finally {
+      setLoadingInvoices(false);
+    }
+  };
+
+  const handleDownloadInvoice = (invoice) => {
+    try {
+      generateInvoicePDF(invoice, user);
+      toast.success('Invoice downloaded!');
+    } catch {
+      toast.error('Failed to generate PDF');
     }
   };
 
@@ -434,21 +462,63 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
         )}
 
         {subData.status === 'active' && (
-          <div className="flex items-center justify-between text-sm">
-            <button
-              onClick={handleToggleAutoRenew}
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Auto-renew: {subData.auto_renew ? 'On' : 'Off'}
-            </button>
-            <button
-              onClick={handleViewInvoices}
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <FileText className="w-3.5 h-3.5" />
-              Invoices
-            </button>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <button
+                onClick={handleToggleAutoRenew}
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Auto-renew: {subData.auto_renew ? 'On' : 'Off'}
+              </button>
+              <button
+                onClick={handleViewInvoices}
+                disabled={loadingInvoices}
+                className="text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                {loadingInvoices
+                  ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  : <FileText className="w-3.5 h-3.5" />}
+                {showInvoices ? 'Hide Invoices' : 'Invoices'}
+              </button>
+            </div>
+
+            {showInvoices && (
+              <div className="rounded-xl border border-stone-200 overflow-hidden">
+                <div className="bg-stone-50 px-4 py-2 border-b border-stone-200">
+                  <p className="text-xs font-semibold text-stone-600 uppercase tracking-wide">Payment History</p>
+                </div>
+                {invoices && invoices.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-6">No invoices yet.</p>
+                )}
+                {invoices && invoices.map((inv) => {
+                  const paidAt = inv.activated_at || inv.paid_at || inv.created_at;
+                  const amount = inv.amount ? `₹${(inv.amount / 100).toLocaleString('en-IN')}` : '—';
+                  const dateStr = paidAt ? new Date(paidAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+                  const invNum = inv.invoice_number || inv.id?.slice(0, 8).toUpperCase();
+                  return (
+                    <div key={inv.id} className="flex items-center justify-between px-4 py-3 border-b border-stone-100 last:border-0 hover:bg-stone-50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-stone-900">#{invNum}</p>
+                          <p className="text-xs text-muted-foreground">{dateStr} · {amount}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDownloadInvoice(inv)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded-lg transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        PDF
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </CardContent>

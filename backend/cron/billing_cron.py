@@ -18,6 +18,9 @@ BLOCK_DURATION_DAYS = 7
 BILLING_GRACE_DAYS = 5
 SUBSCRIPTION_AMOUNT_PAISE = 99900
 
+# Days before trial end to send reminder notifications
+TRIAL_REMINDER_DAYS = [30, 7, 1]
+
 _scheduler_task: Optional[asyncio.Task] = None
 
 
@@ -27,6 +30,15 @@ def _utc_now() -> datetime:
 
 def _first_day_of_current_month(now: datetime) -> datetime:
     return now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _parse_iso(value: str) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
 
 
 async def run_billing_cycle() -> None:
@@ -39,15 +51,84 @@ async def run_billing_cycle() -> None:
     logger.info("Billing cron started at %s", now.isoformat())
 
     try:
+        await _send_trial_ending_reminders(db, now)
         await _expire_trials(db, now)
         await _block_overdue(db, now)
-        await _send_reminders(db, now)
+        await _send_monthly_billing_reminders(db, now)
     finally:
         client.close()
         logger.info("Billing cron finished")
 
 
+async def _send_trial_ending_reminders(db, now: datetime) -> None:
+    """
+    Send notifications to trial users whose trial ends in exactly
+    30, 7, or 1 day(s). Uses a dedup key so we never double-send.
+    """
+    trial_users = await db.users.find(
+        {
+            "role": {"$in": list(SUBSCRIPTION_ROLES)},
+            "subscription_status": "trial",
+            "trial_end_date": {"$exists": True, "$ne": None},
+        },
+        {"_id": 0, "id": 1, "name": 1, "trial_end_date": 1},
+    ).to_list(10000)
+
+    notifications = []
+    for user in trial_users:
+        trial_end_dt = _parse_iso(user.get("trial_end_date", ""))
+        if not trial_end_dt:
+            continue
+
+        days_left = (trial_end_dt.date() - now.date()).days
+
+        if days_left not in TRIAL_REMINDER_DAYS:
+            continue
+
+        # Dedup: check if we already sent this reminder
+        dedup_key = f"trial_reminder_{user['id']}_{days_left}d"
+        already_sent = await db.notifications.find_one({"dedup_key": dedup_key})
+        if already_sent:
+            continue
+
+        if days_left == 1:
+            title = "⚠️ Trial ends tomorrow!"
+            message = (
+                "Your 5-month free trial ends tomorrow. "
+                "Subscribe now to keep your listings active and avoid interruption."
+            )
+        elif days_left == 7:
+            title = "Trial ending in 7 days"
+            message = (
+                f"Your free trial ends on {trial_end_dt.strftime('%d %b %Y')}. "
+                "Subscribe before it ends to continue listing properties without interruption."
+            )
+        else:  # 30 days
+            title = "Trial ending in 30 days"
+            message = (
+                f"Your 5-month free trial ends on {trial_end_dt.strftime('%d %b %Y')}. "
+                "Plan ahead — subscribe to keep full access to all owner features."
+            )
+
+        notifications.append({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "type": "trial_ending",
+            "title": title,
+            "message": message,
+            "dedup_key": dedup_key,
+            "read": False,
+            "created_at": now.isoformat(),
+            "link": "/owner/dashboard?tab=subscription",
+        })
+
+    if notifications:
+        await db.notifications.insert_many(notifications)
+        logger.info("Sent trial-ending reminders to %s users", len(notifications))
+
+
 async def _expire_trials(db, now: datetime) -> None:
+    """Move trial users whose trial_end_date has passed to 'expired'."""
     expired_users = await db.users.find(
         {
             "role": {"$in": list(SUBSCRIPTION_ROLES)},
@@ -61,9 +142,7 @@ async def _expire_trials(db, now: datetime) -> None:
         return
 
     await db.users.update_many(
-        {
-            "id": {"$in": [user["id"] for user in expired_users]},
-        },
+        {"id": {"$in": [u["id"] for u in expired_users]}},
         {
             "$set": {
                 "subscription_status": "expired",
@@ -76,20 +155,25 @@ async def _expire_trials(db, now: datetime) -> None:
     notifications = [
         {
             "id": str(uuid.uuid4()),
-            "user_id": user["id"],
-            "type": "subscription_expired",
+            "user_id": u["id"],
+            "type": "trial_expired",
             "title": "Free trial ended",
-            "message": "Your free trial has ended. Subscribe now to continue using owner features.",
+            "message": (
+                "Your 5-month free trial has ended. "
+                "Subscribe now (₹999/month) to continue listing properties and accessing owner features."
+            ),
             "read": False,
             "created_at": now.isoformat(),
+            "link": "/owner/dashboard?tab=subscription",
         }
-        for user in expired_users
+        for u in expired_users
     ]
     await db.notifications.insert_many(notifications)
     logger.info("Expired %s trial users", len(expired_users))
 
 
 async def _block_overdue(db, now: datetime) -> None:
+    """Block users who haven't paid within the grace period after trial/expiry."""
     if now.day <= BILLING_GRACE_DAYS:
         return
 
@@ -110,7 +194,7 @@ async def _block_overdue(db, now: datetime) -> None:
         return
 
     await db.users.update_many(
-        {"id": {"$in": [user["id"] for user in overdue_users]}},
+        {"id": {"$in": [u["id"] for u in overdue_users]}},
         {
             "$set": {
                 "subscription_status": "blocked",
@@ -123,20 +207,25 @@ async def _block_overdue(db, now: datetime) -> None:
     notifications = [
         {
             "id": str(uuid.uuid4()),
-            "user_id": user["id"],
+            "user_id": u["id"],
             "type": "subscription_blocked",
             "title": "Account suspended",
-            "message": "Your account has been suspended for 7 days due to unpaid subscription. Pay now to restore access.",
+            "message": (
+                "Your account has been suspended due to unpaid subscription. "
+                "Pay now to restore access immediately."
+            ),
             "read": False,
             "created_at": now.isoformat(),
+            "link": "/owner/dashboard?tab=subscription",
         }
-        for user in overdue_users
+        for u in overdue_users
     ]
     await db.notifications.insert_many(notifications)
     logger.info("Blocked %s overdue users", len(overdue_users))
 
 
-async def _send_reminders(db, now: datetime) -> None:
+async def _send_monthly_billing_reminders(db, now: datetime) -> None:
+    """On the 27th of each month, remind active/trial users that billing is coming."""
     if now.day != 27:
         return
 
@@ -154,17 +243,21 @@ async def _send_reminders(db, now: datetime) -> None:
     notifications = [
         {
             "id": str(uuid.uuid4()),
-            "user_id": user["id"],
+            "user_id": u["id"],
             "type": "billing_reminder",
             "title": "Subscription due in 3 days",
-            "message": "Your monthly subscription is due on the 1st. Pay between the 1st and 5th to avoid suspension.",
+            "message": (
+                "Your monthly subscription renews on the 1st. "
+                "Pay between the 1st and 5th to avoid suspension."
+            ),
             "read": False,
             "created_at": now.isoformat(),
+            "link": "/owner/dashboard?tab=subscription",
         }
-        for user in users
+        for u in users
     ]
     await db.notifications.insert_many(notifications)
-    logger.info("Sent billing reminders to %s users", len(users))
+    logger.info("Sent monthly billing reminders to %s users", len(users))
 
 
 async def _billing_loop() -> None:
@@ -177,7 +270,7 @@ async def _billing_loop() -> None:
         await asyncio.sleep(sleep_seconds)
         try:
             await run_billing_cycle()
-        except Exception as exc:  # pragma: no cover - cron safety net
+        except Exception as exc:  # pragma: no cover
             logger.exception("Billing cron failed: %s", exc)
 
 

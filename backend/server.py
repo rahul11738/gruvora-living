@@ -9029,6 +9029,7 @@ async def verify_subscription_payment(
         expiry_date = compute_next_billing_date(now)
 
         logger.info(f"PAYMENT VERIFY: Updating subscription {subscription['id']} to active")
+        invoice_number = f"GRV-{now.strftime('%Y%m')}-{subscription['id'][:6].upper()}"
         sub_update = await db.subscriptions.update_one(
             {"id": subscription["id"]},
             {
@@ -9036,7 +9037,9 @@ async def verify_subscription_payment(
                     "status": "active",
                     "razorpay_payment_id": request.razorpay_payment_id,
                     "activated_at": now.isoformat(),
+                    "paid_at": now.isoformat(),
                     "expires_at": expiry_date.isoformat(),
+                    "invoice_number": invoice_number,
                 }
             },
         )
@@ -9399,7 +9402,19 @@ async def get_subscription_invoices(
     invoices = (
         await db.subscriptions.find(
             {"user_id": user["id"], "status": "active"},
-            {"_id": 0},
+            {
+                "_id": 0,
+                "id": 1,
+                "invoice_number": 1,
+                "plan": 1,
+                "amount": 1,
+                "razorpay_order_id": 1,
+                "razorpay_payment_id": 1,
+                "activated_at": 1,
+                "paid_at": 1,
+                "expires_at": 1,
+                "created_at": 1,
+            },
         )
         .sort("paid_at", -1)
         .to_list(24)

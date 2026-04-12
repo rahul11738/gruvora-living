@@ -213,7 +213,8 @@ export const RegisterPage = () => {
   const SelectedOwnerIcon = selectedOwnerType?.icon;
   const isSubscriptionRole = SUBSCRIPTION_ROLES.has(formData.role);
   const isCommissionRole = COMMISSION_ROLES.has(formData.role);
-  const canRegisterOwner = !isSubscriptionRole || (isSubscriptionRole && couponState?.valid);
+  // Coupon is optional - all owners get 5 months free trial automatically
+  const canRegisterOwner = true;
 
   const handleRoleChange = (role) => {
     setFormData(p => ({ ...p, role }));
@@ -246,12 +247,6 @@ export const RegisterPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (activeTab === 'owner' && isSubscriptionRole && !couponState?.valid) {
-      toast.error('Please enter coupon code GRUVORA5M to get 5 months free subscription.');
-      return;
-    }
-
     setLoading(true);
 
     try {
@@ -266,6 +261,8 @@ export const RegisterPage = () => {
         await registerOwner(payload);
         if (isSubscriptionRole && couponState?.valid) {
           toast.success(`🎉 Registered! You have ${couponState.free_months} months free subscription.`);
+        } else if (isSubscriptionRole) {
+          toast.success('🎉 Registered! You get 5 months free trial automatically.');
         } else {
           toast.success('Registration successful!');
         }
@@ -517,12 +514,12 @@ export const RegisterPage = () => {
                                     <p className="font-semibold text-sm">
                                       {couponState?.valid
                                         ? `🎉 Coupon Applied — ${couponState.free_months} Months FREE!`
-                                        : 'Subscription: ₹251/month'}
+                                        : '🎁 5 Months Free Trial — Included!'}
                                     </p>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                       {couponState?.valid
-                                        ? `Enjoy ${couponState.free_months} months free. After that, ₹251/month.`
-                                        : 'Enter coupon code GRUVORA5M to get first 5 months absolutely FREE.'}
+                                        ? `Enjoy ${couponState.free_months} months free. After that, ₹999/month.`
+                                        : 'All owners get 5 months free automatically. Have a special coupon? Apply below.'}
                                     </p>
                                   </div>
                                 </div>
@@ -530,7 +527,7 @@ export const RegisterPage = () => {
                                 {!couponState?.valid && (
                                   <div className="flex flex-col sm:flex-row gap-2">
                                     <Input
-                                      placeholder="COUPON CODE"
+                                      placeholder="COUPON CODE (optional)"
                                       value={couponInput}
                                       onChange={e => {
                                         setCouponInput(e.target.value.toUpperCase());
@@ -569,7 +566,7 @@ export const RegisterPage = () => {
                                       You get <span className="font-bold">{couponState.free_months} months FREE</span> subscription.
                                     </p>
                                     <p className="text-green-600 text-xs mt-1">
-                                      After {couponState.free_months} months → ₹251/month
+                                      After {couponState.free_months} months → ₹999/month
                                     </p>
                                     <button
                                       type="button"
