@@ -330,6 +330,7 @@ class ReviewCreate(BaseModel):
 
 class ChatMessage(BaseModel):
     message: str
+    images: Optional[List[str]] = None
 
 
 class RecommendationInteractionEvent(BaseModel):
@@ -5549,8 +5550,9 @@ Features you can explain:
 
 Be helpful, concise, and provide specific suggestions. Respond in user's language (Gujarati/Hindi/English).
 When suggesting properties, ask about: location, budget, property type, and specific requirements.""",
-        ).with_model("openai", "gpt-5.2")
+        ).with_model("openai", "gpt-4.1")
 
+        # Always use text-only mode to prevent image input issues
         user_message = UserMessage(text=msg.message)
         response = await chat.send_message(user_message)
 
@@ -5570,6 +5572,15 @@ When suggesting properties, ask about: location, budget, property type, and spec
         return {"response": response}
     except Exception as e:
         logger.error(f"Chatbot error: {str(e)}")
+        error_msg = str(e).lower()
+        if (
+            "image" in error_msg
+            or "vision" in error_msg
+            or "does not support" in error_msg
+        ):
+            return {
+                "response": "Sorry, I'm not able to process images right now. Please try sending a text message instead."
+            }
         return {
             "response": "માફ કરશો, હું અત્યારે જવાબ આપી શકતો નથી. કૃપયા ફરીથી પ્રયાસ કરો."
         }
