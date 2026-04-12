@@ -55,16 +55,16 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
             <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Verified owner badge</li>
             <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Priority customer leads</li>
           </ul>
-          
-          <Button 
-            onClick={() => onPay(payPlan)} 
-            disabled={paying || isActive || paymentSuccess} 
+
+          <Button
+            onClick={() => onPay(payPlan)}
+            disabled={paying || isActive || paymentSuccess}
             className="w-full btn-primary h-11 shadow-md hover:shadow-lg transition-all"
           >
             {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : (isActive || paymentSuccess ? <Check className="w-4 h-4 mr-2" /> : <Zap className="w-4 h-4 mr-2" />)}
             {isActive || paymentSuccess ? 'Plan Active' : (subData?.status === 'trial' ? `Activate ${planName} (${planPrice})` : `Pay Now (${planPrice})`)}
           </Button>
-          
+
           <p className="text-[10px] text-center text-muted-foreground mt-3">
             Secure payment powered by Razorpay. 100% money-back guarantee within 24 hours.
           </p>
@@ -163,10 +163,10 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
           <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Standard listing limit</li>
           <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Verified badge</li>
         </ul>
-        <Button 
-          onClick={() => onPay('basic')} 
-          disabled={paying || isActive || paymentSuccess} 
-          variant="outline" 
+        <Button
+          onClick={() => onPay('basic')}
+          disabled={paying || isActive || paymentSuccess}
+          variant="outline"
           className="w-full text-xs h-8"
         >
           {isActive || paymentSuccess ? 'Plan Active' : 'Pay ₹199'}
@@ -364,11 +364,11 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
               <p className="font-semibold">₹{pendingCommission.toLocaleString('en-IN')}</p>
             </div>
           </div>
-          
+
           {isHybridModel && (
-             <div className="pt-4 border-t">
-               <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} paymentSuccess={paymentSuccess} />
-             </div>
+            <div className="pt-4 border-t">
+              <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} paymentSuccess={paymentSuccess} />
+            </div>
           )}
 
           {Array.isArray(subData.commission_history) && subData.commission_history.length > 0 && (
@@ -383,16 +383,6 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
 
   const cfg = STATUS_CONFIG[subData.status] || STATUS_CONFIG.pending;
   const Icon = cfg.icon;
-
-  const handleViewInvoices = async () => {
-    try {
-      const response = await subscriptionAPI.getInvoices();
-      const invoices = response.data.invoices || [];
-      toast.success(invoices.length ? `Loaded ${invoices.length} invoices` : 'No invoices yet');
-    } catch (error) {
-      toast.error('Failed to load invoices');
-    }
-  };
 
   return (
     <Card className={isBlocked ? 'border-red-300 ring-2 ring-red-200' : ''}>
@@ -412,12 +402,12 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
         {subData.status === 'trial' && trialDaysLeft !== null && (
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
             <p className="text-sm font-medium text-blue-900">
-              {trialDaysLeft > 0 
-                ? `You are on a 5-month free trial. Enjoy full access!` 
+              {trialDaysLeft > 0
+                ? `You are on a 5-month free trial. Enjoy full access!`
                 : 'Your free trial has ended today.'}
             </p>
             <p className="text-xs text-blue-700 mt-1">
-              {trialDaysLeft > 0 
+              {trialDaysLeft > 0
                 ? `Subscription payments will begin in ${trialDaysLeft} days.`
                 : 'Please upgrade to continue using the platform.'}
             </p>
