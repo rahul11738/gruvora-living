@@ -20,9 +20,16 @@ registerServiceWorker({
     }
   },
   onUpdate: ({ skipWaiting }) => {
-    // Show toast notification about new version
-    // User can click "Update" to get latest version
-    console.log('📦 New version available');
+    // Notify users and let them choose update timing.
+    window.dispatchEvent(new CustomEvent('pwa:update-available'));
+
+    const shouldUpdate = window.confirm(
+      'A new version is available. Update now for the latest fixes?',
+    );
+
+    if (shouldUpdate) {
+      skipWaiting();
+    }
   },
   onError: (error) => {
     console.warn('⚠️ Service Worker registration failed:', error);

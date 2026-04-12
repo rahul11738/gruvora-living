@@ -6,8 +6,10 @@ import { useInteractions } from '../context/InteractionContext';
 import { usersAPI, listingsAPI } from '../lib/api';
 import { Header, Footer } from './Layout';
 import { normalizeMediaUrl } from '../lib/media';
+import OptimizedImage from './OptimizedImage';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
+import { ProfileSkeleton } from './SkeletonLoaders';
 import { toast } from 'sonner';
 import {
   User,
@@ -117,9 +119,7 @@ export const OwnerProfilePage = () => {
     return (
       <div className="min-h-screen bg-stone-50">
         <Header />
-        <div className="flex items-center justify-center h-96">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
+        <ProfileSkeleton />
       </div>
     );
   }
@@ -164,13 +164,12 @@ export const OwnerProfilePage = () => {
                 <div className="w-full h-full rounded-full bg-white p-1">
                   <div className="w-full h-full rounded-full bg-primary overflow-hidden flex items-center justify-center">
                     {owner.profile_image ? (
-                      <img
-                        src={owner.profile_image}
+                      <OptimizedImage
+                        publicId={owner.profile_image}
                         alt={owner.name || 'Owner avatar'}
                         className="w-full h-full object-cover"
-                        onError={(event) => {
-                          event.currentTarget.style.display = 'none';
-                        }}
+                        width={160}
+                        sizes="160px"
                       />
                     ) : (
                       <User className="w-16 h-16 md:w-20 md:h-20 text-white" />
@@ -363,10 +362,12 @@ const ReelCard = ({ reel }) => {
       data-testid={`reel-card-${reel.id}`}
     >
       {reel.thumbnail_url ? (
-        <img
-          src={normalizeMediaUrl(reel.thumbnail_url)}
+        <OptimizedImage
+          publicId={normalizeMediaUrl(reel.thumbnail_url)}
           alt={reel.title}
           className="w-full h-full object-cover"
+          width={360}
+          sizes="(max-width: 1024px) 50vw, 25vw"
         />
       ) : (
         <video
@@ -425,10 +426,12 @@ const ListingCard = ({ listing }) => {
     >
       {/* Image */}
       <div className="relative aspect-[4/3] overflow-hidden">
-        <img
-          src={listing.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400'}
+        <OptimizedImage
+          publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
           alt={listing.title}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          width={640}
+          sizes="(max-width: 1024px) 100vw, 33vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 

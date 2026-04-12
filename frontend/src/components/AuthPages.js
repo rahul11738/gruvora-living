@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { toast } from 'sonner';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
+import OptimizedImage from './OptimizedImage';
 import {
   Home,
   Mail,
@@ -104,10 +105,12 @@ export const LoginPage = () => {
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
               <Link to="/" className="inline-flex items-center mb-6 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-                <img
-                  src={gruvoraLogo}
+                <OptimizedImage
+                  publicId={gruvoraLogo}
                   alt="Gruvora"
                   className="h-10 sm:h-11 w-auto max-w-[180px] object-contain"
+                  width={180}
+                  sizes="180px"
                 />
               </Link>
 
@@ -286,10 +289,12 @@ export const RegisterPage = () => {
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
               <Link to="/" className="inline-flex items-center mb-6 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-                <img
-                  src={gruvoraLogo}
+                <OptimizedImage
+                  publicId={gruvoraLogo}
                   alt="Gruvora"
                   className="h-10 sm:h-11 w-auto max-w-[180px] object-contain"
+                  width={180}
+                  sizes="180px"
                 />
               </Link>
 
@@ -425,8 +430,8 @@ export const RegisterPage = () => {
                                 type="button"
                                 onClick={() => handleRoleChange(type.value)}
                                 className={`p-4 rounded-xl border text-left transition-all bg-white/95 shadow-[0_8px_22px_rgba(15,23,42,0.03)] ${isSelected
-                                    ? 'border-secondary/40 bg-secondary/8 shadow-[0_10px_24px_rgba(234,88,12,0.08)]'
-                                    : 'border-stone-200 hover:border-stone-300'
+                                  ? 'border-secondary/40 bg-secondary/8 shadow-[0_10px_24px_rgba(234,88,12,0.08)]'
+                                  : 'border-stone-200 hover:border-stone-300'
                                   }`}
                               >
                                 <Icon className={`w-6 h-6 mb-2 ${isSelected ? 'text-secondary' : 'text-muted-foreground'}`} />
@@ -500,8 +505,8 @@ export const RegisterPage = () => {
                         {isSubscriptionRole && (
                           <div className="space-y-3">
                             <Card className={`border transition-all shadow-[0_8px_22px_rgba(15,23,42,0.04)] ${couponState?.valid
-                                ? 'border-green-300 bg-green-50/80'
-                                : 'border-orange-200 bg-orange-50/80'
+                              ? 'border-green-300 bg-green-50/80'
+                              : 'border-orange-200 bg-orange-50/80'
                               }`}>
                               <CardContent className="pt-5 space-y-4">
                                 <div className="flex items-start gap-3">
@@ -615,8 +620,8 @@ export const RegisterPage = () => {
                 <Button
                   type="submit"
                   className={`w-full h-12 rounded-full ${activeTab === 'owner' && !canRegisterOwner
-                      ? 'opacity-50 cursor-not-allowed bg-stone-400'
-                      : 'btn-primary shadow-[0_12px_24px_rgba(5,150,105,0.18)]'
+                    ? 'opacity-50 cursor-not-allowed bg-stone-400'
+                    : 'btn-primary shadow-[0_12px_24px_rgba(5,150,105,0.18)]'
                     }`}
                   disabled={loading || (activeTab === 'owner' && !canRegisterOwner)}
                   data-testid="register-submit-btn"

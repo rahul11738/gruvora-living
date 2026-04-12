@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { FixedSizeList as List } from 'react-window';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { ownerAPI, listingsAPI, bookingsAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
@@ -60,6 +61,7 @@ import { Header } from './Layout';
 import ListingFormRouter from './listings/ListingFormRouter';
 import SubscriptionCard from './subscription/SubscriptionCard';
 import PaymentModal from './PaymentModal';
+import OptimizedImage from './OptimizedImage';
 
 const categoryIcons = {
   home: Home,
@@ -95,6 +97,10 @@ export const OwnerDashboard = () => {
   const [subscriptionLoading, setSubscriptionLoading] = useState(false);
 
   const showSubscriptionTab = ['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(user?.role);
+  const shouldVirtualizeListings = listings.length > 20;
+  const shouldVirtualizeBookings = bookings.length > 20;
+  const recentListings = useMemo(() => listings.slice(0, 5), [listings]);
+  const recentBookings = useMemo(() => bookings.slice(0, 5), [bookings]);
 
   const handleOpenCreateDialog = useCallback(() => {
     // Allow listing if subscription is active (isActive) OR if on trial (isTrial) OR if not a subscription role
@@ -180,6 +186,29 @@ export const OwnerDashboard = () => {
     navigate('/');
   }, [logout, navigate]);
 
+  const renderVirtualizedListingRow = useCallback(({ index, style }) => {
+    const listing = listings[index];
+    return (
+      <div style={style} className="px-1 py-2">
+        <ListingRow
+          listing={listing}
+          onDelete={handleDeleteListing}
+          onBoost={handleBoostListing}
+          showActions
+        />
+      </div>
+    );
+  }, [listings, handleDeleteListing]);
+
+  const renderVirtualizedBookingRow = useCallback(({ index, style }) => {
+    const booking = bookings[index];
+    return (
+      <div style={style} className="px-1 py-2">
+        <BookingRow booking={booking} onStatusChange={handleBookingStatus} showDetails />
+      </div>
+    );
+  }, [bookings, handleBookingStatus]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-50 flex items-center justify-center">
@@ -193,10 +222,12 @@ export const OwnerDashboard = () => {
       {/* Mobile Header */}
       <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
         <div className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
-          <img
-            src="/gruvoraLogo.jpeg"
+          <OptimizedImage
+            publicId="/gruvoraLogo.jpeg"
             alt="Gruvora"
             className="h-8 w-auto max-w-[140px] object-contain"
+            width={140}
+            sizes="140px"
           />
         </div>
         <button onClick={() => setSidebarOpen(true)} className="p-2">
@@ -209,10 +240,12 @@ export const OwnerDashboard = () => {
         <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="p-6">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-              <img
-                src="/gruvoraLogo.jpeg"
+              <OptimizedImage
+                publicId="/gruvoraLogo.jpeg"
                 alt="Gruvora"
                 className="h-10 w-auto max-w-[180px] object-contain"
+                width={180}
+                sizes="180px"
               />
             </Link>
 
@@ -436,11 +469,11 @@ export const OwnerDashboard = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {listings.slice(0, 5).map((listing) => (
-                        <ListingRow 
-                          key={listing.id} 
-                          listing={listing} 
-                          onDelete={handleDeleteListing} 
+                      {recentListings.map((listing) => (
+                        <ListingRow
+                          key={listing.id}
+                          listing={listing}
+                          onDelete={handleDeleteListing}
                           onBoost={handleBoostListing}
                         />
                       ))}
@@ -462,7 +495,7 @@ export const OwnerDashboard = () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      {bookings.slice(0, 5).map((booking) => (
+                      {recentBookings.map((booking) => (
                         <BookingRow key={booking.id} booking={booking} onStatusChange={handleBookingStatus} />
                       ))}
                     </div>
@@ -488,9 +521,27 @@ export const OwnerDashboard = () => {
                   </CardContent>
                 </Card>
               ) : (
-                listings.map((listing) => (
-                  <ListingRow key={listing.id} listing={listing} onDelete={handleDeleteListing} showActions />
-                ))
+                shouldVirtualizeListings ? (
+                  <List
+                    height={Math.min(760, listings.length * 132)}
+                    itemCount={listings.length}
+                    itemSize={132}
+                    width="100%"
+                    overscanCount={4}
+                  >
+                    {renderVirtualizedListingRow}
+                  </List>
+                ) : (
+                  listings.map((listing) => (
+                    <ListingRow
+                      key={listing.id}
+                      listing={listing}
+                      onDelete={handleDeleteListing}
+                      onBoost={handleBoostListing}
+                      showActions
+                    />
+                  ))
+                )
               )}
             </div>
           )}
@@ -507,9 +558,21 @@ export const OwnerDashboard = () => {
                   </CardContent>
                 </Card>
               ) : (
-                bookings.map((booking) => (
-                  <BookingRow key={booking.id} booking={booking} onStatusChange={handleBookingStatus} showDetails />
-                ))
+                shouldVirtualizeBookings ? (
+                  <List
+                    height={Math.min(760, bookings.length * 220)}
+                    itemCount={bookings.length}
+                    itemSize={220}
+                    width="100%"
+                    overscanCount={3}
+                  >
+                    {renderVirtualizedBookingRow}
+                  </List>
+                ) : (
+                  bookings.map((booking) => (
+                    <BookingRow key={booking.id} booking={booking} onStatusChange={handleBookingStatus} showDetails />
+                  ))
+                )
               )}
             </div>
           )}
@@ -564,10 +627,12 @@ const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
   return (
     <div className="flex items-center gap-4 p-4 bg-stone-50 rounded-xl" data-testid={`listing-row-${listing.id}`}>
       <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
-        <img
-          src={listing.images?.[0] || 'https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=200'}
+        <OptimizedImage
+          publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
           alt={listing.title}
           className="w-full h-full object-cover"
+          width={200}
+          sizes="80px"
         />
       </div>
       <div className="flex-1 min-w-0">
@@ -601,9 +666,9 @@ const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
         <p className="font-bold text-primary">₹{listing.price?.toLocaleString('en-IN')}</p>
         <p className="text-sm text-muted-foreground capitalize">{listing.listing_type}</p>
         {listing.category === 'services' && (
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             className="mt-2 text-xs border-amber-200 text-amber-600 hover:bg-amber-50"
             onClick={() => onBoost(listing.id)}
           >
@@ -826,10 +891,12 @@ const AnalyticsSection = ({ stats, listings }) => {
               {listings.slice(0, 5).map((listing, idx) => (
                 <div key={listing.id} className="flex items-center gap-4 p-3 rounded-lg bg-stone-50">
                   <span className="text-2xl font-bold text-muted-foreground">#{idx + 1}</span>
-                  <img
-                    src={listing.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=100'}
+                  <OptimizedImage
+                    publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
                     alt={listing.title}
                     className="w-16 h-16 rounded-lg object-cover"
+                    width={120}
+                    sizes="64px"
                   />
                   <div className="flex-1 min-w-0">
                     <h4 className="font-medium truncate">{listing.title}</h4>
@@ -1146,10 +1213,12 @@ export const BoostListingModal = ({ listing, isOpen, onClose, user }) => {
         <div className="space-y-4">
           {/* Listing Preview */}
           <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-lg">
-            <img
-              src={listing?.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=100'}
+            <OptimizedImage
+              publicId={listing?.images?.[0] || 'gharshetu/placeholders/listing-default'}
               alt={listing?.title}
               className="w-16 h-16 rounded-lg object-cover"
+              width={120}
+              sizes="64px"
             />
             <div>
               <h4 className="font-medium line-clamp-1">{listing?.title}</h4>
@@ -1164,14 +1233,14 @@ export const BoostListingModal = ({ listing, isOpen, onClose, user }) => {
                 key={option.id}
                 onClick={() => setSelectedDuration(option.id)}
                 className={`w-full p-4 rounded-xl border-2 transition-all flex items-center justify-between ${selectedDuration === option.id
-                    ? 'border-primary bg-primary/5'
-                    : 'border-stone-200 hover:border-stone-300'
+                  ? 'border-primary bg-primary/5'
+                  : 'border-stone-200 hover:border-stone-300'
                   }`}
               >
                 <div className="flex items-center gap-3">
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${selectedDuration === option.id
-                      ? 'border-primary bg-primary'
-                      : 'border-stone-300'
+                    ? 'border-primary bg-primary'
+                    : 'border-stone-300'
                     }`}>
                     {selectedDuration === option.id && (
                       <CheckCircle className="w-3 h-3 text-white" />

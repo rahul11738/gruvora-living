@@ -14,6 +14,7 @@ import {
   Eye,
   Loader2,
 } from 'lucide-react';
+import OptimizedImage from './OptimizedImage';
 
 const categoryIcons = {
   home: Home,
@@ -121,9 +122,8 @@ export const DiscoverSearchPage = () => {
               <button
                 type="button"
                 onClick={() => setSelectedCategory(null)}
-                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
-                  !selectedCategory ? 'bg-primary text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                }`}
+                className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${!selectedCategory ? 'bg-primary text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
               >
                 All
               </button>
@@ -132,9 +132,8 @@ export const DiscoverSearchPage = () => {
                   key={key}
                   type="button"
                   onClick={() => setSelectedCategory(key)}
-                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
-                    selectedCategory === key ? 'bg-primary text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                  }`}
+                  className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${selectedCategory === key ? 'bg-primary text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
                 >
                   <Icon className="w-4 h-4" />
                   <span className="capitalize">{key}</span>
@@ -191,10 +190,12 @@ const ListViewCard = ({ listing, formatPrice, contextCategory = null }) => {
       className="group relative overflow-hidden rounded-2xl bg-white border border-stone-100 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
     >
       <div className="relative aspect-[4/3] overflow-hidden">
-        <img
-          src={listing.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400'}
+        <OptimizedImage
+          publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
           alt={listing.title}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          width={640}
+          sizes="(max-width: 1024px) 100vw, 33vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 

@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import { normalizeMediaUrl } from '../lib/media';
+import OptimizedImage from './OptimizedImage';
 
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
@@ -361,10 +362,12 @@ const WishlistCard = ({ listing, onRemove }) => {
   return (
     <Card className="overflow-hidden border-stone-200 shadow-sm hover:shadow-lg transition-all duration-200 group" data-testid={`wishlist-card-${listing.id}`}>
       <div className="aspect-[4/3] relative">
-        <img
-          src={listing.images?.[0] || 'https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=400'}
+        <OptimizedImage
+          publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
           alt={listing.title}
           className="w-full h-full object-cover"
+          width={640}
+          sizes="(max-width: 1024px) 100vw, 50vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/5 to-transparent" />
         <div className="absolute left-3 top-3 flex flex-wrap gap-2">
@@ -450,10 +453,12 @@ const SavedReelCard = ({ video, onRemove }) => {
       <div className="aspect-[9/16] relative bg-stone-900">
         {/* Video Thumbnail */}
         {video.thumbnail_url ? (
-          <img
-            src={normalizeMediaUrl(video.thumbnail_url)}
+          <OptimizedImage
+            publicId={normalizeMediaUrl(video.thumbnail_url)}
             alt={video.title}
             className="w-full h-full object-cover"
+            width={360}
+            sizes="(max-width: 1024px) 50vw, 25vw"
           />
         ) : (
           <video
@@ -648,8 +653,8 @@ export const WishlistPage = () => {
                 type="button"
                 onClick={() => setFilter(item.id)}
                 className={`px-3 py-2 rounded-full text-xs font-medium border transition-colors ${filter === item.id
-                    ? 'bg-primary text-white border-primary'
-                    : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
                   }`}
               >
                 <Filter className="w-3.5 h-3.5 inline-block mr-1" />

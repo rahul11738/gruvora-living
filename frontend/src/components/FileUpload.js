@@ -10,6 +10,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
+import OptimizedImage from './OptimizedImage';
 
 const getSignedUploadParams = async (folder, resourceType) => {
   const response = await api.post('/upload/signature', {
@@ -195,10 +196,12 @@ export const ImageUploader = ({
               exit={{ opacity: 0, scale: 0.9 }}
               className="relative aspect-square rounded-lg overflow-hidden group"
             >
-              <img
-                src={image.url}
+              <OptimizedImage
+                publicId={image.url}
                 alt={`Upload ${index + 1}`}
                 className="w-full h-full object-cover"
+                width={300}
+                sizes="(max-width: 768px) 50vw, 25vw"
               />
               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                 <button
@@ -391,8 +394,8 @@ export const MediaUploader = ({
           <button
             onClick={() => setActiveTab('images')}
             className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'images'
-                ? 'bg-primary text-white'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              ? 'bg-primary text-white'
+              : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
               }`}
           >
             <Image className="w-4 h-4 inline mr-2" />
@@ -401,8 +404,8 @@ export const MediaUploader = ({
           <button
             onClick={() => setActiveTab('video')}
             className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-colors ${activeTab === 'video'
-                ? 'bg-primary text-white'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+              ? 'bg-primary text-white'
+              : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
               }`}
           >
             <Video className="w-4 h-4 inline mr-2" />

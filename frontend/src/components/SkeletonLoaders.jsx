@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { memo } from 'react';
+import './skeleton.css';
 
 /**
  * SKELETON LOADERS - Replace spinning loaders with perceived progress
@@ -46,6 +47,49 @@ export const Skeleton = ({ width = '100%', height = '20px', className = '', ...p
         {...props}
     />
 );
+
+export const RouteSkeleton = memo(function RouteSkeleton() {
+    return (
+        <div className="min-h-screen bg-stone-50 px-4 py-10">
+            <div className="mx-auto max-w-6xl space-y-6">
+                <Skeleton height="56px" className="rounded-2xl" />
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                        <CardSkeleton key={idx} />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+});
+
+export const ProfileSkeleton = memo(function ProfileSkeleton() {
+    return (
+        <div className="min-h-screen bg-stone-50">
+            <div className="mx-auto max-w-6xl px-4 py-10">
+                <div className="rounded-2xl bg-white p-6 shadow-sm">
+                    <div className="flex flex-col items-center gap-4 md:flex-row md:items-start">
+                        <Skeleton width="128px" height="128px" className="rounded-full" />
+                        <div className="w-full space-y-3">
+                            <Skeleton width="40%" height="28px" />
+                            <Skeleton width="60%" height="18px" />
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                                {Array.from({ length: 4 }).map((_, idx) => (
+                                    <Skeleton key={idx} height="64px" className="rounded-xl" />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {Array.from({ length: 6 }).map((_, idx) => (
+                        <CardSkeleton key={idx} />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+});
 
 /**
  * Card Skeleton (for listing/property cards)

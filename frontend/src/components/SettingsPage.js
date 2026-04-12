@@ -19,6 +19,7 @@ import {
   Save,
   Image,
 } from 'lucide-react';
+import OptimizedImage from './OptimizedImage';
 
 const tabs = [
   { id: 'profile', label: 'Profile', icon: User },
@@ -359,10 +360,12 @@ export const SettingsPage = () => {
 
                       <div className="mt-3">
                         {(selectedProfileImagePreview || profileForm.profile_image) ? (
-                          <img
-                            src={selectedProfileImagePreview || profileForm.profile_image}
+                          <OptimizedImage
+                            publicId={selectedProfileImagePreview || profileForm.profile_image}
                             alt="Profile preview"
                             className="w-24 h-24 rounded-full object-cover border"
+                            width={96}
+                            sizes="96px"
                           />
                         ) : (
                           <div className="w-24 h-24 rounded-full border border-dashed border-stone-300 flex items-center justify-center text-stone-400 text-xs">

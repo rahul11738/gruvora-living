@@ -1,5 +1,6 @@
 import React from 'react';
 import { User } from 'lucide-react';
+import OptimizedImage from '../OptimizedImage';
 
 const CommentSection = React.memo(({ comments }) => {
   if (!comments.length) {
@@ -10,13 +11,12 @@ const CommentSection = React.memo(({ comments }) => {
     <div key={comment.id} className="flex gap-3">
       <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
         {comment.user_profile_image ? (
-          <img
-            src={comment.user_profile_image}
+          <OptimizedImage
+            publicId={comment.user_profile_image}
             alt={comment.user_name || 'User avatar'}
             className="w-full h-full object-cover"
-            onError={(event) => {
-              event.currentTarget.style.display = 'none';
-            }}
+            width={40}
+            sizes="32px"
           />
         ) : (
           <User className="w-4 h-4 text-gray-500" />

@@ -21,10 +21,9 @@
  * @param {Function} config.onError - Callback on SW error
  */
 export function registerServiceWorker(config = {}) {
-    if (!('serviceWorker' in navigator)) {
-        console.log('Service Workers not supported in this browser');
-        return;
-    }
+    if (process.env.NODE_ENV !== 'production') return;
+
+    if (!('serviceWorker' in navigator)) return;
 
     const { skipWaiting = false, onMount, onUpdate, onError } = config;
 
@@ -34,17 +33,31 @@ export function registerServiceWorker(config = {}) {
                 scope: '/',
             });
 
-            console.log('Service Worker registered successfully:', registration);
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+            });
+
+            if (registration.waiting && navigator.serviceWorker.controller) {
+                onUpdate?.({
+                    registration,
+                    skipWaiting: () => registration.waiting?.postMessage({ type: 'SKIP_WAITING' }),
+                });
+            }
 
             // Handle updates
             registration.addEventListener('updatefound', () => {
                 const newWorker = registration.installing;
 
+                if (!newWorker) return;
+
                 newWorker.addEventListener('statechange', () => {
                     if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                         // New service worker available
-                        console.log('New Service Worker version available');
                         onUpdate?.({
+                            registration,
                             skipWaiting: () => {
                                 newWorker.postMessage({ type: 'SKIP_WAITING' });
                             },
@@ -65,7 +78,6 @@ export function registerServiceWorker(config = {}) {
                 registration.waiting.postMessage({ type: 'SKIP_WAITING' });
             }
         } catch (error) {
-            console.error('Service Worker registration failed:', error);
             onError?.(error);
         }
     });
@@ -95,22 +107,11 @@ export function postToServiceWorker(data) {
  * Clear all caches
  */
 export function clearServiceWorkerCache() {
-    return new Promise((resolve, reject) => {
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.controller?.postMessage(
-                { type: 'CLEAR_CACHE' },
-                (error) => {
-                    if (error) {
-                        reject(error);
-                    } else {
-                        resolve(true);
-                    }
-                }
-            );
-        } else {
-            reject(new Error('Service Worker not available'));
-        }
-    });
+    if (!('caches' in window)) {
+        return Promise.reject(new Error('Cache API not available'));
+    }
+
+    return caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))).then(() => true);
 }
 
 /**

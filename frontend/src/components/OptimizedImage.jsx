@@ -1,100 +1,122 @@
-import React, { useState, useEffect } from 'react';
-import { Image as LucideImage } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 
-/**
- * OptimizedImage Component
- * 
- * Automatically transforms images through Cloudinary with:
- * - Auto format (f_auto): Delivers WebP for modern browsers, JPEG for older
- * - Auto quality (q_auto): Balances quality vs file size (~80%)
- * - Responsive widths: Scales image to device resolution
- * - Lazy loading: Loads images on demand
- * - Placeholder: BlurHash while loading
- * 
- * USE THIS INSTEAD OF <img> TAGS EVERYWHERE
- * 
- * @example
- * <OptimizedImage 
- *   src="https://res.cloudinary.com/myapp/image/upload/v1234/photo.jpg"
- *   alt="Property"
- *   width={400}
- *   height={300}
- *   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
- * />
- */
-export const OptimizedImage = React.memo(({
-    src,
-    alt = 'Image',
-    width = 400,
-    height = 300,
-    className = '',
-    sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
-    priority = false,
-    onLoad,
-    objectFit = 'cover',
-}) => {
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState(false);
+const CLOUD_NAME = process.env.REACT_APP_CLOUDINARY_CLOUD_NAME || 'dalkm3nih';
+const DEFAULT_SIZES = '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw';
+const RESPONSIVE_WIDTHS = [320, 500, 640, 768, 1024, 1280, 1536];
 
-    // Handle Unsplash URLs - convert to Cloudinary-friendly format if needed
-    let optimizedSrc = src;
-
-    // If it's already a Cloudinary URL, add optimization params
-    if (src?.includes('res.cloudinary.com')) {
-        optimizedSrc = addCloudinaryOptimizations(src);
+const extractPublicIdFromCloudinaryUrl = (url) => {
+    if (!url || !url.includes('res.cloudinary.com') || !url.includes('/image/upload/')) {
+        return null;
     }
-    // For other image sources, we'll handle them as-is but with lazy loading
 
-    const handleLoad = () => {
-        setIsLoading(false);
-        onLoad?.();
+    const tail = url.split('/image/upload/')[1]?.split('?')[0] || '';
+    const parts = tail.split('/').filter(Boolean);
+    if (!parts.length) return null;
+
+    const versionIndex = parts.findIndex((part) => /^v\d+$/.test(part));
+    const idParts = versionIndex >= 0 ? parts.slice(versionIndex + 1) : parts;
+    if (!idParts.length) return null;
+
+    const last = idParts[idParts.length - 1].replace(/\.[^./?#]+$/, '');
+    idParts[idParts.length - 1] = last;
+    return idParts.join('/');
+};
+
+const normalizeUrl = (value) => {
+    if (!value) return '';
+    return String(value).trim().replace(/^http:\/\//i, 'https://');
+};
+
+const buildCloudinaryBase = (width) => `f_auto,q_auto,w_${width}`;
+
+const buildCloudinaryUrl = ({ publicId, width }) => {
+    const safeValue = normalizeUrl(publicId);
+    if (!safeValue) return '';
+
+    const cloudinaryPublicId = extractPublicIdFromCloudinaryUrl(safeValue);
+    const transform = buildCloudinaryBase(width);
+
+    if (cloudinaryPublicId) {
+        return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${transform}/${cloudinaryPublicId}`;
+    }
+
+    if (/^https?:\/\//i.test(safeValue)) {
+        const encoded = encodeURIComponent(safeValue);
+        return `https://res.cloudinary.com/${CLOUD_NAME}/image/fetch/${transform}/${encoded}`;
+    }
+
+    if (safeValue.startsWith('/')) {
+        return safeValue;
+    }
+
+    return `https://res.cloudinary.com/${CLOUD_NAME}/image/upload/${transform}/${safeValue}`;
+};
+
+export const addCloudinaryOptimizations = (publicId, options = {}) => {
+    const width = Number(options.width) || 500;
+    return buildCloudinaryUrl({ publicId, width });
+};
+
+export const optimizeUnsplashUrl = (url, width = 500) => buildCloudinaryUrl({ publicId: url, width });
+
+export const OptimizedImage = React.memo(({
+    publicId,
+    alt,
+    width = 500,
+    sizes = DEFAULT_SIZES,
+    className = '',
+    style,
+    fallback = null,
+    onLoad,
+    onError,
+    ...rest
+}) => {
+    const [isLoaded, setIsLoaded] = useState(false);
+    const [hasError, setHasError] = useState(false);
+
+    const src = useMemo(() => buildCloudinaryUrl({ publicId, width }), [publicId, width]);
+
+    const srcSet = useMemo(() => {
+        if (!publicId) return undefined;
+        const widths = Array.from(new Set([...RESPONSIVE_WIDTHS, Number(width) || 500])).sort((a, b) => a - b);
+        return widths
+            .map((w) => `${buildCloudinaryUrl({ publicId, width: w })} ${w}w`)
+            .join(', ');
+    }, [publicId, width]);
+
+    const handleLoad = (event) => {
+        setIsLoaded(true);
+        onLoad?.(event);
     };
 
-    const handleError = () => {
-        setError(true);
-        setIsLoading(false);
+    const handleError = (event) => {
+        setHasError(true);
+        onError?.(event);
     };
 
-    if (error) {
-        return (
-            <div
-                className={`bg-gray-200 flex items-center justify-center ${className}`}
-                style={{ width: `${width}px`, height: `${height}px` }}
-            >
-                <LucideImage className="w-8 h-8 text-gray-400" />
+    if (hasError || !src) {
+        return fallback || (
+            <div className={`w-full h-full bg-stone-200 flex items-center justify-center ${className}`} style={style}>
+                <span className="text-xs text-stone-500">Image unavailable</span>
             </div>
         );
     }
 
     return (
-        <div className={`relative overflow-hidden ${className}`}>
-            {/* Placeholder while loading */}
-            {isLoading && (
-                <div
-                    className="absolute inset-0 bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 animate-pulse"
-                    style={{ width: `${width}px`, height: `${height}px` }}
-                />
-            )}
-
-            {/* Main image */}
+        <div className={`relative overflow-hidden ${className}`} style={style}>
+            {!isLoaded && <div className="absolute inset-0 bg-stone-200 animate-pulse" aria-hidden="true" />}
             <img
-                src={optimizedSrc}
+                src={src}
+                srcSet={srcSet}
+                sizes={sizes}
                 alt={alt}
-                width={width}
-                height={height}
-                loading={priority ? 'eager' : 'lazy'}
+                loading="lazy"
                 decoding="async"
+                width={width}
                 onLoad={handleLoad}
                 onError={handleError}
-                className={`
-          w-full h-full transition-opacity duration-300
-          ${isLoading ? 'opacity-0' : 'opacity-100'}
-        `}
-                style={{
-                    objectFit: objectFit,
-                    objectPosition: 'center'
-                }}
-                sizes={sizes}
+                className={`w-full h-full object-cover transition-all duration-300 ${isLoaded ? 'opacity-100 blur-0 scale-100' : 'opacity-80 blur-sm scale-105'}`}
+                {...rest}
             />
         </div>
     );
@@ -102,113 +124,10 @@ export const OptimizedImage = React.memo(({
 
 OptimizedImage.displayName = 'OptimizedImage';
 
-/**
- * Add Cloudinary optimization parameters to URLs
- * - f_auto: Delivers optimal format (WebP for modern browsers)
- * - q_auto: Automatically adjusts quality (default 80)
- * - c_fill: Crop to fill dimensions
- * - g_auto: Smart gravity for cropping
- */
-export function addCloudinaryOptimizations(url, options = {}) {
-    if (!url || !url.includes('res.cloudinary.com')) {
-        return url;
-    }
-
-    const {
-        quality = 'auto',
-        format = 'auto',
-        width,
-        gravity = 'auto',
-    } = options;
-
-    // Extract upload path from URL
-    // Format: https://res.cloudinary.com/{cloud}/image/upload/{transformations}/{public_id}.{ext}
-    const urlParts = url.split('/upload/');
-
-    if (urlParts.length !== 2) return url;
-
-    const baseUrl = urlParts[0];
-    const filePath = urlParts[1];
-
-    // Build transformation string
-    let transformations = [];
-
-    if (width) {
-        transformations.push(`w_${width}`);
-    }
-
-    transformations.push(`q_${quality}`);
-    transformations.push(`f_${format}`);
-    transformations.push(`c_fill`);
-    transformations.push(`g_${gravity}`);
-
-    const transformPath = transformations.join(',');
-
-    return `${baseUrl}/upload/${transformPath}/${filePath}`;
-}
-
-/**
- * Legacy Unsplash Optimizer (for development only)
- * Convert Unsplash URLs to use responsive parameters
- * 
- * @deprecated Use Cloudinary URLs instead for production
- */
-export function optimizeUnsplashUrl(url, width = 400) {
-    if (!url?.includes('unsplash.com')) return url;
-
-    // Add width parameter to Unsplash
-    return url.includes('?')
-        ? `${url}&w=${width}&q=80&auto=format&fit=crop`
-        : `${url}?w=${width}&q=80&auto=format&fit=crop`;
-}
-
-/**
- * Responsive Image Component
- * Handles srcSet for automatic resolution selection
- */
-export const ResponsiveImage = React.memo(({
-    src,
-    alt = 'Image',
-    className = '',
-    sizes = '(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw',
-    priority = false,
-    onLoad,
-}) => {
-    const [isLoading, setIsLoading] = useState(true);
-
-    const handleLoad = () => {
-        setIsLoading(false);
-        onLoad?.();
-    };
-
-    // Generate responsive widths for srcSet
-    const widths = [300, 500, 800, 1200, 1600];
-
-    let srcSet = '';
-    if (src?.includes('res.cloudinary.com') || src?.includes('unsplash.com')) {
-        srcSet = widths
-            .map(w => {
-                const optimized = src.includes('res.cloudinary.com')
-                    ? addCloudinaryOptimizations(src, { width: w })
-                    : optimizeUnsplashUrl(src, w);
-                return `${optimized} ${w}w`;
-            })
-            .join(', ');
-    }
-
-    return (
-        <img
-            src={src}
-            alt={alt}
-            srcSet={srcSet}
-            sizes={sizes}
-            loading={priority ? 'eager' : 'lazy'}
-            decoding="async"
-            onLoad={handleLoad}
-            className={`w-full h-full ${className} ${isLoading ? 'animate-pulse' : ''}`}
-            style={{ objectFit: 'cover', objectPosition: 'center' }}
-        />
-    );
-});
+export const ResponsiveImage = React.memo((props) => (
+    <OptimizedImage {...props} />
+));
 
 ResponsiveImage.displayName = 'ResponsiveImage';
+
+export default OptimizedImage;

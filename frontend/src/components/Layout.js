@@ -6,6 +6,7 @@ import { Button } from './ui/button';
 import { observeRoutePrefetch, prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
+import OptimizedImage from './OptimizedImage';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,6 +53,18 @@ export const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const discoverLinkRef = useRef(null);
+  const reelsLinkRef = useRef(null);
+
+  useEffect(() => {
+    const cleanupDiscover = observeRoutePrefetch(discoverLinkRef.current, prefetchDiscoverRoute, '240px');
+    const cleanupReels = observeRoutePrefetch(reelsLinkRef.current, prefetchReelsRoute, '240px');
+
+    return () => {
+      cleanupDiscover();
+      cleanupReels();
+    };
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -70,10 +83,12 @@ export const Header = () => {
         <div className="flex items-center justify-between gap-4 h-18 md:h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center shrink-0" data-testid="logo">
-            <img
-              src={gruvoraLogo}
+            <OptimizedImage
+              publicId={gruvoraLogo}
               alt="Gruvora"
               className="h-9 md:h-10 w-auto max-w-[170px] object-contain"
+              width={180}
+              sizes="180px"
             />
           </Link>
 
@@ -106,6 +121,7 @@ export const Header = () => {
             {/* Discover Button - Hidden on mobile (in bottom nav) */}
             <Link
               to="/discover"
+              ref={discoverLinkRef}
               onMouseEnter={prefetchDiscoverRoute}
               onFocus={prefetchDiscoverRoute}
               onClick={() => markRouteNavigation('/discover', 'header-discover-btn')}
@@ -119,6 +135,7 @@ export const Header = () => {
             {/* Reels Button - Hidden on mobile (in bottom nav) */}
             <Link
               to="/reels"
+              ref={reelsLinkRef}
               onMouseEnter={prefetchReelsRoute}
               onFocus={prefetchReelsRoute}
               onClick={() => markRouteNavigation('/reels', 'header-reels-btn')}
@@ -325,7 +342,7 @@ export const Footer = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
           <div>
             <div className="mb-4 inline-flex items-center rounded-xl bg-white/95 px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.18)]">
-              <img src={gruvoraLogo} alt="Gruvora" className="h-9 w-auto max-w-[180px] object-contain" />
+              <OptimizedImage publicId={gruvoraLogo} alt="Gruvora" className="h-9 w-auto max-w-[180px] object-contain" width={180} sizes="180px" />
             </div>
             <p className="text-stone-300 text-sm leading-relaxed">
               Smart digital platform to connect users with homes, businesses, stay options, event spaces, and local services.

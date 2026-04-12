@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { useDebounce, useAsync } from '../hooks/performanceHooks';
 import { Input } from './ui/input';
+import OptimizedImage from './OptimizedImage';
 
 /**
  * OPTIMIZED SEARCH INPUT
@@ -205,13 +206,12 @@ export const OptimizedSearchInput = ({
                             <div className="flex items-start gap-3">
                                 {/* Thumbnail if available */}
                                 {result.image && (
-                                    <img
-                                        src={result.image}
+                                    <OptimizedImage
+                                        publicId={result.image}
                                         alt=""
                                         width={40}
-                                        height={40}
+                                        sizes="40px"
                                         className="w-10 h-10 rounded-md object-cover flex-shrink-0"
-                                        loading="lazy"
                                     />
                                 )}
 

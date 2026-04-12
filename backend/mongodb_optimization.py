@@ -37,6 +37,8 @@ INDEXES_TO_CREATE = {
         
         # Filtering indexes
         {'key': [('status', 1), ('created_at', -1)]},
+        {'key': [('title', 1), ('price', 1), ('location', 1), ('created_at', -1), ('owner_id', 1)]},
+        {'key': [('title', 1), ('price', 1), ('location', 1), ('createdAt', -1), ('userId', 1)], 'sparse': True},
         {'key': [('price_range.min', 1), ('price_range.max', 1)]},
         
         # TTL index for temporary listings (auto-delete after 90 days)
@@ -46,6 +48,9 @@ INDEXES_TO_CREATE = {
     'users': [
         {'key': [('email', 1)], 'unique': True},
         {'key': [('username', 1)], 'unique': True},
+        {'key': [('id', 1), ('created_at', -1)]},
+        {'key': [('createdAt', -1)], 'sparse': True},
+        {'key': [('userId', 1)], 'sparse': True},
         {'key': [('role', 1)]},
         {'key': [('created_at', -1)]},
         {'key': [('subscription_status', 1), ('subscription_end_date', 1)]},
@@ -60,6 +65,8 @@ INDEXES_TO_CREATE = {
     
     'videos': [
         {'key': [('owner_id', 1), ('created_at', -1)]},
+        {'key': [('title', 1), ('location', 1), ('created_at', -1), ('owner_id', 1)]},
+        {'key': [('title', 1), ('location', 1), ('createdAt', -1), ('userId', 1)], 'sparse': True},
         {'key': [('category', 1), ('created_at', -1)]},
         {'key': [('views', -1)]},
         {'key': [('likes', -1)]},
@@ -98,8 +105,10 @@ async def create_indexes(db):
             collection = db[collection_name]
             
             for index_spec in indexes:
-                key = index_spec.pop('key')
-                options = index_spec
+                # Avoid mutating INDEXES_TO_CREATE so repeated startup calls remain safe.
+                spec = dict(index_spec)
+                key = spec.pop('key')
+                options = spec
                 
                 index_name = f":".join([f"{k[0]}_{k[1]}" for k in key])
                 

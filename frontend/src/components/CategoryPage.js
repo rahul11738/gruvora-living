@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { listingsAPI, categoriesAPI } from '../lib/api';
 import { prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
@@ -39,6 +39,9 @@ import {
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
+import OptimizedImage from './OptimizedImage';
+import { CardGridSkeleton } from './SkeletonLoaders';
+import VirtualizedListings from './VirtualizedListings';
 
 const categoryIcons = {
   home: Home,
@@ -250,7 +253,7 @@ export const CategoryPage = () => {
     fetchListings();
   }, [fetchListings]);
 
-  const handleFilterChange = (key, value) => {
+  const handleFilterChange = useCallback((key, value) => {
     if (key === 'listing_type' && !showListingTypeControls) {
       return;
     }
@@ -268,9 +271,9 @@ export const CategoryPage = () => {
       if (v) params.set(k, v);
     });
     setSearchParams(params);
-  };
+  }, [filters, setSearchParams, showListingTypeControls]);
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setFilters({
       sub_category: '',
       listing_type: '',
@@ -282,15 +285,31 @@ export const CategoryPage = () => {
       page: 1,
     });
     setSearchParams(new URLSearchParams());
-  };
+  }, [setSearchParams]);
 
-  const currentCategory = categories.find((c) => c.id === category);
-  const Icon = categoryIcons[category] || Home;
-  const bgColor = categoryColors[category] || 'bg-primary';
-  const theme = categoryThemes[category] || categoryThemes.default;
-  const title = categoryTitles[category] || { en: 'Listings', gu: '' };
-  const description =
-    categoryDescriptions[category] || 'Discover verified listings curated for your needs.';
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [filters.page]);
+
+  const currentCategory = useMemo(() => categories.find((c) => c.id === category), [categories, category]);
+  const Icon = useMemo(() => categoryIcons[category] || Home, [category]);
+  const bgColor = useMemo(() => categoryColors[category] || 'bg-primary', [category]);
+  const theme = useMemo(() => categoryThemes[category] || categoryThemes.default, [category]);
+  const title = useMemo(() => categoryTitles[category] || { en: 'Listings', gu: '' }, [category]);
+  const description = useMemo(
+    () => categoryDescriptions[category] || 'Discover verified listings curated for your needs.',
+    [category]
+  );
+
+  const shouldVirtualize = useMemo(
+    () => viewMode === 'list' && listings.length > 18,
+    [viewMode, listings.length]
+  );
+
+  const virtualizedHeight = useMemo(() => {
+    const viewport = typeof window !== 'undefined' ? window.innerHeight : 900;
+    return Math.max(480, Math.min(820, Math.floor(viewport * 0.72)));
+  }, []);
 
   const handleWishlist = async (listingId, e) => {
     e.preventDefault();
@@ -493,18 +512,7 @@ export const CategoryPage = () => {
       {/* Listings */}
       <div className="container-main py-8">
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <div className="aspect-[4/3] bg-stone-200" />
-                <CardContent className="p-4 space-y-3">
-                  <div className="h-5 bg-stone-200 rounded w-3/4" />
-                  <div className="h-4 bg-stone-200 rounded w-1/2" />
-                  <div className="h-6 bg-stone-200 rounded w-1/3" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <CardGridSkeleton count={6} cols={3} />
         ) : listings.length === 0 ? (
           <div className="text-center py-20">
             <div className="w-20 h-20 bg-stone-100 border border-stone-200 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -526,24 +534,44 @@ export const CategoryPage = () => {
               </p>
             </div>
 
-            <div
-              className={
-                viewMode === 'grid'
-                  ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-                  : 'flex flex-col gap-4'
-              }
-            >
-              {listings.map((listing) => (
-                <ListingCard
-                  key={listing.id}
-                  listing={listing}
-                  viewMode={viewMode}
-                  onWishlist={handleWishlist}
-                  wishlisted={isWishlisted(listing.id)}
-                  wishlistPending={Boolean(pendingWishlistMap[listing.id])}
+            {shouldVirtualize ? (
+              <div className="rounded-xl border border-stone-200 bg-white/70 p-2">
+                <VirtualizedListings
+                  items={listings}
+                  rowHeight={236}
+                  height={virtualizedHeight}
+                  renderItem={(listing) => (
+                    <ListingCard
+                      key={listing.id}
+                      listing={listing}
+                      viewMode={viewMode}
+                      onWishlist={handleWishlist}
+                      wishlisted={isWishlisted(listing.id)}
+                      wishlistPending={Boolean(pendingWishlistMap[listing.id])}
+                    />
+                  )}
                 />
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div
+                className={
+                  viewMode === 'grid'
+                    ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+                    : 'flex flex-col gap-4'
+                }
+              >
+                {listings.map((listing) => (
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    viewMode={viewMode}
+                    onWishlist={handleWishlist}
+                    wishlisted={isWishlisted(listing.id)}
+                    wishlistPending={Boolean(pendingWishlistMap[listing.id])}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -576,7 +604,7 @@ export const CategoryPage = () => {
   );
 };
 
-const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPending }) => {
+const ListingCard = memo(({ listing, viewMode, onWishlist, wishlisted, wishlistPending }) => {
   const navigate = useNavigate();
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryColors[listing.category] || 'bg-primary';
@@ -619,12 +647,12 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
         data-testid={`listing-card-${listing.id}`}
       >
         <div className="relative w-64 flex-shrink-0">
-          <img
-            src={listing.images?.[0] || 'https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=400'}
+          <OptimizedImage
+            publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
             alt={listing.title}
-            loading="lazy"
-            decoding="async"
             className="w-full h-full object-cover"
+            width={640}
+            sizes="(max-width: 1024px) 100vw, 420px"
           />
           <div className={`absolute top-3 left-3 ${bgColor} px-2 py-1 rounded-full flex items-center gap-1`}>
             <Icon className="w-3 h-3 text-white" />
@@ -698,12 +726,12 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
       data-testid={`listing-card-${listing.id}`}
     >
       <div className="relative aspect-[4/3] overflow-hidden">
-        <img
-          src={listing.images?.[0] || 'https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=400'}
+        <OptimizedImage
+          publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
           alt={listing.title}
-          loading="lazy"
-          decoding="async"
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+          width={640}
+          sizes="(max-width: 1024px) 100vw, 33vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
         <div className={`absolute top-4 left-4 ${bgColor} px-3 py-1 rounded-full flex items-center gap-1`}>
@@ -774,6 +802,8 @@ const ListingCard = ({ listing, viewMode, onWishlist, wishlisted, wishlistPendin
       </div>
     </Link>
   );
-};
+});
+
+ListingCard.displayName = 'ListingCard';
 
 export default CategoryPage;

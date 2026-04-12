@@ -55,11 +55,8 @@ from listing_priority import (
 )
 from models.listing_base import ListingBaseCreate
 from validators.listing_factory import validate_specific_fields
-
-try:
-    import redis.asyncio as redis_asyncio
-except ImportError:
-    redis_asyncio = None
+from cache_middleware import ResponseCacheMiddleware
+from redis_setup import create_redis_client, close_redis_client
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -358,6 +355,7 @@ ALLOWED_UPLOAD_FOLDERS = {"listings", "reels", "profile"}
 _upload_rate_limit_windows: Dict[str, List[datetime]] = defaultdict(list)
 redis_url = os.environ.get("REDIS_URL", "")
 redis_client = None
+response_cache: Optional[ResponseCacheMiddleware] = None
 delete_worker_task = None
 DELETE_JOB_MAX_ATTEMPTS = 5
 DELETE_RETRY_DELAYS_SECONDS = [30, 120, 600, 1800, 3600]
@@ -368,8 +366,9 @@ ADMIN_STATS_CACHE_TTL_SECONDS = int(
 RECOMMENDATIONS_CACHE_TTL_SECONDS = int(
     os.environ.get("RECOMMENDATIONS_CACHE_TTL_SECONDS", "120")
 )
-HOT_ENDPOINT_CACHE_TTL_SECONDS = int(
-    os.environ.get("HOT_ENDPOINT_CACHE_TTL_SECONDS", "20")
+HOT_ENDPOINT_CACHE_TTL_SECONDS = max(
+    60,
+    min(120, int(os.environ.get("HOT_ENDPOINT_CACHE_TTL_SECONDS", "90"))),
 )
 HOT_ENDPOINT_CACHE_MAX_ITEMS = int(
     os.environ.get("HOT_ENDPOINT_CACHE_MAX_ITEMS", "1000")
@@ -414,6 +413,115 @@ ROLE_ALLOWED_LISTING_CATEGORIES = {
     UserRole.EVENT_OWNER.value: {ListingCategory.EVENT.value},
     UserRole.ADMIN.value: ALL_LISTING_CATEGORIES,
 }
+
+LISTING_LIST_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "title": 1,
+    "category": 1,
+    "sub_category": 1,
+    "listing_type": 1,
+    "price": 1,
+    "price_display": 1,
+    "location": 1,
+    "city": 1,
+    "latitude": 1,
+    "longitude": 1,
+    "images": 1,
+    "owner_id": 1,
+    "owner_name": 1,
+    "views": 1,
+    "likes": 1,
+    "saves": 1,
+    "featured": 1,
+    "subscription_plan": 1,
+    "boost_expires": 1,
+    "fresh_priority_until": 1,
+    "status": 1,
+    "is_available": 1,
+    "created_at": 1,
+}
+
+WISHLIST_LISTING_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "title": 1,
+    "category": 1,
+    "sub_category": 1,
+    "listing_type": 1,
+    "price": 1,
+    "price_display": 1,
+    "location": 1,
+    "city": 1,
+    "images": 1,
+    "owner_id": 1,
+    "owner_name": 1,
+    "views": 1,
+    "likes": 1,
+    "saves": 1,
+    "created_at": 1,
+}
+
+OWNER_LISTING_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "title": 1,
+    "category": 1,
+    "sub_category": 1,
+    "listing_type": 1,
+    "price": 1,
+    "location": 1,
+    "city": 1,
+    "images": 1,
+    "status": 1,
+    "views": 1,
+    "likes": 1,
+    "saves": 1,
+    "created_at": 1,
+    "updated_at": 1,
+}
+
+VIDEO_LIST_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "owner_id": 1,
+    "owner_name": 1,
+    "owner_image": 1,
+    "title": 1,
+    "description": 1,
+    "category": 1,
+    "url": 1,
+    "video_url": 1,
+    "video_public_id": 1,
+    "video_version": 1,
+    "thumbnail_url": 1,
+    "listing_id": 1,
+    "likes": 1,
+    "views": 1,
+    "saves": 1,
+    "shares": 1,
+    "comments_count": 1,
+    "created_at": 1,
+    "location": 1,
+    "hashtags": 1,
+}
+
+
+def _parse_pagination(page: Any, limit: Any, *, default_limit: int, max_limit: int):
+    try:
+        parsed_page = int(page or 1)
+    except (TypeError, ValueError):
+        parsed_page = 1
+    parsed_page = max(1, parsed_page)
+
+    try:
+        parsed_limit = int(limit or default_limit)
+    except (TypeError, ValueError):
+        parsed_limit = default_limit
+    parsed_limit = min(max_limit, max(1, parsed_limit))
+
+    skip = (parsed_page - 1) * parsed_limit
+    return parsed_page, parsed_limit, skip
 
 
 def get_allowed_listing_categories_for_role(role: Any) -> Set[str]:
@@ -641,6 +749,87 @@ async def set_hot_cached_payload(
         "payload": payload,
         "expires_at": datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds),
     }
+
+
+async def get_cached_api_payload(
+    namespace: str,
+    params: Dict[str, Any],
+    producer,
+    *,
+    ttl_seconds: int = HOT_ENDPOINT_CACHE_TTL_SECONDS,
+) -> Tuple[Dict[str, Any], bool]:
+    """Reusable cache middleware entrypoint used by high-traffic GET routes."""
+    if response_cache is not None:
+        return await response_cache.get_or_set(
+            namespace,
+            params,
+            producer,
+            ttl_seconds=ttl_seconds,
+        )
+
+    # Backward-compatible fallback to existing hot cache implementation.
+    cache_key = _build_hot_cache_key(namespace, params)
+    cached_payload = await get_hot_cached_payload(cache_key)
+    if cached_payload is not None:
+        return cached_payload, True
+    payload = await producer()
+    await set_hot_cached_payload(cache_key, payload, ttl_seconds=ttl_seconds)
+    return payload, False
+
+
+async def invalidate_hot_cache_namespaces(*namespaces: str) -> None:
+    unique_namespaces = [ns for ns in dict.fromkeys(namespaces) if ns]
+    if not unique_namespaces:
+        return
+
+    if response_cache is not None:
+        for namespace in unique_namespaces:
+            try:
+                await response_cache.invalidate_namespace(namespace)
+            except Exception as exc:
+                logger.warning(
+                    "Response cache namespace invalidation failed for %s: %s",
+                    namespace,
+                    exc,
+                )
+
+    # Invalidate legacy hot cache keys too (for endpoints still using hot:* keys).
+    if redis_client:
+        for namespace in unique_namespaces:
+            pattern = f"hot:{namespace}:*"
+            try:
+                keys = []
+                async for key in redis_client.scan_iter(match=pattern, count=200):
+                    keys.append(key)
+                if keys:
+                    await redis_client.delete(*keys)
+            except Exception as exc:
+                logger.warning(
+                    "Legacy hot cache invalidation failed for %s: %s",
+                    namespace,
+                    exc,
+                )
+
+    for namespace in unique_namespaces:
+        prefix = f"{namespace}:"
+        matching = [
+            key for key in list(_hot_endpoint_cache.keys()) if key.startswith(prefix)
+        ]
+        for key in matching:
+            _hot_endpoint_cache.pop(key, None)
+
+
+async def invalidate_listing_related_caches() -> None:
+    await invalidate_hot_cache_namespaces(
+        "listings",
+        "listings_trending",
+        "listings_nearby",
+        "listings_map",
+    )
+
+
+async def invalidate_video_related_caches() -> None:
+    await invalidate_hot_cache_namespaces("videos")
 
 
 async def enforce_upload_rate_limit(
@@ -1932,6 +2121,7 @@ async def create_listing(
 
     await db.listings.insert_one(listing_doc)
     await db.users.update_one({"id": user["id"]}, {"$push": {"listings": listing_id}})
+    await invalidate_listing_related_caches()
 
     return {
         "message": "Listing created",
@@ -2001,140 +2191,135 @@ async def get_listings(
         parsed_limit = 20
     parsed_limit = min(100, max(1, parsed_limit))
 
-    cache_key = _build_hot_cache_key(
-        "listings",
-        {
-            "category": normalized_category,
-            "owner_id": owner_id or "",
-            "listing_type": normalized_listing_type,
-            "sub_category": sub_category or "",
-            "city": city or "",
-            "min_price": parsed_min_price,
-            "max_price": parsed_max_price,
-            "search": (search or q or "").strip().lower(),
-            "amenities": amenities or "",
-            "lat": lat,
-            "lng": lng,
-            "radius": radius,
-            "sort_by": sort_by,
-            "sort_order": sort_order,
-            "page": parsed_page,
-            "limit": parsed_limit,
-        },
-    )
-    cached_payload = await get_hot_cached_payload(cache_key)
-    if cached_payload is not None:
-        if response is not None:
-            response.headers["X-Cache"] = "HIT"
-            response.headers["Cache-Control"] = (
-                f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
-            )
-        return cached_payload
-
-    query = {
-        "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
-        "is_available": True,
-    }
-
-    if normalized_category in valid_categories:
-        query["category"] = normalized_category
-    if owner_id:
-        query["owner_id"] = owner_id
-    if normalized_listing_type in valid_listing_types:
-        query["listing_type"] = normalized_listing_type
-    if sub_category:
-        query["sub_category"] = sub_category
-    if city:
-        query["city"] = {"$regex": city, "$options": "i"}
-    if parsed_min_price is not None:
-        query["price"] = {"$gte": parsed_min_price}
-    if parsed_max_price is not None:
-        query["price"] = {**query.get("price", {}), "$lte": parsed_max_price}
-    effective_search = search or q
-    if effective_search:
-        from search_engine import _extract_proper_nouns
-
-        proper = _extract_proper_nouns(effective_search)
-        normalized = normalize_search_query(effective_search)
-        terms = normalized.get("expanded_terms", [])[:20]
-        or_clauses = []
-        if proper:
-            pn = re.escape(proper)
-            for field in ["title", "title_en", "description", "location"]:
-                or_clauses.append({field: {"$regex": pn, "$options": "i"}})
-        if terms:
-            rp = "|".join(re.escape(t) for t in terms)
-            for field in [
-                "title",
-                "title_en",
-                "description",
-                "location",
-                "city",
-                "sub_category",
-            ]:
-                or_clauses.append({field: {"$regex": rp, "$options": "i"}})
-        if or_clauses:
-            query["$or"] = or_clauses
-    if amenities:
-        amenity_list = amenities.split(",")
-        query["amenities"] = {"$all": amenity_list}
-
-    skip = (parsed_page - 1) * parsed_limit
-    now_iso = datetime.now(timezone.utc).isoformat()
-
-    base_query = dict(query)
-    search_or_clauses = base_query.pop("$or", None)
-    priority_conditions = [
-        {"status": ListingStatus.BOOSTED.value, "boost_expires": {"$gt": now_iso}},
-        {"fresh_priority_until": {"$gt": now_iso}},
-        {"featured": True},
-        {"subscription_plan": SubscriptionPlan.PRO.value},
-    ]
-
-    priority_query: Dict[str, Any] = dict(base_query)
-    if search_or_clauses:
-        priority_query["$and"] = [
-            {"$or": search_or_clauses},
-            {"$or": priority_conditions},
-        ]
-    else:
-        priority_query["$or"] = priority_conditions
-
-    boosted_or_fresh = (
-        await db.listings.find(priority_query, {"_id": 0})
-        .sort([("fresh_priority_until", -1), ("boost_expires", -1), ("created_at", -1)])
-        .limit(parsed_limit)
-        .to_list(parsed_limit)
-    )
-    priority_ids = [item.get("id") for item in boosted_or_fresh if item.get("id")]
-
-    regular_query = dict(base_query)
-    if search_or_clauses:
-        regular_query["$or"] = search_or_clauses
-    if priority_ids:
-        regular_query["id"] = {"$nin": priority_ids}
-
-    regular_limit = max(1, parsed_limit - len(boosted_or_fresh))
-    regular = (
-        await db.listings.find(regular_query, {"_id": 0})
-        .sort("created_at", -1)
-        .skip(skip)
-        .limit(regular_limit)
-        .to_list(parsed_limit)
-    )
-
-    listings = boosted_or_fresh + regular
-    total = await db.listings.count_documents(query)
-
-    payload = {
-        "listings": listings,
-        "total": total,
+    cache_params = {
+        "category": normalized_category,
+        "owner_id": owner_id or "",
+        "listing_type": normalized_listing_type,
+        "sub_category": sub_category or "",
+        "city": city or "",
+        "min_price": parsed_min_price,
+        "max_price": parsed_max_price,
+        "search": (search or q or "").strip().lower(),
+        "amenities": amenities or "",
+        "lat": lat,
+        "lng": lng,
+        "radius": radius,
+        "sort_by": sort_by,
+        "sort_order": sort_order,
         "page": parsed_page,
-        "pages": (total + parsed_limit - 1) // parsed_limit,
+        "limit": parsed_limit,
     }
-    await set_hot_cached_payload(cache_key, payload)
+
+    async def _fetch_payload() -> Dict[str, Any]:
+        query = {
+            "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
+            "is_available": True,
+        }
+
+        if normalized_category in valid_categories:
+            query["category"] = normalized_category
+        if owner_id:
+            query["owner_id"] = owner_id
+        if normalized_listing_type in valid_listing_types:
+            query["listing_type"] = normalized_listing_type
+        if sub_category:
+            query["sub_category"] = sub_category
+        if city:
+            query["city"] = {"$regex": city, "$options": "i"}
+        if parsed_min_price is not None:
+            query["price"] = {"$gte": parsed_min_price}
+        if parsed_max_price is not None:
+            query["price"] = {**query.get("price", {}), "$lte": parsed_max_price}
+        effective_search = search or q
+        if effective_search:
+            from search_engine import _extract_proper_nouns
+
+            proper = _extract_proper_nouns(effective_search)
+            normalized = normalize_search_query(effective_search)
+            terms = normalized.get("expanded_terms", [])[:20]
+            or_clauses = []
+            if proper:
+                pn = re.escape(proper)
+                for field in ["title", "title_en", "description", "location"]:
+                    or_clauses.append({field: {"$regex": pn, "$options": "i"}})
+            if terms:
+                rp = "|".join(re.escape(t) for t in terms)
+                for field in [
+                    "title",
+                    "title_en",
+                    "description",
+                    "location",
+                    "city",
+                    "sub_category",
+                ]:
+                    or_clauses.append({field: {"$regex": rp, "$options": "i"}})
+            if or_clauses:
+                query["$or"] = or_clauses
+        if amenities:
+            amenity_list = amenities.split(",")
+            query["amenities"] = {"$all": amenity_list}
+
+        skip = (parsed_page - 1) * parsed_limit
+        now_iso = datetime.now(timezone.utc).isoformat()
+
+        base_query = dict(query)
+        search_or_clauses = base_query.pop("$or", None)
+        priority_conditions = [
+            {"status": ListingStatus.BOOSTED.value, "boost_expires": {"$gt": now_iso}},
+            {"fresh_priority_until": {"$gt": now_iso}},
+            {"featured": True},
+            {"subscription_plan": SubscriptionPlan.PRO.value},
+        ]
+
+        priority_query: Dict[str, Any] = dict(base_query)
+        if search_or_clauses:
+            priority_query["$and"] = [
+                {"$or": search_or_clauses},
+                {"$or": priority_conditions},
+            ]
+        else:
+            priority_query["$or"] = priority_conditions
+
+        boosted_or_fresh = (
+            await db.listings.find(priority_query, LISTING_LIST_PROJECTION)
+            .sort([("fresh_priority_until", -1), ("boost_expires", -1), ("created_at", -1)])
+            .limit(parsed_limit)
+            .to_list(parsed_limit)
+        )
+        priority_ids = [item.get("id") for item in boosted_or_fresh if item.get("id")]
+
+        regular_query = dict(base_query)
+        if search_or_clauses:
+            regular_query["$or"] = search_or_clauses
+        if priority_ids:
+            regular_query["id"] = {"$nin": priority_ids}
+
+        regular_limit = max(1, parsed_limit - len(boosted_or_fresh))
+        regular = (
+            await db.listings.find(regular_query, LISTING_LIST_PROJECTION)
+            .sort("created_at", -1)
+            .skip(skip)
+            .limit(regular_limit)
+            .to_list(parsed_limit)
+        )
+
+        listings = boosted_or_fresh + regular
+        total = await db.listings.count_documents(query)
+
+        return {
+            "listings": listings,
+            "total": total,
+            "page": parsed_page,
+            "pages": (total + parsed_limit - 1) // parsed_limit,
+        }
+
+    payload, cache_hit = await get_cached_api_payload(
+        "listings",
+        cache_params,
+        _fetch_payload,
+    )
     if response is not None:
-        response.headers["X-Cache"] = "MISS"
+        response.headers["X-Cache"] = "HIT" if cache_hit else "MISS"
         response.headers["Cache-Control"] = (
             f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
         )
@@ -2143,40 +2328,73 @@ async def get_listings(
 
 @api_router.get("/listings/trending")
 async def get_trending_listings(
-    limit: int = 10, category: Optional[ListingCategory] = None
+    category: Optional[ListingCategory] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=50),
+    response: Response = None,
 ):
-    query = {
-        "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
-        "is_available": True,
-    }
-    if category:
-        query["category"] = category
+    page, limit, skip = _parse_pagination(page, limit, default_limit=10, max_limit=50)
 
-    candidates = (
-        await db.listings.find(query, {"_id": 0})
-        .limit(max(limit * 5, 50))
-        .to_list(max(limit * 5, 50))
+    cache_params = {
+        "category": str(category.value if isinstance(category, Enum) else category or ""),
+        "page": page,
+        "limit": limit,
+    }
+
+    async def _fetch_payload() -> Dict[str, Any]:
+        query = {
+            "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
+            "is_available": True,
+        }
+        if category:
+            query["category"] = category
+
+        candidate_window = min(max((skip + limit) * 5, 50), 500)
+        candidates = (
+            await db.listings.find(query, LISTING_LIST_PROJECTION)
+            .limit(candidate_window)
+            .to_list(candidate_window)
+        )
+        candidates.sort(
+            key=lambda listing: (
+                listing_boost_score(listing),
+                listing_freshness_score(listing),
+                float(listing.get("views") or 0),
+                float(listing.get("likes") or 0),
+            ),
+            reverse=True,
+        )
+        listings = candidates[skip : skip + limit]
+        total = await db.listings.count_documents(query)
+        return {
+            "listings": listings,
+            "total": total,
+            "page": page,
+            "pages": (total + limit - 1) // limit,
+        }
+
+    payload, cache_hit = await get_cached_api_payload(
+        "listings_trending",
+        cache_params,
+        _fetch_payload,
     )
-    candidates.sort(
-        key=lambda listing: (
-            listing_boost_score(listing),
-            listing_freshness_score(listing),
-            float(listing.get("views") or 0),
-            float(listing.get("likes") or 0),
-        ),
-        reverse=True,
-    )
-    listings = candidates[:limit]
-    return {"listings": listings}
+    if response is not None:
+        response.headers["X-Cache"] = "HIT" if cache_hit else "MISS"
+        response.headers["Cache-Control"] = (
+            f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+        )
+    return payload
 
 
 @api_router.get("/listings/recommended")
 async def get_recommended_listings(
-    user: dict = Depends(get_current_user), limit: int = 10
+    user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=50),
 ):
+    page, limit, skip = _parse_pagination(page, limit, default_limit=10, max_limit=50)
     # AI-based recommendations based on user history
     preferences = user.get("preferences", {})
-    search_history = user.get("search_history", [])
     wishlist_docs = await db.wishlists.find(
         {"user_id": user["id"]},
         {"_id": 0, "listing_id": 1},
@@ -2200,42 +2418,82 @@ async def get_recommended_listings(
         query["price"] = {"$lte": preferences["max_budget"]}
 
     listings = (
-        await db.listings.find(query, {"_id": 0})
+        await db.listings.find(query, LISTING_LIST_PROJECTION)
         .sort([("views", -1), ("likes", -1)])
+        .skip(skip)
         .limit(limit)
         .to_list(limit)
     )
+    total = await db.listings.count_documents(query)
 
-    return {"listings": listings, "reason": "Based on your preferences"}
+    return {
+        "listings": listings,
+        "reason": "Based on your preferences",
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
 
 
 @api_router.get("/listings/nearby")
 async def get_nearby_listings(
-    lat: float, lng: float, radius: float = 5, limit: int = 20
+    lat: float,
+    lng: float,
+    radius: float = 5,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    response: Response = None,
 ):
-    # Simple distance-based query (for production, use MongoDB geospatial queries)
-    query = {
-        "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
-        "is_available": True,
-        "latitude": {"$exists": True},
-        "longitude": {"$exists": True},
+    page, limit, skip = _parse_pagination(page, limit, default_limit=20, max_limit=100)
+
+    cache_params = {
+        "lat": round(lat, 4),
+        "lng": round(lng, 4),
+        "radius": round(radius, 3),
+        "page": page,
+        "limit": limit,
     }
 
-    listings = (
-        await db.listings.find(query, {"_id": 0}).limit(limit * 3).to_list(limit * 3)
+    async def _fetch_payload() -> Dict[str, Any]:
+        # Simple distance-based query (for production, use MongoDB geospatial queries)
+        query = {
+            "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
+            "is_available": True,
+            "latitude": {"$exists": True},
+            "longitude": {"$exists": True},
+        }
+
+        window = min(max((skip + limit) * 3, 120), 1000)
+        listings = await db.listings.find(query, LISTING_LIST_PROJECTION).limit(window).to_list(window)
+
+        nearby = []
+        for listing in listings:
+            if listing.get("latitude") and listing.get("longitude"):
+                dlat = abs(listing["latitude"] - lat)
+                dlng = abs(listing["longitude"] - lng)
+                if dlat < radius / 111 and dlng < radius / 111:
+                    nearby.append(listing)
+
+        total = len(nearby)
+        paged = nearby[skip : skip + limit]
+        return {
+            "listings": paged,
+            "total": total,
+            "page": page,
+            "pages": (total + limit - 1) // limit if total else 0,
+        }
+
+    payload, cache_hit = await get_cached_api_payload(
+        "listings_nearby",
+        cache_params,
+        _fetch_payload,
     )
-
-    # Filter by distance (simplified)
-    nearby = []
-    for listing in listings:
-        if listing.get("latitude") and listing.get("longitude"):
-            # Simple distance calculation
-            dlat = abs(listing["latitude"] - lat)
-            dlng = abs(listing["longitude"] - lng)
-            if dlat < radius / 111 and dlng < radius / 111:  # Rough approximation
-                nearby.append(listing)
-
-    return {"listings": nearby[:limit]}
+    if response is not None:
+        response.headers["X-Cache"] = "HIT" if cache_hit else "MISS"
+        response.headers["Cache-Control"] = (
+            f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+        )
+    return payload
 
 
 @api_router.get("/listings/map")
@@ -2245,37 +2503,73 @@ async def get_map_listings(
     min_lng: float,
     max_lng: float,
     category: Optional[ListingCategory] = None,
-    limit: int = 100,
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=500),
+    response: Response = None,
 ):
-    query = {
-        "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
-        "is_available": True,
-        "latitude": {"$gte": min_lat, "$lte": max_lat},
-        "longitude": {"$gte": min_lng, "$lte": max_lng},
+    page, limit, skip = _parse_pagination(page, limit, default_limit=100, max_limit=500)
+
+    cache_params = {
+        "min_lat": round(min_lat, 4),
+        "max_lat": round(max_lat, 4),
+        "min_lng": round(min_lng, 4),
+        "max_lng": round(max_lng, 4),
+        "category": str(category.value if isinstance(category, Enum) else category or ""),
+        "page": page,
+        "limit": limit,
     }
-    if category:
-        query["category"] = category
 
-    listings = (
-        await db.listings.find(
-            query,
-            {
-                "_id": 0,
-                "id": 1,
-                "title": 1,
-                "price": 1,
-                "category": 1,
-                "latitude": 1,
-                "longitude": 1,
-                "images": 1,
-                "listing_type": 1,
-            },
+    async def _fetch_payload() -> Dict[str, Any]:
+        query = {
+            "status": {"$in": [ListingStatus.APPROVED, ListingStatus.BOOSTED]},
+            "is_available": True,
+            "latitude": {"$gte": min_lat, "$lte": max_lat},
+            "longitude": {"$gte": min_lng, "$lte": max_lng},
+        }
+        if category:
+            query["category"] = category
+
+        listings = (
+            await db.listings.find(
+                query,
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "title": 1,
+                    "price": 1,
+                    "category": 1,
+                    "latitude": 1,
+                    "longitude": 1,
+                    "images": 1,
+                    "listing_type": 1,
+                    "created_at": 1,
+                    "owner_id": 1,
+                },
+            )
+            .skip(skip)
+            .limit(limit)
+            .to_list(limit)
         )
-        .limit(limit)
-        .to_list(limit)
-    )
 
-    return {"listings": listings}
+        total = await db.listings.count_documents(query)
+        return {
+            "listings": listings,
+            "total": total,
+            "page": page,
+            "pages": (total + limit - 1) // limit,
+        }
+
+    payload, cache_hit = await get_cached_api_payload(
+        "listings_map",
+        cache_params,
+        _fetch_payload,
+    )
+    if response is not None:
+        response.headers["X-Cache"] = "HIT" if cache_hit else "MISS"
+        response.headers["Cache-Control"] = (
+            f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+        )
+    return payload
 
 
 @api_router.get("/listings/heatmap")
@@ -2509,6 +2803,7 @@ async def update_listing(
         )
 
     await db.listings.update_one({"id": listing_id}, {"$set": update_data})
+    await invalidate_listing_related_caches()
 
     return {"message": "Listing updated successfully"}
 
@@ -2526,6 +2821,7 @@ async def delete_listing(listing_id: str, user: dict = Depends(get_owner_user)):
     await db.users.update_one(
         {"id": listing["owner_id"]}, {"$pull": {"listings": listing_id}}
     )
+    await invalidate_listing_related_caches()
 
     return {"message": "Listing deleted successfully"}
 
@@ -2537,6 +2833,7 @@ async def like_listing(listing_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Listing not found")
 
     await db.listings.update_one({"id": listing_id}, {"$inc": {"likes": 1}})
+    await invalidate_listing_related_caches()
 
     return {"message": "Listing liked"}
 
@@ -2544,6 +2841,7 @@ async def like_listing(listing_id: str, user: dict = Depends(get_current_user)):
 @api_router.post("/listings/{listing_id}/share")
 async def share_listing(listing_id: str, user: dict = Depends(get_current_user)):
     await db.listings.update_one({"id": listing_id}, {"$inc": {"shares": 1}})
+    await invalidate_listing_related_caches()
     return {"message": "Share recorded"}
 
 
@@ -2571,6 +2869,7 @@ async def boost_listing(boost: BoostListing, user: dict = Depends(get_owner_user
             }
         },
     )
+    await invalidate_listing_related_caches()
 
     return {
         "message": f"Listing boosted for {boost.boost_days} days",
@@ -2603,6 +2902,7 @@ async def add_to_wishlist(listing_id: str, user: dict = Depends(get_current_user
     await db.users.update_one(
         {"id": user["id"]}, {"$addToSet": {"wishlist": listing_id}}
     )
+    await invalidate_listing_related_caches()
 
     return {"message": "Added to wishlist", "wishlisted": True}
 
@@ -2618,44 +2918,61 @@ async def remove_from_wishlist(listing_id: str, user: dict = Depends(get_current
             {"$inc": {"saves": -1}},
         )
     await db.users.update_one({"id": user["id"]}, {"$pull": {"wishlist": listing_id}})
+    await invalidate_listing_related_caches()
     return {"message": "Removed from wishlist", "wishlisted": False}
 
 
 @api_router.get("/wishlist")
-async def get_wishlist(user: dict = Depends(get_current_user)):
+async def get_wishlist(
+    user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    page, limit, skip = _parse_pagination(page, limit, default_limit=20, max_limit=100)
+    raw_window = min(max(skip + limit, 100), 500)
     wishlist_docs = (
         await db.wishlists.find(
             {"user_id": user["id"]},
             {"_id": 0},
         )
         .sort("created_at", -1)
-        .to_list(200)
+        .to_list(raw_window)
     )
 
     if not wishlist_docs:
         wishlist_ids = [str(item) for item in (user.get("wishlist", []) or []) if item]
         if not wishlist_ids:
-            return {"listings": [], "count": 0}
+            return {"listings": [], "count": 0, "page": page, "pages": 0}
+        total = len(wishlist_ids)
+        paged_ids = wishlist_ids[skip : skip + limit]
         listings = await db.listings.find(
-            {"id": {"$in": wishlist_ids}}, {"_id": 0}
-        ).to_list(200)
+            {"id": {"$in": paged_ids}}, WISHLIST_LISTING_PROJECTION
+        ).to_list(limit)
         listing_map = {
             listing.get("id"): listing for listing in listings if listing.get("id")
         }
         ordered_listings = []
-        for listing_id in wishlist_ids:
+        for listing_id in paged_ids:
             listing = listing_map.get(listing_id)
             if listing:
                 listing["wishlisted_at"] = None
                 ordered_listings.append(listing)
-        return {"listings": ordered_listings, "count": len(ordered_listings)}
+        return {
+            "listings": ordered_listings,
+            "count": total,
+            "page": page,
+            "pages": (total + limit - 1) // limit,
+        }
+
+    total = len(wishlist_docs)
+    wishlist_docs = wishlist_docs[skip : skip + limit]
 
     listing_ids = [
         doc.get("listing_id") for doc in wishlist_docs if doc.get("listing_id")
     ]
-    listings = await db.listings.find({"id": {"$in": listing_ids}}, {"_id": 0}).to_list(
-        200
-    )
+    listings = await db.listings.find(
+        {"id": {"$in": listing_ids}}, WISHLIST_LISTING_PROJECTION
+    ).to_list(limit)
     listing_map = {
         listing.get("id"): listing for listing in listings if listing.get("id")
     }
@@ -2669,7 +2986,12 @@ async def get_wishlist(user: dict = Depends(get_current_user)):
         listing["wishlisted_at"] = doc.get("created_at") or doc.get("updated_at")
         ordered_listings.append(listing)
 
-    return {"listings": ordered_listings, "count": len(ordered_listings)}
+    return {
+        "listings": ordered_listings,
+        "count": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
 
 
 # ============ BOOKING ROUTES ============
@@ -3941,6 +4263,7 @@ async def upload_video(
     }
 
     await db.videos.insert_one(video_doc)
+    await invalidate_video_related_caches()
 
     return {
         "success": True,
@@ -4003,6 +4326,7 @@ async def create_video(video: VideoCreate, user: dict = Depends(get_owner_user))
     }
 
     await db.videos.insert_one(video_doc)
+    await invalidate_video_related_caches()
 
     return {"message": "Video posted successfully", "video_id": video_id}
 
@@ -4020,62 +4344,49 @@ async def get_videos(
         query["category"] = category
 
     is_anonymous = not user
-    cache_key = _build_hot_cache_key(
-        "videos",
-        {
-            "category": str(
-                category.value if isinstance(category, Enum) else category or ""
-            ),
-            "page": page,
-            "limit": limit,
-        },
-    )
-    if is_anonymous:
-        cached_payload = await get_hot_cached_payload(cache_key)
-        if cached_payload is not None:
-            if response is not None:
-                response.headers["X-Cache"] = "HIT"
-                response.headers["Cache-Control"] = (
-                    f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
-                )
-            return cached_payload
-
-    skip = (page - 1) * limit
-    projection = {
-        "_id": 0,
-        "id": 1,
-        "owner_id": 1,
-        "owner_name": 1,
-        "owner_image": 1,
-        "title": 1,
-        "description": 1,
-        "category": 1,
-        "url": 1,
-        "video_url": 1,
-        "video_public_id": 1,
-        "video_version": 1,
-        "thumbnail_url": 1,
-        "listing_id": 1,
-        "likes": 1,
-        "views": 1,
-        "saves": 1,
-        "shares": 1,
-        "comments_count": 1,
-        "created_at": 1,
-        "location": 1,
-        "hashtags": 1,
+    cache_params = {
+        "category": str(
+            category.value if isinstance(category, Enum) else category or ""
+        ),
+        "page": page,
+        "limit": limit,
     }
-    videos = (
-        await db.videos.find(query, projection)
-        .sort("created_at", -1)
-        .skip(skip)
-        .limit(limit)
-        .to_list(limit)
-    )
-    videos = [_normalize_video_doc_for_response(video) for video in videos]
-    total = await db.videos.count_documents(query)
 
-    if user and videos:
+    async def _fetch_public_payload() -> Dict[str, Any]:
+        skip = (page - 1) * limit
+        raw_videos = (
+            await db.videos.find(query, VIDEO_LIST_PROJECTION)
+            .sort("created_at", -1)
+            .skip(skip)
+            .limit(limit)
+            .to_list(limit)
+        )
+        raw_videos = [_normalize_video_doc_for_response(video) for video in raw_videos]
+        total_public = await db.videos.count_documents(query)
+        return {
+            "videos": raw_videos,
+            "total": total_public,
+            "page": page,
+            "pages": (total_public + limit - 1) // limit,
+        }
+
+    if is_anonymous:
+        payload, cache_hit = await get_cached_api_payload(
+            "videos",
+            cache_params,
+            _fetch_public_payload,
+        )
+        if response is not None:
+            response.headers["X-Cache"] = "HIT" if cache_hit else "MISS"
+            response.headers["Cache-Control"] = (
+                f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
+            )
+        return payload
+
+    payload = await _fetch_public_payload()
+    videos = payload.get("videos", [])
+
+    if videos:
         user_id = user["id"]
         video_ids = [v["id"] for v in videos]
         owner_ids = list({v.get("owner_id") for v in videos if v.get("owner_id")})
@@ -4099,19 +4410,6 @@ async def get_videos(
             v["user_saved"] = v["id"] in saved_set
             v["user_following"] = v.get("owner_id") in following_set
 
-    payload = {
-        "videos": videos,
-        "total": total,
-        "page": page,
-        "pages": (total + limit - 1) // limit,
-    }
-    if is_anonymous:
-        await set_hot_cached_payload(cache_key, payload)
-        if response is not None:
-            response.headers["X-Cache"] = "MISS"
-            response.headers["Cache-Control"] = (
-                f"public, max-age={HOT_ENDPOINT_CACHE_TTL_SECONDS}"
-            )
     return payload
 
 
@@ -4129,32 +4427,8 @@ async def get_video_feed(
         query["category"] = preferences["category"]
 
     skip = (page - 1) * limit
-    projection = {
-        "_id": 0,
-        "id": 1,
-        "owner_id": 1,
-        "owner_name": 1,
-        "owner_image": 1,
-        "title": 1,
-        "description": 1,
-        "category": 1,
-        "url": 1,
-        "video_url": 1,
-        "video_public_id": 1,
-        "video_version": 1,
-        "thumbnail_url": 1,
-        "listing_id": 1,
-        "likes": 1,
-        "views": 1,
-        "saves": 1,
-        "shares": 1,
-        "comments_count": 1,
-        "created_at": 1,
-        "location": 1,
-        "hashtags": 1,
-    }
     videos = (
-        await db.videos.find(query, projection)
+        await db.videos.find(query, VIDEO_LIST_PROJECTION)
         .sort([("views", -1), ("created_at", -1)])
         .skip(skip)
         .limit(limit)
@@ -4186,17 +4460,38 @@ async def get_video_feed(
             v["user_saved"] = v["id"] in saved_set
             v["user_following"] = v.get("owner_id") in following_set
 
-    return {"videos": videos, "page": page}
+    total = await db.videos.count_documents(query)
+    return {
+        "videos": videos,
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
 
 
 @api_router.get("/videos/saved")
-async def get_saved_videos(user: dict = Depends(get_current_user)):
+async def get_saved_videos(
+    user: dict = Depends(get_current_user),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    page, limit, skip = _parse_pagination(page, limit, default_limit=20, max_limit=100)
     saved_ids = user.get("saved_reels", [])
     if not saved_ids:
-        return {"videos": []}
+        return {"videos": [], "total": 0, "page": page, "pages": 0}
 
-    videos = await db.videos.find({"id": {"$in": saved_ids}}, {"_id": 0}).to_list(100)
-    return {"videos": videos}
+    total = len(saved_ids)
+    paged_ids = saved_ids[skip : skip + limit]
+
+    videos = await db.videos.find({"id": {"$in": paged_ids}}, VIDEO_LIST_PROJECTION).to_list(limit)
+    video_map = {video.get("id"): video for video in videos if video.get("id")}
+    ordered = [video_map[vid] for vid in paged_ids if vid in video_map]
+    return {
+        "videos": ordered,
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
 
 
 @api_router.get("/videos/{video_id}")
@@ -4347,6 +4642,7 @@ async def like_video(video_id: str, user: dict = Depends(get_current_user)):
                 {"id": video_id, "likes": {"$gt": 0}}, {"$inc": {"likes": -1}}
             )
             updated = await db.videos.find_one({"id": video_id}, {"_id": 0, "likes": 1})
+            await invalidate_video_related_caches()
             return {
                 "message": "Video unliked",
                 "liked": False,
@@ -4367,6 +4663,7 @@ async def like_video(video_id: str, user: dict = Depends(get_current_user)):
             pass
 
         updated = await db.videos.find_one({"id": video_id}, {"_id": 0, "likes": 1})
+        await invalidate_video_related_caches()
         return {
             "message": "Video liked",
             "liked": True,
@@ -4388,6 +4685,7 @@ async def save_video(video_id: str, user: dict = Depends(get_current_user)):
         {"id": user["id"]}, {"$addToSet": {"saved_reels": video_id}}
     )
     await db.videos.update_one({"id": video_id}, {"$inc": {"saves": 1}})
+    await invalidate_video_related_caches()
 
     return {"message": "Video saved"}
 
@@ -4398,6 +4696,7 @@ async def unsave_video(video_id: str, user: dict = Depends(get_current_user)):
         user["id"], "video_unsave", max_requests=80, window_seconds=60
     )
     await db.users.update_one({"id": user["id"]}, {"$pull": {"saved_reels": video_id}})
+    await invalidate_video_related_caches()
     return {"message": "Video unsaved"}
 
 
@@ -4477,6 +4776,7 @@ async def add_video_comment(
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.notifications.insert_one(notification)
+    await invalidate_video_related_caches()
 
     return {
         "message": "Comment added",
@@ -4503,6 +4803,7 @@ async def delete_video_comment(
         projection={"_id": 0, "comments_count": 1},
         return_document=ReturnDocument.AFTER,
     )
+    await invalidate_video_related_caches()
 
     return {
         "message": "Comment deleted",
@@ -4579,6 +4880,7 @@ async def share_video(video_id: str, user: dict = Depends(get_current_user)):
         shared_now = False
 
     updated = await db.videos.find_one({"id": video_id}, {"_id": 0, "shares": 1})
+    await invalidate_video_related_caches()
     return {
         "message": "Share tracked" if shared_now else "Share already tracked",
         "shared": True,
@@ -4603,6 +4905,7 @@ async def hide_reel(video_id: str, user: dict = Depends(get_current_user)):
 
     is_hidden = video.get("hidden", False)
     await db.videos.update_one({"id": video_id}, {"$set": {"hidden": not is_hidden}})
+    await invalidate_video_related_caches()
 
     return {
         "message": f"Reel {'unhidden' if is_hidden else 'hidden'} successfully",
@@ -4633,6 +4936,7 @@ async def delete_reel(video_id: str, user: dict = Depends(get_current_user)):
     # Remove from user's videos if applicable
     if is_owner:
         await db.users.update_one({"id": user["id"]}, {"$pull": {"videos": video_id}})
+    await invalidate_video_related_caches()
 
     return {"message": "Reel deleted successfully", "video_id": video_id}
 
@@ -5917,6 +6221,7 @@ async def update_listing_status(
             }
         },
     )
+    await invalidate_listing_related_caches()
     await invalidate_admin_stats_cache()
 
     await log_admin_action(
@@ -6358,6 +6663,7 @@ async def admin_remove_listing(
             }
         },
     )
+    await invalidate_listing_related_caches()
     await invalidate_admin_stats_cache()
     await log_admin_action(
         admin,
@@ -7377,8 +7683,12 @@ async def create_admin(admin_data: UserRegister):
 # ============ OWNER DASHBOARD ROUTES ============
 @api_router.get("/owner/listings")
 async def get_owner_listings(
-    user_id: Optional[str] = None, user: dict = Depends(get_owner_user)
+    user_id: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    user: dict = Depends(get_owner_user),
 ):
+    page, limit, skip = _parse_pagination(page, limit, default_limit=20, max_limit=100)
     requested_owner_id = user_id.strip() if user_id else ""
     if (
         requested_owner_id
@@ -7401,9 +7711,19 @@ async def get_owner_listings(
         "category": {"$in": allowed_categories},
     }
     listings = (
-        await db.listings.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+        await db.listings.find(query, OWNER_LISTING_PROJECTION)
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+        .to_list(limit)
     )
-    return {"listings": listings}
+    total = await db.listings.count_documents(query)
+    return {
+        "listings": listings,
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
 
 
 @api_router.get("/owner/stats")
@@ -10049,19 +10369,17 @@ socket_app = socketio.ASGIApp(sio, app)
 
 
 async def startup_services():
-    global redis_client, delete_worker_task
-    if redis_asyncio and redis_url:
-        try:
-            redis_client = redis_asyncio.from_url(
-                redis_url, encoding="utf-8", decode_responses=True
-            )
-            await redis_client.ping()
-            logger.info("Redis rate limiter enabled")
-        except Exception as e:
-            redis_client = None
-            logger.warning(f"Redis unavailable, using in-memory rate limiter: {e}")
+    global redis_client, response_cache, delete_worker_task
+    redis_client = await create_redis_client(redis_url)
+    response_cache = ResponseCacheMiddleware(
+        redis_client,
+        prefix="api-cache",
+        max_items=HOT_ENDPOINT_CACHE_MAX_ITEMS,
+    )
+    if redis_client:
+        logger.info("Redis cache and rate limiter enabled")
     else:
-        logger.warning("Redis client not configured, using in-memory rate limiter")
+        logger.warning("Redis client not configured, using in-memory cache/rate limiter")
 
     await db.media_delete_jobs.create_index("id", unique=True)
     await db.media_delete_jobs.create_index([("status", 1), ("next_retry_at", 1)])
@@ -10092,6 +10410,9 @@ async def startup_services():
     )
     await db.debug_session_reports.create_index([("user_id", 1), ("created_at", -1)])
     await db.users.create_index("id", unique=True)
+    await db.users.create_index([("id", 1), ("created_at", -1)])
+    await db.users.create_index([("createdAt", -1)], sparse=True)
+    await db.users.create_index([("userId", 1)], sparse=True)
     await db.users.create_index([("role", 1), ("created_at", -1)])
     await db.users.create_index([("aadhar_status", 1), ("role", 1)])
     await db.subscriptions.create_index("id", unique=True)
@@ -10139,16 +10460,27 @@ async def startup_services():
     )
     await db.search_history.create_index("id", unique=True)
     await db.search_history.create_index([("user_id", 1), ("created_at", -1)])
+    await db.search_history.create_index([("userId", 1), ("createdAt", -1)], sparse=True)
     await db.search_history.create_index(
         [("user_id", 1), ("city", 1), ("category", 1), ("created_at", -1)]
     )
     await db.wishlists.create_index([("user_id", 1), ("listing_id", 1)], unique=True)
+    await db.wishlists.create_index([("user_id", 1), ("created_at", -1)])
 
     # Search-related indexes for smart query filters and fast suggestions.
     await db.listings.create_index(
         [("status", 1), ("is_available", 1), ("city", 1), ("category", 1)]
     )
     await db.listings.create_index([("status", 1), ("created_at", -1)])
+    await db.listings.create_index(
+        [("title", 1), ("price", 1), ("location", 1), ("created_at", -1), ("owner_id", 1)]
+    )
+    await db.listings.create_index(
+        [("title", 1), ("price", 1), ("location", 1), ("createdAt", -1), ("userId", 1)],
+        sparse=True,
+    )
+    await db.listings.create_index([("price", 1), ("created_at", -1)])
+    await db.listings.create_index([("owner_id", 1), ("created_at", -1)])
     await db.listings.create_index([("owner_id", 1), ("status", 1)])
     await db.listings.create_index([("category", 1), ("status", 1)])
     await db.listings.create_index([("removed_by_admin", 1)])
@@ -10188,6 +10520,20 @@ async def startup_services():
     )
     await db.listings.create_index([("pricing.amount", 1)])
     await db.listings.create_index([("pricing.type", 1)])
+    await db.videos.create_index(
+        [("title", 1), ("location", 1), ("created_at", -1), ("owner_id", 1)]
+    )
+    await db.videos.create_index(
+        [("title", 1), ("location", 1), ("createdAt", -1), ("userId", 1)],
+        sparse=True,
+    )
+    await db.bookings.create_index([("user_id", 1), ("created_at", -1)])
+    await db.bookings.create_index([("owner_id", 1), ("created_at", -1)])
+    await db.reviews.create_index([("listing_id", 1), ("created_at", -1)])
+    await db.reviews.create_index([("user_id", 1), ("created_at", -1)])
+    await db.comments.create_index([("video_id", 1), ("created_at", -1)])
+    await db.comments.create_index([("user_id", 1), ("created_at", -1)])
+    await db.notifications.create_index([("createdAt", -1), ("userId", 1)], sparse=True)
     await db.admin_audit_logs.create_index([("actor_id", 1), ("created_at", -1)])
     await db.admin_audit_logs.create_index([("target_id", 1), ("created_at", -1)])
     try:
@@ -10209,7 +10555,7 @@ async def startup_services():
 
 
 async def shutdown_db_client():
-    global redis_client, delete_worker_task
+    global redis_client, response_cache, delete_worker_task
     if delete_worker_task:
         delete_worker_task.cancel()
         try:
@@ -10219,5 +10565,6 @@ async def shutdown_db_client():
         delete_worker_task = None
 
     client.close()
-    if redis_client:
-        await redis_client.close()
+    response_cache = None
+    await close_redis_client(redis_client)
+    redis_client = None

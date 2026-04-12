@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import OptimizedImage from './OptimizedImage';
 import { toast } from 'sonner';
 import {
   Home,
@@ -247,14 +248,13 @@ export const HeroSection = () => {
           transition={reduceMotion ? { duration: 0 } : { duration: 10, ease: 'easeOut' }}
           className="absolute inset-0"
         />
-        <img
-          src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1920"
+        <OptimizedImage
+          publicId="gharshetu/placeholders/hero-main"
           alt=""
           aria-hidden="true"
-          loading="eager"
-          decoding="async"
-          fetchPriority="high"
           className="absolute inset-0 h-full w-full object-cover"
+          width={1920}
+          sizes="100vw"
         />
         <div className="absolute inset-0 bg-stone-950/55" />
         <div className="absolute inset-0 bg-gradient-to-r from-stone-950/95 via-stone-950/78 to-stone-950/40" />
@@ -1028,12 +1028,12 @@ export const PropertyCard = memo(({ listing, showActions = true, contextCategory
     >
       {/* Image */}
       <div className="relative aspect-[4/3] overflow-hidden">
-        <img
-          src={listing.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=400'}
+        <OptimizedImage
+          publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
           alt={listing.title}
-          loading="lazy"
-          decoding="async"
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          width={640}
+          sizes="(max-width: 1024px) 100vw, 33vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -1277,12 +1277,12 @@ export const ReelsPromoSection = () => {
             <div className="relative">
               <div className="mx-auto w-[230px] sm:w-[260px] rounded-[2.5rem] border border-white/20 bg-stone-900 p-2.5 shadow-[0_28px_60px_rgba(0,0,0,0.45)]">
                 <div className="rounded-[2rem] overflow-hidden aspect-[9/16] relative bg-stone-800">
-                  <img
-                    src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400"
+                  <OptimizedImage
+                    publicId="gharshetu/placeholders/reels-preview"
                     alt="Reels Preview"
-                    loading="lazy"
-                    decoding="async"
                     className="w-full h-full object-cover"
+                    width={480}
+                    sizes="(max-width: 768px) 60vw, 260px"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -1420,13 +1420,19 @@ export const TrustSection = () => {
               transition={reduceMotion ? { duration: 0 } : { duration: 0.5, delay: 0.12 }}
               className="relative z-10"
             >
-              <motion.img
-                src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600"
-                alt="Happy Family"
+              <motion.div
                 whileHover={reduceMotion ? undefined : { scale: 1.02 }}
                 transition={reduceMotion ? { duration: 0 } : { duration: 0.4, ease: 'easeOut' }}
-                className="rounded-2xl shadow-xl border border-stone-200"
-              />
+                className="rounded-2xl shadow-xl border border-stone-200 overflow-hidden"
+              >
+                <OptimizedImage
+                  publicId="gharshetu/placeholders/happy-family"
+                  alt="Happy Family"
+                  width={600}
+                  sizes="(max-width: 1024px) 100vw, 600px"
+                  className="w-full h-full object-cover"
+                />
+              </motion.div>
 
               <motion.div
                 {...revealUp(reduceMotion, 0.2, 12)}

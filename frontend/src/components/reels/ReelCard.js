@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { normalizeMediaUrl } from '../../lib/media';
+import OptimizedImage from '../OptimizedImage';
 import {
   Heart,
   MessageCircle,
@@ -73,11 +74,11 @@ const ReelCard = React.memo(({
     if (videoRef.current) {
       videoRef.current.muted = isMuted;
       if (isActive) {
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => { });
         setIsPlaying(true);
         if (!viewedReelsInSession.has(videoId)) {
           viewedReelsInSession.add(videoId);
-          videosAPI.recordView(videoId).catch(() => {});
+          videosAPI.recordView(videoId).catch(() => { });
         }
       } else {
         videoRef.current.pause();
@@ -182,7 +183,7 @@ const ReelCard = React.memo(({
           title: video.title,
           url: shareUrl,
         });
-      } catch (error) {}
+      } catch (error) { }
     } else {
       navigator.clipboard.writeText(shareUrl);
       toast.success('Link copied!');
@@ -282,7 +283,7 @@ const ReelCard = React.memo(({
             >
               <MoreVertical className="w-5 h-5" />
             </button>
-            
+
             {showMenu && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -298,7 +299,7 @@ const ReelCard = React.memo(({
                   {isHidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   <span>{isHidden ? 'Unhide Reel' : 'Hide Reel'}</span>
                 </button>
-                
+
                 <button
                   onClick={handleDeleteReel}
                   disabled={deleteLoading}
@@ -380,7 +381,7 @@ const ReelCard = React.memo(({
               <div className="w-12 h-12 rounded-full border-2 border-white overflow-hidden bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 p-[2px]">
                 <div className="w-full h-full rounded-full bg-black overflow-hidden">
                   {video.owner_image ? (
-                    <img src={video.owner_image} alt="" className="w-full h-full object-cover" />
+                    <OptimizedImage publicId={video.owner_image} alt="" className="w-full h-full object-cover" width={64} sizes="48px" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <User className="w-6 h-6 text-white" />
@@ -403,7 +404,7 @@ const ReelCard = React.memo(({
           </div>
 
           <motion.button onClick={handleLike} disabled={likePending} className="flex flex-col items-center disabled:opacity-60" data-testid="like-btn" whileTap={{ scale: 0.9 }}>
-              <Heart className={`w-8 h-8 ${liked ? 'text-red-500 fill-red-500' : 'text-white'}`} />
+            <Heart className={`w-8 h-8 ${liked ? 'text-red-500 fill-red-500' : 'text-white'}`} />
             <span className="text-white text-xs mt-1 font-semibold">{formatNumber(likeCount)}</span>
           </motion.button>
 
@@ -418,7 +419,7 @@ const ReelCard = React.memo(({
           </button>
 
           <motion.button onClick={handleSave} disabled={saveLoading} className="flex flex-col items-center disabled:opacity-60" data-testid="save-btn" whileTap={{ scale: 0.9 }}>
-              <Bookmark className={`w-8 h-8 ${saved ? 'text-white fill-white' : 'text-white'}`} />
+            <Bookmark className={`w-8 h-8 ${saved ? 'text-white fill-white' : 'text-white'}`} />
           </motion.button>
 
           <button onClick={toggleMute} className="relative">

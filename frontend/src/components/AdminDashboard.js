@@ -28,6 +28,7 @@ import {
   IndianRupee, TrendingUp, CreditCard, Settings, Save,
 } from 'lucide-react';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
+import OptimizedImage from './OptimizedImage';
 
 const CATEGORY_ICONS = {
   home: Home, business: Building2, stay: Hotel,
@@ -345,10 +346,12 @@ export const AdminDashboard = () => {
       <aside className="w-64 bg-stone-900 text-white flex flex-col fixed h-screen z-40">
         <div className="p-6 border-b border-stone-700">
           <Link to="/" className="flex items-center gap-2">
-            <img
-              src={gruvoraLogo}
+            <OptimizedImage
+              publicId={gruvoraLogo}
               alt="Gruvora"
               className="h-8 w-auto max-w-[140px] object-contain rounded-md"
+              width={140}
+              sizes="140px"
             />
             <div>
               <p className="text-xs text-stone-400">Admin Panel</p>
@@ -364,8 +367,8 @@ export const AdminDashboard = () => {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${activeTab === tab.id
-                    ? 'bg-primary text-white'
-                    : 'text-stone-400 hover:bg-stone-800 hover:text-white'
+                  ? 'bg-primary text-white'
+                  : 'text-stone-400 hover:bg-stone-800 hover:text-white'
                   }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
@@ -921,8 +924,13 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
                 return (
                   <div key={l.id} className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
                     <div className="w-14 h-14 rounded overflow-hidden flex-shrink-0">
-                      <img src={l.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200'}
-                        alt="" className="w-full h-full object-cover" />
+                      <OptimizedImage
+                        publicId={l.images?.[0] || 'gharshetu/placeholders/listing-default'}
+                        alt=""
+                        className="w-full h-full object-cover"
+                        width={200}
+                        sizes="56px"
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
@@ -973,8 +981,13 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
               return (
                 <div key={l.id} className="flex items-center gap-4 p-4 hover:bg-stone-50">
                   <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
-                    <img src={l.images?.[0] || 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=200'}
-                      alt="" className="w-full h-full object-cover" />
+                    <OptimizedImage
+                      publicId={l.images?.[0] || 'gharshetu/placeholders/listing-default'}
+                      alt=""
+                      className="w-full h-full object-cover"
+                      width={200}
+                      sizes="64px"
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
@@ -1122,10 +1135,10 @@ const NotificationsTab = ({ target, title, message, type, sending, onTargetChang
 const RevenueTab = ({ data, onRefresh }) => {
   if (!data) return <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
-  const { 
-    recent_payments = [], 
-    recent_subscriptions = [], 
-    recent_boosts = [], 
+  const {
+    recent_payments = [],
+    recent_subscriptions = [],
+    recent_boosts = [],
     revenue_by_type = [],
     owners_subscription_summary = []
   } = data;
@@ -1228,12 +1241,12 @@ const RevenueTab = ({ data, onRefresh }) => {
               {owners_subscription_summary.map((group) => (
                 <div key={group._id || 'unknown'} className="flex items-center justify-between p-3 bg-stone-50 rounded-lg">
                   <div className="flex items-center gap-2">
-                    <Badge 
+                    <Badge
                       className={
-                        group._id === 'active' ? 'bg-green-100 text-green-700' : 
-                        group._id === 'trial' ? 'bg-blue-100 text-blue-700' : 
-                        group._id === 'expired' ? 'bg-red-100 text-red-700' : 
-                        'bg-stone-100 text-stone-700'
+                        group._id === 'active' ? 'bg-green-100 text-green-700' :
+                          group._id === 'trial' ? 'bg-blue-100 text-blue-700' :
+                            group._id === 'expired' ? 'bg-red-100 text-red-700' :
+                              'bg-stone-100 text-stone-700'
                       }
                     >
                       {group._id || 'Pending'}
@@ -1333,18 +1346,18 @@ const RevenueTab = ({ data, onRefresh }) => {
                       </span>
                     </TableCell>
                     <TableCell className="text-stone-600 text-sm font-medium">
-                      {owner.subscription_amount_paise 
-                        ? `₹${(owner.subscription_amount_paise / 100).toLocaleString('en-IN')}` 
+                      {owner.subscription_amount_paise
+                        ? `₹${(owner.subscription_amount_paise / 100).toLocaleString('en-IN')}`
                         : '₹999'}
                     </TableCell>
                     <TableCell>
                       <Badge
                         className={
                           owner.status === 'active' ? 'bg-green-100 text-green-700' :
-                          owner.status === 'trial' ? 'bg-blue-100 text-blue-700' :
-                          owner.status === 'expired' ? 'bg-red-100 text-red-700' :
-                          owner.status === 'blocked' ? 'bg-red-200 text-red-800' :
-                          'bg-stone-100 text-stone-700'
+                            owner.status === 'trial' ? 'bg-blue-100 text-blue-700' :
+                              owner.status === 'expired' ? 'bg-red-100 text-red-700' :
+                                owner.status === 'blocked' ? 'bg-red-200 text-red-800' :
+                                  'bg-stone-100 text-stone-700'
                         }
                       >
                         {owner.status || 'Pending'}
@@ -1384,18 +1397,18 @@ const SettingsTab = ({ settings, onUpdate }) => {
     categories: {
       stay: { platform_fee: 50, subscription_fee: 999, basic_subscription_fee: 199, pro_subscription_fee: 499, boost_fee: 199, service_fee_percent: 5, listing_fee: 0, commission_rate: 2 },
       event: { platform_fee: 50, subscription_fee: 999, basic_subscription_fee: 199, pro_subscription_fee: 499, boost_fee: 199, service_fee_percent: 5, listing_fee: 0, commission_rate: 2 },
-      services: { 
-        platform_fee: 0, 
-        service_basic_fee: 50, 
-        service_verified_fee: 99, 
-        service_top_fee: 149, 
-        reel_boost_1d: 19, 
-        reel_boost_3d: 49, 
+      services: {
+        platform_fee: 0,
+        service_basic_fee: 50,
+        service_verified_fee: 99,
+        service_top_fee: 149,
+        reel_boost_1d: 19,
+        reel_boost_3d: 49,
         reel_boost_7d: 99,
-        boost_fee: 19, 
-        service_fee_percent: 0, 
-        listing_fee: 0, 
-        commission_rate: 0 
+        boost_fee: 19,
+        service_fee_percent: 0,
+        listing_fee: 0,
+        commission_rate: 0
       },
       home: { platform_fee: 0, subscription_fee: 999, basic_subscription_fee: 999, pro_subscription_fee: 999, boost_fee: 199, service_fee_percent: 0, listing_fee: 199, commission_rate: 0 },
       business: { platform_fee: 0, subscription_fee: 999, basic_subscription_fee: 999, pro_subscription_fee: 999, boost_fee: 199, service_fee_percent: 0, listing_fee: 199, commission_rate: 0 }
@@ -1408,18 +1421,18 @@ const SettingsTab = ({ settings, onUpdate }) => {
     }
   }, [settings]);
 
-  const activeConfig = selectedCat === 'global' 
-    ? formData.global_config 
-    : (formData.categories && formData.categories[selectedCat]) || { 
-        platform_fee: 0, 
-        subscription_fee: 0, 
-        boost_fee: 0, 
-        service_fee_percent: 0,
-        commission_rate: 0,
-        basic_subscription_fee: 0,
-        pro_subscription_fee: 0,
-        listing_fee: 0
-      };
+  const activeConfig = selectedCat === 'global'
+    ? formData.global_config
+    : (formData.categories && formData.categories[selectedCat]) || {
+      platform_fee: 0,
+      subscription_fee: 0,
+      boost_fee: 0,
+      service_fee_percent: 0,
+      commission_rate: 0,
+      basic_subscription_fee: 0,
+      pro_subscription_fee: 0,
+      listing_fee: 0
+    };
 
   const updateActiveConfig = (field, rawValue) => {
     // Safely parse number, default to 0 if invalid
@@ -1429,7 +1442,7 @@ const SettingsTab = ({ settings, onUpdate }) => {
     setFormData(prev => {
       const newData = { ...prev };
       const updates = { [field]: safeValue };
-      
+
       // Keep commission fields in sync
       if (field === 'commission_rate') updates.service_fee_percent = safeValue;
       if (field === 'service_fee_percent') updates.commission_rate = safeValue;
@@ -1441,10 +1454,10 @@ const SettingsTab = ({ settings, onUpdate }) => {
         if (!newData.categories) newData.categories = {};
         // Ensure the specific category object exists
         if (!newData.categories[selectedCat]) {
-          newData.categories[selectedCat] = { 
-            platform_fee: 0, 
-            subscription_fee: 0, 
-            boost_fee: 0, 
+          newData.categories[selectedCat] = {
+            platform_fee: 0,
+            subscription_fee: 0,
+            boost_fee: 0,
             service_fee_percent: 0,
             commission_rate: 0,
             basic_subscription_fee: 0,
@@ -1484,11 +1497,10 @@ const SettingsTab = ({ settings, onUpdate }) => {
           <button
             key={cat.id}
             onClick={() => setSelectedCat(cat.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-              selectedCat === cat.id
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCat === cat.id
                 ? 'bg-primary text-white shadow-md'
                 : 'bg-white text-stone-600 hover:bg-stone-50 border border-stone-200'
-            }`}
+              }`}
           >
             <cat.icon className="w-4 h-4" />
             {cat.label}

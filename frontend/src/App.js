@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
@@ -7,19 +7,11 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { InteractionProvider } from "./context/InteractionContext";
 import { NotificationProvider } from "./components/Notifications.jsx";
+import { RouteSkeleton } from "./components/SkeletonLoaders";
+import { prefetchDiscoverRoute, prefetchReelsRoute } from "./lib/routePrefetch";
 
 // Pages
-import { Header, Footer, MobileBottomNav } from "./components/Layout";
-import {
-  HeroSection,
-  CategoriesSection,
-  TrendingSection,
-  FeaturesSection,
-  TrustSection,
-  ReelsPromoSection,
-  CTASection,
-  RecommendationsSection,
-} from "./components/HomeComponents";
+import { MobileBottomNav } from "./components/Layout";
 import { LoginPage, RegisterPage, VerifyEmailPage } from "./components/AuthPages";
 
 const lazyWithRetry = (componentImport) =>
@@ -43,6 +35,7 @@ const lazyWithRetry = (componentImport) =>
 
 const CategoryPage = lazyWithRetry(() => import("./components/CategoryPage").then((m) => ({ default: m.CategoryPage })));
 const ListingDetailPage = lazyWithRetry(() => import("./components/ListingDetailPage").then((m) => ({ default: m.ListingDetailPage })));
+const HomePage = lazyWithRetry(() => import("./components/HomePage"));
 const ReelsPage = lazyWithRetry(() => import("./components/ReelsPage").then((m) => ({ default: m.ReelsPage })));
 const UserDashboard = lazyWithRetry(() => import("./components/UserDashboard").then((m) => ({ default: m.UserDashboard })));
 const WishlistPage = lazyWithRetry(() => import("./components/UserDashboard").then((m) => ({ default: m.WishlistPage })));
@@ -62,9 +55,7 @@ const UserVerificationPolicyPage = lazyWithRetry(() => import("./components/Poli
 const CommunityGuidelinesPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.CommunityGuidelinesPage })));
 
 const RouteLoader = () => (
-  <div className="min-h-screen flex items-center justify-center bg-stone-50">
-    <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-  </div>
+  <RouteSkeleton />
 );
 
 // Protected Route Component
@@ -72,11 +63,7 @@ const ProtectedRoute = ({ children, requireOwner = false, requireAdmin = false }
   const { isAuthenticated, isOwner, isAdmin, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
+    return <RouteSkeleton />;
   }
 
   if (!isAuthenticated) {
@@ -92,26 +79,6 @@ const ProtectedRoute = ({ children, requireOwner = false, requireAdmin = false }
   }
 
   return children;
-};
-
-// Home Page
-const HomePage = () => {
-  return (
-    <div className="min-h-screen bg-stone-50" data-testid="home-page">
-      <Header />
-      <main>
-        <HeroSection />
-        <CategoriesSection />
-        <RecommendationsSection />
-        <TrendingSection />
-        <FeaturesSection />
-        <TrustSection />
-        <ReelsPromoSection />
-        <CTASection />
-      </main>
-      <Footer />
-    </div>
-  );
 };
 
 // Search Page - Uses CategoryPage without category filter
@@ -224,6 +191,25 @@ function AppRoutes() {
 }
 
 function App() {
+  useEffect(() => {
+    const warmRoutes = () => {
+      prefetchDiscoverRoute();
+      prefetchReelsRoute();
+    };
+
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(warmRoutes, { timeout: 2500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(warmRoutes, 1500);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
   return (
     <BrowserRouter>
       <AuthProvider>

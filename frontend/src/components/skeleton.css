@@ -1,0 +1,21 @@
+@keyframes gs-shimmer {
+    0% {
+        background-position: -1200px 0;
+    }
+
+    100% {
+        background-position: 1200px 0;
+    }
+}
+
+.shimmer-loading {
+    background: linear-gradient(90deg, #ece8e2 25%, #f6f4f1 37%, #ece8e2 63%);
+    background-size: 1200px 100%;
+    animation: gs-shimmer 1.35s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .shimmer-loading {
+        animation: none;
+    }
+}

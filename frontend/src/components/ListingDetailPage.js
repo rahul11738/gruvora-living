@@ -41,6 +41,8 @@ import {
 import { Header, Footer } from './Layout';
 import { ChatWithOwnerButton } from './DirectChat';
 import { PaymentButton } from './PaymentModal';
+import OptimizedImage from './OptimizedImage';
+import { ListingDetailSkeleton } from './SkeletonLoaders';
 
 const categoryIcons = {
   home: Home,
@@ -217,13 +219,7 @@ export const ListingDetailPage = () => {
     return (
       <div className="min-h-screen bg-stone-50">
         <Header />
-        <div className="container-main py-8">
-          <div className="animate-pulse space-y-6">
-            <div className="aspect-[16/9] bg-stone-200 rounded-2xl" />
-            <div className="h-10 bg-stone-200 rounded w-1/2" />
-            <div className="h-6 bg-stone-200 rounded w-1/3" />
-          </div>
-        </div>
+        <ListingDetailSkeleton />
       </div>
     );
   }
@@ -236,7 +232,7 @@ export const ListingDetailPage = () => {
   const wishlistPending = Boolean(pendingWishlistMap[String(id)]);
   const images = listing.images?.length > 0
     ? listing.images
-    : ['https://images.unsplash.com/photo-1744311971549-9c529b60b98a?w=800'];
+    : ['gharshetu/placeholders/listing-detail'];
 
   return (
     <div className="min-h-screen bg-stone-50" data-testid="listing-detail-page">
@@ -256,10 +252,12 @@ export const ListingDetailPage = () => {
       {/* Image Gallery */}
       <div className="container-main mb-8">
         <div className="relative aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden">
-          <img
-            src={images[currentImageIndex]}
+          <OptimizedImage
+            publicId={images[currentImageIndex]}
             alt={listing.title}
             className="w-full h-full object-cover"
+            width={1280}
+            sizes="100vw"
           />
 
           {images.length > 1 && (
@@ -325,7 +323,7 @@ export const ListingDetailPage = () => {
                 className={`flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden border-2 transition-colors ${i === currentImageIndex ? 'border-primary' : 'border-transparent'
                   }`}
               >
-                <img src={img} alt="" className="w-full h-full object-cover" />
+                <OptimizedImage publicId={img} alt="" className="w-full h-full object-cover" width={192} sizes="96px" />
               </button>
             ))}
           </div>
@@ -557,8 +555,8 @@ export const ListingDetailPage = () => {
                 )}
 
                 <p className="text-center text-xs text-muted-foreground">
-                  {(listing.category === 'home' || listing.category === 'business') 
-                    ? 'No direct booking • Connect via visit request' 
+                  {(listing.category === 'home' || listing.category === 'business')
+                    ? 'No direct booking • Connect via visit request'
                     : 'Secure payment • Instant confirmation'}
                 </p>
               </CardContent>

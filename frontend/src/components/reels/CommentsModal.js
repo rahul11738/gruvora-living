@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import { videosAPI } from '../../lib/api';
 import CommentSection from './CommentSection';
+import OptimizedImage from '../OptimizedImage';
 
 const CommentsModal = ({ video, onCommentCreated, onClose }) => {
   const { isAuthenticated, user } = useAuth();
@@ -109,13 +110,12 @@ const CommentsModal = ({ video, onCommentCreated, onClose }) => {
         <form onSubmit={handleSubmit} className="p-4 border-t flex items-center gap-3 bg-white">
           <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 overflow-hidden">
             {user?.profile_image ? (
-              <img
-                src={user.profile_image}
+              <OptimizedImage
+                publicId={user.profile_image}
                 alt={user?.name || 'Your avatar'}
                 className="w-full h-full object-cover"
-                onError={(event) => {
-                  event.currentTarget.style.display = 'none';
-                }}
+                width={40}
+                sizes="32px"
               />
             ) : (
               <User className="w-4 h-4 text-gray-500" />
