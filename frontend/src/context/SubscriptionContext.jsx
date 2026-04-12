@@ -44,9 +44,6 @@ const writeCache = (userId, data) => {
   } catch { /* storage full - ignore */ }
 };
 
-const clearCache = (userId) => {
-  try { localStorage.removeItem(`${CACHE_KEY}_${userId}`); } catch { /* ignore */ }
-};
 
 export const SubscriptionProvider = ({ children }) => {
   const { user, isAuthenticated, isOwner } = useAuth();
