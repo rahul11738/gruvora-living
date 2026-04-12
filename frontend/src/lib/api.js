@@ -518,6 +518,7 @@ export const subscriptionAPI = {
   validateCoupon: (data) => api.post('/subscriptions/coupon/validate', data),
   toggleAutoRenew: () => api.put('/subscriptions/auto-renew'),
   getInvoices: () => api.get('/subscriptions/invoices'),
+  selfRepair: () => api.post('/subscriptions/self-repair'),
 };
 
 export default api;

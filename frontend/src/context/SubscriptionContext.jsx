@@ -92,6 +92,25 @@ export const SubscriptionProvider = ({ children }) => {
       }
       const incoming = response.data || { status: 'pending', has_subscription: false, model: 'subscription' };
 
+      // If backend returns non-active but we have a cached active status,
+      // trigger a self-repair and keep the active state
+      if (incoming.status !== 'active' && incoming.status !== 'trial') {
+        // Fire self-repair in background - it will fix the DB and next fetch will be correct
+        subscriptionAPI.selfRepair().then(repairRes => {
+          if (repairRes.data?.repaired) {
+            const repairedData = {
+              ...incoming,
+              status: 'active',
+              has_subscription: true,
+              subscription_plan: repairRes.data.subscription_plan,
+              next_billing_date: repairRes.data.next_billing_date,
+            };
+            setSubData(repairedData);
+            if (user?.id) writeCache(user.id, repairedData);
+          }
+        }).catch(() => { /* silent - repair is best-effort */ });
+      }
+
       setSubData(prev => {
         // Never downgrade an already-active status (race condition guard)
         if (prev?.status === 'active' && incoming.status !== 'active' && prev?._fromUser !== true) {

@@ -9153,6 +9153,65 @@ async def toggle_subscription_auto_renew(
     return {"auto_renew": not current}
 
 
+@api_router.post("/subscriptions/self-repair")
+async def self_repair_subscription(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """
+    Self-service endpoint: any owner can call this to sync their subscription_status
+    from the subscriptions collection into their user document.
+    Called automatically by the frontend on login if status looks wrong.
+    """
+    user = await get_current_user(credentials)
+    user_id = user.get("id")
+    role = user.get("role")
+
+    if role not in SUBSCRIPTION_ROLES:
+        return {"repaired": False, "reason": "role_not_applicable"}
+
+    # Find the most recent active subscription record
+    active_subs = await db.subscriptions.find(
+        {"user_id": user_id, "status": "active"}
+    ).sort("activated_at", -1).limit(1).to_list(1)
+
+    if not active_subs:
+        return {"repaired": False, "status": user.get("subscription_status", "pending")}
+
+    sub = active_subs[0]
+    plan = sub.get("plan", SubscriptionPlan.BASIC.value)
+    expiry_date = sub.get("expires_at")
+
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "subscription": "active",
+                "subscription_status": "active",
+                "subscription_plan": plan,
+                "subscription_expires": expiry_date,
+                "next_billing_date": expiry_date,
+                "last_payment_date": sub.get("activated_at"),
+                "block_status": None,
+                "block_until": None,
+            }
+        },
+    )
+
+    # Also approve any listings that were awaiting payment
+    await db.listings.update_many(
+        {"owner_id": user_id, "status": {"$in": ["awaiting_payment", "pending"]}},
+        {"$set": {"status": "approved"}},
+    )
+
+    logger.info(f"SELF-REPAIR: Fixed subscription for {user.get('email')} -> active, plan={plan}")
+    return {
+        "repaired": True,
+        "status": "active",
+        "subscription_plan": plan,
+        "next_billing_date": expiry_date,
+    }
+
+
 @api_router.post("/admin/subscriptions/migrate-owners")
 async def migrate_owner_subscriptions(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -9364,10 +9423,12 @@ async def get_subscription_status(
 
         # 1. SELF-HEALING: Check if user has an active subscription record but status is not active in user doc
         if role in SUBSCRIPTION_ROLES and user.get("subscription_status") != "active":
-            latest_active_sub = await db.subscriptions.find_one(
-                {"user_id": user_id, "status": "active"},
-                sort=[("activated_at", -1)]
-            )
+            # Motor 3.x: find_one does NOT support sort= kwarg; use find().sort().limit(1)
+            latest_active_sub = await db.subscriptions.find(
+                {"user_id": user_id, "status": "active"}
+            ).sort("activated_at", -1).limit(1).to_list(1)
+            latest_active_sub = latest_active_sub[0] if latest_active_sub else None
+
             if latest_active_sub:
                 logger.info(f"SELF-HEALING: Found active sub for {email}. Fixing status...")
                 expiry_date = latest_active_sub.get("expires_at")
@@ -9383,6 +9444,8 @@ async def get_subscription_status(
                             "subscription_expires": expiry_date,
                             "next_billing_date": expiry_date,
                             "last_payment_date": latest_active_sub.get("activated_at"),
+                            "block_status": None,
+                            "block_until": None,
                         }
                     }
                 )
@@ -9394,6 +9457,7 @@ async def get_subscription_status(
                 user["subscription_status"] = "active"
                 user["subscription_plan"] = plan
                 user["next_billing_date"] = expiry_date
+                logger.info(f"SELF-HEALING COMPLETE: {email} is now active")
 
         # 2. Auto-initialize trial if missing
         if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
