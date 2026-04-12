@@ -9336,16 +9336,19 @@ async def get_subscription_status(
     try:
         user = await get_current_user(credentials)
         user_id = user.get("id")
-        role = user.get("role")  # Already normalized in get_current_user
+        email = user.get("email")
+        role = user.get("role")
+        
+        logger.info(f"FETCH STATUS: User={email}, Role={role}")
 
-        # SELF-HEALING: Check if user has an active subscription record but status is not active in user doc
+        # 1. SELF-HEALING: Check if user has an active subscription record but status is not active in user doc
         if role in SUBSCRIPTION_ROLES and user.get("subscription_status") != "active":
             latest_active_sub = await db.subscriptions.find_one(
                 {"user_id": user_id, "status": "active"},
                 sort=[("activated_at", -1)]
             )
             if latest_active_sub:
-                logger.info(f"SELF-HEALING: Found active sub for {user_id} but status was {user.get('subscription_status')}. Fixing user doc...")
+                logger.info(f"SELF-HEALING: Found active sub for {email}. Fixing status...")
                 expiry_date = latest_active_sub.get("expires_at")
                 plan = latest_active_sub.get("plan", SubscriptionPlan.BASIC.value)
                 
@@ -9364,176 +9367,93 @@ async def get_subscription_status(
                 )
                 # Re-fetch updated user
                 user = await db.users.find_one({"id": user_id}, {"_id": 0})
+                if user:
+                    user["subscription_status"] = "active"
 
-        # Auto-initialize subscription for owners if missing
+        # 2. Auto-initialize trial if missing
         if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
             init_doc = build_subscription_init_doc(role=role)
-            await db.users.update_one({"id": user["id"]}, {"$set": init_doc})
-            logger.info(
-                f"Auto-initialized 5-month trial for owner: {user.get('email')}"
-            )
-            # CRITICAL FIX: Re-fetch user from DB to get the updated subscription data
-            user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
-            if not user:
-                raise HTTPException(
-                    status_code=404, detail="User not found after initialization"
-                )
+            await db.users.update_one({"id": user_id}, {"$set": init_doc})
+            user.update(init_doc)
+            logger.info(f"AUTO-INIT: 5-month trial for {email}")
 
-        # FORCE FIX: If user is an owner but somehow still has no trial data, force return a trial status
-        # This is a fail-safe to ensure "Subscription data unavailable" NEVER appears for owners.
-        if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
-            user["subscription_status"] = "trial"
-            user["trial_months_remaining"] = 5
-            user["subscription_model"] = "subscription"
-            user["subscription_plan"] = (
-                SubscriptionPlan.UNLIMITED.value
-                if role == UserRole.PROPERTY_OWNER.value
-                else SubscriptionPlan.BASIC.value
-            )
-
-        # Check for hybrid roles (Subscription + Commission)
+        # 3. Role-based Model Determination
         is_hybrid = role in COMMISSION_ROLES and role in SUBSCRIPTION_ROLES
+        is_commission = role in COMMISSION_ROLES and not is_hybrid
+        
+        status = str(user.get("subscription_status") or "pending")
+        has_active_sub = status in {"active", "trial"}
 
-        # Initialize response data
+        # 4. Response Data Construction
         response_data = {
-            "has_subscription": False,
-            "status": "pending",
-            "model": "subscription",
+            "has_subscription": has_active_sub,
+            "status": status,
+            "model": "hybrid" if is_hybrid else ("commission" if is_commission else "subscription"),
+            "role": role
         }
 
+        # 5. Commission Details
         if role in COMMISSION_ROLES:
             pending_commission = await db.commissions.aggregate(
                 [
-                    {"$match": {"owner_id": user["id"], "status": "pending"}},
+                    {"$match": {"owner_id": user_id, "status": "pending"}},
                     {"$group": {"_id": None, "total": {"$sum": "$commission_amount"}}},
                 ]
             ).to_list(1)
-
             pending_total = pending_commission[0]["total"] if pending_commission else 0
-            response_data.update(
-                {
-                    "model": "hybrid" if is_hybrid else "commission",
-                    "commission_rate": f"{int(COMMISSION_RATE * 100)}%",
-                    "pending_commission_amount": pending_total,
-                    "message": f"You pay {int(COMMISSION_RATE * 100)}% commission per confirmed deal.",
-                }
-            )
+            response_data.update({
+                "commission_rate": f"{int(COMMISSION_RATE * 100)}%",
+                "pending_commission_amount": pending_total,
+                "commission_message": f"You pay {int(COMMISSION_RATE * 100)}% commission per confirmed deal.",
+            })
 
-            # PROACTIVE NOTIFICATION: Send trial end warning if applicable
-            if user.get("subscription_status") == "trial":
-                trial_end = user.get("trial_end_date")
-                if trial_end:
-                    trial_end_dt = _parse_iso_datetime(trial_end)
-                    if trial_end_dt:
-                        now_utc = datetime.now(timezone.utc)
-                        days_left = (trial_end_dt - now_utc).days
-                        # Only send warning if trial is ending in 0-7 days
-                        if 0 <= days_left <= 7:
-                            # Check if we already sent a warning in the last 24 hours to avoid spam
-                            last_warn = await db.notifications.find_one(
-                                {
-                                    "user_id": user["id"],
-                                    "type": "warning",
-                                    "title": "Free Trial Ending Soon",
-                                    "created_at": {
-                                        "$gte": (
-                                            now_utc - timedelta(days=1)
-                                        ).isoformat()
-                                    },
-                                }
-                            )
-                            if not last_warn:
-                                await create_system_notification(
-                                    user_id=user["id"],
-                                    title="Free Trial Ending Soon",
-                                    message=f"Professional Reminder: Your 5-month free trial ends in {days_left} days. Set up payment to maintain your premium benefits.",
-                                    type="warning",
-                                    link="/owner/dashboard",
-                                )
+        # 6. Subscription Details
+        if role in SUBSCRIPTION_ROLES:
+            settings = await db.settings.find_one({"id": "platform_config"})
+            subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
+            basic_fee = STAY_EVENT_BASIC_SUB_PAISE
+            pro_fee = STAY_EVENT_PRO_SUB_PAISE
+            
+            if settings:
+                global_config = settings.get("global_config", {})
+                try:
+                    subscription_amount = int(float(global_config.get("subscription_fee", 999.0)) * 100)
+                except (ValueError, TypeError):
+                    pass
+            
+            plan = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
+            plan_amount = basic_fee if plan == SubscriptionPlan.BASIC.value else pro_fee
+            if role == UserRole.PROPERTY_OWNER.value:
+                plan_amount = subscription_amount
 
-            if not is_hybrid:
-                return response_data
+            trial_days_remaining = None
+            trial_end = user.get("trial_end_date")
+            if status == "trial" and trial_end:
+                trial_end_dt = _parse_iso_datetime(trial_end)
+                if trial_end_dt:
+                    trial_days_remaining = max(0, (trial_end_dt - datetime.now(timezone.utc)).days)
 
-        if role not in SUBSCRIPTION_ROLES:
-            return {"has_subscription": False, "message": "Subscription not applicable"}
-
-        status = str(user.get("subscription_status") or "pending")
-        trial_end = user.get("trial_end_date")
-        next_billing = user.get("next_billing_date")
-        now = datetime.now(timezone.utc)
-
-        trial_days_remaining = None
-        if status == "trial" and trial_end:
-            trial_end_dt = _parse_iso_datetime(trial_end)
-            if trial_end_dt:
-                trial_days_remaining = max(0, (trial_end_dt - now).days)
-
-        last_payment = await db.subscriptions.find_one(
-            {"user_id": user["id"], "status": "active"},
-            {"_id": 0, "paid_at": 1, "invoice_number": 1, "billing_month": 1},
-            sort=[("paid_at", -1)],
-        )
-
-        # Fetch dynamic subscription amounts from settings
-        settings = await db.settings.find_one({"id": "platform_config"})
-        subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
-        basic_fee = STAY_EVENT_BASIC_SUB_PAISE
-        pro_fee = STAY_EVENT_PRO_SUB_PAISE
-
-        if settings:
-            global_config = settings.get("global_config", {})
-            try:
-                subscription_amount = int(
-                    float(global_config.get("subscription_fee", 999.0)) * 100
-                )
-            except (ValueError, TypeError):
-                subscription_amount = 99900
-
-        plan = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
-        plan_amount = basic_fee if plan == SubscriptionPlan.BASIC.value else pro_fee
-        if role == UserRole.PROPERTY_OWNER.value:
-            plan_amount = subscription_amount
-
-        response_data.update(
-            {
-                "status": status,
-                "has_subscription": status in {"active", "trial"},
+            response_data.update({
                 "amount_monthly": f"₹{plan_amount // 100}",
-                "subscription_amount_paise": plan_amount,
-                "coupon_used": user.get("coupon_used"),
                 "trial_end_date": trial_end,
                 "trial_days_remaining": trial_days_remaining,
-                "next_billing_date": next_billing,
+                "next_billing_date": user.get("next_billing_date"),
                 "last_payment_date": user.get("last_payment_date"),
-                "last_invoice": last_payment,
-                "auto_renew": user.get("auto_renew", True),
-                "block_until": user.get("block_until"),
-                "subscription_start_date": user.get("subscription_start_date"),
                 "subscription_plan": plan,
                 "price": f"₹{plan_amount // 100}/month",
+                "message": "Active subscription" if has_active_sub else "No active subscription",
                 "features": [
-                    "Featured placement"
-                    if plan == SubscriptionPlan.PRO.value
-                    else "Normal visibility",
-                    "Unlimited listings"
-                    if plan == SubscriptionPlan.PRO.value
-                    or role == UserRole.PROPERTY_OWNER.value
-                    else "Limited listings",
+                    "Featured placement" if plan == SubscriptionPlan.PRO.value else "Normal visibility",
+                    "Unlimited listings" if plan == SubscriptionPlan.PRO.value or role == UserRole.PROPERTY_OWNER.value else "Limited listings",
                     "Verified badge",
                     "Analytics dashboard",
                     "Direct customer inquiries",
-                ],
-            }
-        )
-
-        if status in {"active", "trial"}:
-            response_data["message"] = "Active subscription"
-        else:
-            response_data["message"] = "No active subscription"
+                ]
+            })
 
         return response_data
     except Exception as e:
-        logger.error(f"CRITICAL: get_subscription_status failed: {e}", exc_info=True)
+        logger.error(f"CRITICAL: get_subscription_status failed for {credentials.credentials[:10]}...: {e}", exc_info=True)
         # Professional fallback to prevent 500 error and allow UI to handle it gracefully
         return {
             "has_subscription": False,

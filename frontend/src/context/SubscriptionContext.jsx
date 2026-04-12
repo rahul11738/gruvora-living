@@ -52,7 +52,10 @@ export const SubscriptionProvider = ({ children }) => {
   const isExpired = subData?.status === 'expired';
   const isCommissionModel = subData?.model === 'commission';
   const isHybridModel = subData?.model === 'hybrid';
-  const needsPayment = (isPending || isExpired || isBlocked) && !isCommissionModel;
+
+  // For hybrid/commission, if they have an active sub, don't show as needing payment
+  const hasActiveSubscription = isActive || isTrial;
+  const needsPayment = (isPending || isExpired || isBlocked) && !isCommissionModel && !hasActiveSubscription;
   const trialDaysLeft = subData?.trial_days_remaining ?? null;
 
   return (

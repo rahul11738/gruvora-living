@@ -268,8 +268,10 @@ export const OwnerDashboard = () => {
                 >
                   <Crown className="w-5 h-5" />
                   Subscription
-                  {subData?.has_subscription || subData?.model === 'commission' ? (
+                  {subData?.has_subscription ? (
                     <Badge className="ml-auto bg-green-500">Active</Badge>
+                  ) : subData?.model === 'commission' ? (
+                    <Badge className="ml-auto bg-green-500">Partner</Badge>
                   ) : needsPayment ? (
                     <Badge className="ml-auto bg-red-500">Due</Badge>
                   ) : (
