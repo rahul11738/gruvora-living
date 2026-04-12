@@ -1274,11 +1274,14 @@ const RevenueTab = ({ data, onRefresh }) => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recent_payments.slice(0, 5).map((pay) => (
+              {recent_payments.slice(0, 10).map((pay) => (
                 <div key={pay.id} className="flex items-center justify-between p-2 border-b last:border-0 hover:bg-stone-50 transition-colors">
-                  <div className="space-y-1">
-                    <p className="text-xs font-bold text-stone-900 capitalize truncate w-32">{pay.user_name || 'Owner'}</p>
+                  <div className="space-y-1 min-w-0 flex-1">
+                    <p className="text-xs font-bold text-stone-900 capitalize truncate">{pay.user_name || 'Owner'}</p>
                     <p className="text-[10px] text-stone-500">{pay.booking_type || 'Subscription'}</p>
+                    <p className="text-[9px] text-stone-400">{pay.user_phone || 'No phone'}</p>
+                    <p className="text-[8px] text-stone-400 truncate">Order: {pay.order_id || 'N/A'}</p>
+                    <p className="text-[8px] text-stone-400 truncate">Pay ID: {pay.payment_id?.slice(0, 12) || 'N/A'}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-bold text-green-600">₹{(pay.amount / 100).toLocaleString('en-IN')}</p>

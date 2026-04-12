@@ -6976,11 +6976,13 @@ async def get_admin_revenue(user: dict = Depends(get_admin_user)):
     # ✅ FIX: Enrich subscription records with owner info and merge into payments
     # so admin dashboard "Recent Transactions" shows subscription payments too
     owner_ids = list({s.get("user_id") for s in subscriptions if s.get("user_id")})
+    owner_ids.extend([p.get("user_id") for p in payments if p.get("user_id")])
+    owner_ids = list(set(owner_ids))
     owner_map = {}
     if owner_ids:
         owners_cursor = db.users.find(
             {"id": {"$in": owner_ids}},
-            {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1},
+            {"_id": 0, "id": 1, "name": 1, "email": 1, "role": 1, "phone": 1},
         )
         async for o in owners_cursor:
             owner_map[o["id"]] = o
@@ -6991,7 +6993,10 @@ async def get_admin_revenue(user: dict = Depends(get_admin_user)):
         enriched_subscriptions.append(
             {
                 **sub,
+                "payment_id": sub.get("razorpay_payment_id", ""),
+                "order_id": sub.get("razorpay_order_id", ""),
                 "user_name": owner.get("name", "Owner"),
+                "user_phone": owner.get("phone", ""),
                 "user_email": owner.get("email", ""),
                 "owner_role": owner.get("role", ""),
                 "booking_type": f"Subscription ({sub.get('plan', 'basic').replace('_', ' ').title()})",
@@ -6999,8 +7004,23 @@ async def get_admin_revenue(user: dict = Depends(get_admin_user)):
             }
         )
 
+    # Also enrich regular payments with user info
+    enriched_payments = []
+    for pay in payments:
+        owner = owner_map.get(pay.get("user_id"), {})
+        enriched_payments.append(
+            {
+                **pay,
+                "payment_id": pay.get("razorpay_payment_id", pay.get("payment_id", "")),
+                "order_id": pay.get("razorpay_order_id", pay.get("order_id", "")),
+                "user_name": owner.get("name", "Owner"),
+                "user_phone": owner.get("phone", ""),
+                "user_email": owner.get("email", ""),
+            }
+        )
+
     # Merge subscription payments into recent_payments for unified admin view
-    all_payments = list(payments) + enriched_subscriptions
+    all_payments = enriched_payments + enriched_subscriptions
     all_payments.sort(
         key=lambda x: x.get("paid_at") or x.get("created_at") or "", reverse=True
     )
@@ -8070,14 +8090,19 @@ async def verify_payment(
                 {"id": payment["listing_id"]},
                 {
                     "$set": {
-                        "status": ListingStatus.PENDING,
+                        "status": "approved",
                         "payment_status": "paid",
                         "listing_fee_paid": True,
+                        "payment_required": None,
+                        "fee_amount_paise": None,
                         "updated_at": now_iso,
                     }
                 },
             )
-            return {"success": True, "message": "Listing fee paid successfully!"}
+            return {
+                "success": True,
+                "message": "Listing fee paid successfully! Your listing is now live.",
+            }
 
         elif payment_type == "subscription":
             months = int(payment.get("subscription_months", 1))
@@ -8133,8 +8158,17 @@ async def verify_payment(
                         "subscription_plan": plan,
                         "featured": featured,
                         "owner_verified": verified,
+                        "status": "approved",
+                        "payment_required": None,
+                        "fee_amount_paise": None,
                     }
                 },
+            )
+
+            # Also approve any listings that were awaiting payment
+            await db.listings.update_many(
+                {"owner_id": user_id, "status": "awaiting_payment"},
+                {"$set": {"status": "approved"}},
             )
 
             await db.subscriptions.insert_one(
@@ -9016,6 +9050,7 @@ async def verify_subscription_payment(
         )
 
         # Update all owner's listings visibility based on the plan
+        # Also approve any listings that were awaiting payment
         await db.listings.update_many(
             {"owner_id": user["id"]},
             {
@@ -9023,8 +9058,16 @@ async def verify_subscription_payment(
                     "subscription_plan": plan,
                     "featured": is_featured,
                     "status": "approved",
+                    "payment_required": None,
+                    "fee_amount_paise": None,
                 }
             },
+        )
+
+        # Approve any listings that were awaiting payment
+        await db.listings.update_many(
+            {"owner_id": user["id"], "status": "awaiting_payment"},
+            {"$set": {"status": "approved"}},
         )
 
         # Notify user of successful activation
