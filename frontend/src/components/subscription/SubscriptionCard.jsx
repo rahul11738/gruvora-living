@@ -203,7 +203,8 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
           order_id,
           handler: async (response) => {
             try {
-              const verifyRes = await subscriptionAPI.verify({
+              // Verify payment with backend - we don't need the response, we update UI immediately
+              await subscriptionAPI.verify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
