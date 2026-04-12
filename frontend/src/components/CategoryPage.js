@@ -1,6 +1,6 @@
 import React, { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { listingsAPI, categoriesAPI } from '../lib/api';
+import { categoriesAPI } from '../lib/api';
 import { prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { executeListingSearch, fetchListingSuggestions } from '../lib/smartSearch';
@@ -9,7 +9,6 @@ import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Card, CardContent } from './ui/card';
 import {
   Select,
   SelectContent,
@@ -17,13 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-import { Slider } from './ui/slider';
 import { toast } from 'sonner';
 import {
   MapPin,
   Heart,
   Eye,
-  Filter,
   Grid,
   List,
   Home,
@@ -31,9 +28,7 @@ import {
   Hotel,
   PartyPopper,
   Wrench,
-  X,
   SlidersHorizontal,
-  ChevronDown,
   Video,
   Compass,
 } from 'lucide-react';
@@ -293,7 +288,6 @@ export const CategoryPage = () => {
 
   const currentCategory = useMemo(() => categories.find((c) => c.id === category), [categories, category]);
   const Icon = useMemo(() => categoryIcons[category] || Home, [category]);
-  const bgColor = useMemo(() => categoryColors[category] || 'bg-primary', [category]);
   const theme = useMemo(() => categoryThemes[category] || categoryThemes.default, [category]);
   const title = useMemo(() => categoryTitles[category] || { en: 'Listings', gu: '' }, [category]);
   const description = useMemo(

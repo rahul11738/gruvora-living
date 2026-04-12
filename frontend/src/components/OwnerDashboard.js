@@ -3,9 +3,8 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FixedSizeList as List } from 'react-window';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { ownerAPI, listingsAPI, bookingsAPI, subscriptionAPI, paymentsAPI, boostAPI } from '../lib/api';
+import { ownerAPI, listingsAPI, bookingsAPI, boostAPI } from '../lib/api';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import {
   Dialog,
@@ -43,10 +42,8 @@ import {
   Phone,
   Mail,
   Calendar,
-  Star,
   Rocket,
   Zap,
-  Shield,
   Loader2,
 } from 'lucide-react';
 import ListingFormRouter from './listings/ListingFormRouter';
