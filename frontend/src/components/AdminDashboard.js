@@ -14,11 +14,9 @@ import {
   Table,
   TableHeader,
   TableBody,
-  TableFooter,
   TableHead,
   TableRow,
   TableCell,
-  TableCaption,
 } from './ui/table';
 import { toast } from 'sonner';
 import {
