@@ -1527,6 +1527,13 @@ async def login(credentials: UserLogin):
             "email": user["email"],
             "role": user["role"],
             "is_verified": user.get("is_verified", False),
+            "subscription_status": user.get("subscription_status"),
+            "subscription_plan": user.get("subscription_plan"),
+            "subscription_expires": user.get("subscription_expires"),
+            "next_billing_date": user.get("next_billing_date"),
+            "last_payment_date": user.get("last_payment_date"),
+            "trial_end_date": user.get("trial_end_date"),
+            "block_status": user.get("block_status"),
         },
     }
 
@@ -1587,6 +1594,12 @@ async def get_me(user: dict = Depends(get_current_user)):
     safe_user = {
         k: v for k, v in user.items() if k not in ["password", "verification_token"]
     }
+    # Always include subscription fields so frontend never needs a separate status call
+    # to determine if the user has an active subscription after login/refresh
+    for field in ["subscription_status", "subscription_plan", "subscription_expires",
+                  "next_billing_date", "last_payment_date", "trial_end_date", "block_status"]:
+        if field not in safe_user:
+            safe_user[field] = user.get(field)
     return safe_user
 
 

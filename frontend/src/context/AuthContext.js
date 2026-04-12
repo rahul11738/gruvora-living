@@ -23,19 +23,33 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const fetchUser = useCallback(async () => {
-    try {
-      const response = await authAPI.getMe();
-      setUser(response.data);
-    } catch (error) {
-      const status = error?.response?.status;
-      if (status === 401) {
-        console.info('Session expired or invalid token. Logging out.');
-      } else {
-        console.error('Failed to fetch user:', error);
+    const MAX_RETRIES = 2;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await authAPI.getMe();
+        setUser(response.data);
+        setLoading(false);
+        return;
+      } catch (error) {
+        const status = error?.response?.status;
+        if (status === 401 || status === 403 || status === 404) {
+          // Auth error - logout immediately, no retry
+          console.info('Session expired or invalid token. Logging out.');
+          logout();
+          setLoading(false);
+          return;
+        }
+        if (attempt < MAX_RETRIES) {
+          // Network/timeout error - wait and retry
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        // All retries exhausted - keep existing user state if we have one
+        // (don't logout on network timeout - user may just have slow connection)
+        console.error('Failed to fetch user after retries:', error);
+        setLoading(false);
+        return;
       }
-      logout();
-    } finally {
-      setLoading(false);
     }
   }, [logout]);
 
