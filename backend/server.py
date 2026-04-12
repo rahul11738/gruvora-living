@@ -9373,10 +9373,14 @@ async def get_subscription_status(
                         }
                     }
                 )
-                # Re-fetch updated user
-                user = await db.users.find_one({"id": user_id}, {"_id": 0})
-                if user:
-                    user["subscription_status"] = "active"
+                # Re-fetch updated user; fall back to patching in-memory if DB re-fetch fails
+                refreshed = await db.users.find_one({"id": user_id}, {"_id": 0})
+                if refreshed:
+                    user = refreshed
+                # Always ensure in-memory user reflects active status
+                user["subscription_status"] = "active"
+                user["subscription_plan"] = plan
+                user["next_billing_date"] = expiry_date
 
         # 2. Auto-initialize trial if missing
         if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
