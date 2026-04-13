@@ -308,7 +308,7 @@ export const OwnerProfilePage = () => {
       {/* Content */}
       <div className="container-main py-8">
         {activeTab === 'reels' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4" data-testid="reels-grid">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4" data-testid="reels-grid">
             {owner.reels?.length > 0 ? (
               owner.reels.map((reel) => (
                 <ReelCard
