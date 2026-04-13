@@ -25,7 +25,7 @@ import {
   LogOut, Loader2, Bell, Ban, Trash2,
   RotateCcw, Search, ChevronLeft, ChevronRight,
   AlertTriangle, Activity, BarChart3, Mail, Phone, MapPin,
-  IndianRupee, TrendingUp, CreditCard, Settings, Save, Video, Menu,
+  IndianRupee, TrendingUp, CreditCard, Settings, Save, Video, Menu, X,
 } from 'lucide-react';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import OptimizedImage from './OptimizedImage';
@@ -422,7 +422,7 @@ export const AdminDashboard = () => {
       </div>
 
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-stone-900 text-white shadow-2xl transition-transform duration-200 overflow-y-auto lg:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-6 border-b border-stone-700">
+        <div className="p-6 border-b border-stone-700 relative">
           <Link to="/" className="flex items-center gap-2">
             <OptimizedImage
               publicId={gruvoraLogo}
@@ -435,6 +435,14 @@ export const AdminDashboard = () => {
               <p className="text-xs text-stone-400">Admin Panel</p>
             </div>
           </Link>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden absolute top-4 right-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-700 text-stone-300 hover:text-white hover:bg-stone-800"
+            aria-label="Close admin navigation"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
@@ -470,7 +478,7 @@ export const AdminDashboard = () => {
         </div>
       </aside>
 
-      <main className="flex-1 min-w-0 lg:ml-64 p-4 lg:p-8 pt-4 lg:pt-8 min-h-screen">
+      <main className="flex-1 min-w-0 lg:ml-64 p-4 lg:p-8 pt-4 lg:pt-8 pb-24 lg:pb-8 min-h-screen">
         {activeTab === 'overview' && (
           <OverviewTab
             stats={stats}
@@ -599,7 +607,7 @@ export const AdminDashboard = () => {
       )}
 
       <Dialog open={!!profileModal} onOpenChange={() => { setProfileModal(null); setProfileData(null); }}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>User Profile</DialogTitle>
           </DialogHeader>
@@ -631,7 +639,7 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
     <div className="space-y-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900">Dashboard Overview</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900">Dashboard Overview</h1>
           <p className="text-stone-500 text-sm mt-1">Real-time platform health</p>
         </div>
         {stats.razorpay_enabled ? (
@@ -801,7 +809,7 @@ const UsersTab = ({
     <div className="space-y-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Users</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Users</h1>
           <p className="text-stone-500 text-sm">{total.toLocaleString()} total</p>
         </div>
       </div>
@@ -987,7 +995,7 @@ const UsersTab = ({
 const OwnersTab = ({ owners = [], total, onVerify, onReject, onViewProfile }) => (
   <div className="space-y-6">
     <div>
-      <h1 className="text-2xl font-bold">Owner Verification Requests</h1>
+      <h1 className="text-xl sm:text-2xl font-bold">Owner Verification Requests</h1>
       <p className="text-stone-500 text-sm">{total} pending Aadhar verifications</p>
     </div>
 
@@ -1056,7 +1064,7 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Listings</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Listings</h1>
         <p className="text-stone-500 text-sm">{total.toLocaleString()} total - {pendingListings.length} pending</p>
       </div>
 
@@ -1200,7 +1208,7 @@ const NotificationsTab = ({ target, title, message, type, sending, onTargetChang
   onTitleChange, onMessageChange, onTypeChange, onSend, stats }) => (
   <div className="space-y-6 max-w-2xl">
     <div>
-      <h1 className="text-2xl font-bold">Send Notification</h1>
+      <h1 className="text-xl sm:text-2xl font-bold">Send Notification</h1>
       <p className="text-stone-500 text-sm">Broadcast messages to users and owners</p>
     </div>
 
@@ -1298,12 +1306,12 @@ const RevenueTab = ({ data, onRefresh }) => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-stone-900">Revenue Analytics</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-stone-900">Revenue Analytics</h1>
           <p className="text-stone-500 text-sm mt-1">Track payments, subscriptions and boosts</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           {data.razorpay_enabled ? (
             <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
               <CheckCircle className="w-3 h-3 mr-1" />
@@ -1315,7 +1323,7 @@ const RevenueTab = ({ data, onRefresh }) => {
               Razorpay Inactive
             </Badge>
           )}
-          <Button onClick={onRefresh} variant="outline" size="sm" className="gap-2">
+          <Button onClick={onRefresh} variant="outline" size="sm" className="gap-2 w-full sm:w-auto">
             <RotateCcw className="w-4 h-4" />
             Refresh
           </Button>
@@ -1439,7 +1447,7 @@ const RevenueTab = ({ data, onRefresh }) => {
           <CardContent>
             <div className="space-y-3">
               {recent_payments.slice(0, 10).map((pay) => (
-                <div key={pay.id} className="flex items-center justify-between p-2 border-b last:border-0 hover:bg-stone-50 transition-colors">
+                <div key={pay.id} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between p-2 border-b last:border-0 hover:bg-stone-50 transition-colors">
                   <div className="space-y-1 min-w-0 flex-1">
                     <p className="text-xs font-bold text-stone-900 capitalize truncate">{pay.user_name || 'Owner'}</p>
                     <p className="text-[10px] text-stone-500">{pay.booking_type || 'Subscription'}</p>
@@ -1447,7 +1455,7 @@ const RevenueTab = ({ data, onRefresh }) => {
                     <p className="text-[8px] text-stone-400 truncate">Order: {pay.order_id || 'N/A'}</p>
                     <p className="text-[8px] text-stone-400 truncate">Pay ID: {pay.payment_id?.slice(0, 12) || 'N/A'}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-left sm:text-right">
                     <p className="text-xs font-bold text-green-600">₹{(pay.amount / 100).toLocaleString('en-IN')}</p>
                     <p className="text-[9px] text-stone-400">{new Date(pay.paid_at || pay.created_at).toLocaleDateString()}</p>
                   </div>
@@ -1464,7 +1472,64 @@ const RevenueTab = ({ data, onRefresh }) => {
           <CardTitle className="text-lg">Owner Subscription Details & Payment Tracker</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div className="md:hidden space-y-3">
+            {owners_subscription_summary.flatMap((group) => group.total_users).slice(0, 30).map((owner) => (
+              <div key={owner.id} className="rounded-xl border border-stone-200 bg-white p-3 space-y-2">
+                <div>
+                  <p className="font-medium text-stone-900 truncate">{owner.name}</p>
+                  <p className="text-xs text-stone-500 truncate">{owner.email}</p>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Badge variant="outline" className="capitalize text-[10px]">
+                    {owner.role?.replace(/_/g, ' ')}
+                  </Badge>
+                  <Badge
+                    className={
+                      owner.status === 'active' ? 'bg-green-100 text-green-700' :
+                        owner.status === 'trial' ? 'bg-blue-100 text-blue-700' :
+                          owner.status === 'expired' ? 'bg-red-100 text-red-700' :
+                            owner.status === 'blocked' ? 'bg-red-200 text-red-800' :
+                              'bg-stone-100 text-stone-700'
+                    }
+                  >
+                    {owner.status || 'Pending'}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-stone-400">Plan</p>
+                    <p className="font-medium text-stone-700 capitalize">{owner.subscription_plan?.replace(/_/g, ' ') || 'Basic'}</p>
+                  </div>
+                  <div>
+                    <p className="text-stone-400">Amount</p>
+                    <p className="font-medium text-stone-700">
+                      {owner.subscription_amount_paise
+                        ? `₹${(owner.subscription_amount_paise / 100).toLocaleString('en-IN')}`
+                        : '₹999'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-stone-400">Last Payment</p>
+                    <p className="font-medium text-stone-700">
+                      {owner.last_payment_date
+                        ? new Date(owner.last_payment_date).toLocaleDateString('en-IN')
+                        : 'No payment'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-stone-400">Next Billing</p>
+                    <p className="font-medium text-stone-700">
+                      {owner.next_billing ? new Date(owner.next_billing).toLocaleDateString('en-IN') : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {owners_subscription_summary.length === 0 && (
+              <p className="text-center text-stone-400 py-8">No owners found</p>
+            )}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1639,16 +1704,16 @@ const SettingsTab = ({ settings, onUpdate }) => {
   return (
     <div className="max-w-5xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">Platform Settings</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-stone-900">Platform Settings</h1>
         <p className="text-stone-500 text-sm mt-1">Configure category-specific fees and platform rates</p>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
         {categories.map((cat) => (
           <button
             key={cat.id}
             onClick={() => setSelectedCat(cat.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCat === cat.id
+            className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCat === cat.id
               ? 'bg-primary text-white shadow-md'
               : 'bg-white text-stone-600 hover:bg-stone-50 border border-stone-200'
               }`}
@@ -1824,7 +1889,7 @@ const SettingsTab = ({ settings, onUpdate }) => {
                 </div>
 
                 <div className="flex justify-end pt-4 border-t">
-                  <Button type="submit" className="gap-2 bg-primary hover:bg-primary/90">
+                  <Button type="submit" className="gap-2 bg-primary hover:bg-primary/90 w-full sm:w-auto">
                     <Save className="w-4 h-4" />
                     Save Settings
                   </Button>
@@ -1859,7 +1924,7 @@ const LogsTab = ({ logs, total, page, onPageChange }) => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Activity Logs</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Activity Logs</h1>
         <p className="text-stone-500 text-sm">{total.toLocaleString()} total actions</p>
       </div>
       <Card>
@@ -1922,7 +1987,7 @@ const AdminReelsTab = ({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-stone-900">Reels Moderation</h1>
+        <h1 className="text-xl sm:text-2xl font-bold text-stone-900">Reels Moderation</h1>
         <p className="text-stone-500 text-sm mt-1">Search owner by user ID and moderate reels.</p>
       </div>
 
@@ -1975,7 +2040,7 @@ const AdminReelsTab = ({
                 ))}
               </div>
               {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-2">
                   <p className="text-sm text-stone-500">Page {page} of {totalPages}</p>
                   <div className="flex gap-2">
                     <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
