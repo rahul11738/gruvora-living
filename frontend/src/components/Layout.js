@@ -405,7 +405,6 @@ export const Footer = () => {
                   gruvora@gmail.com
                 </a>
               </li>
-              <li>+91 9875231321</li>
             </ul>
           </div>
         </div>
