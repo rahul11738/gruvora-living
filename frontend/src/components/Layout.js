@@ -134,7 +134,7 @@ export const Header = () => {
   return (
     <header className="glass-header sticky top-0 z-50 backdrop-blur-xl border-b border-white/60 shadow-[0_10px_30px_rgba(15,23,42,0.04)]" data-testid="header">
       <div className="container-main">
-        <div className="flex items-center justify-between gap-2 xl:gap-3 h-18 md:h-20">
+        <div className="flex items-center justify-between gap-4 h-18 md:h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center shrink-0" data-testid="logo">
             <OptimizedImage
@@ -147,7 +147,7 @@ export const Header = () => {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="relative hidden xl:flex items-center gap-1 rounded-full p-1 xl:flex-1 xl:min-w-0 xl:mx-1 2xl:mx-2 bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur-md">
+          <nav className="relative hidden xl:flex items-center gap-1.5 rounded-full p-1.5 bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur-md">
             {categories.map((cat) => {
               const isActive = location.pathname === cat.href;
               const Icon = cat.icon;
@@ -155,7 +155,7 @@ export const Header = () => {
                 <Link
                   key={cat.id}
                   to={cat.href}
-                  className={`group relative flex items-center justify-center gap-1.5 2xl:gap-2 px-2.5 2xl:px-4 py-2 2xl:py-2.5 rounded-full text-xs 2xl:text-[13px] font-semibold tracking-wide transition-all duration-200 ${isActive
+                  className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-semibold tracking-wide transition-all duration-200 ${isActive
                     ? categoryNavTheme.active
                     : categoryNavTheme.inactive
                     }`}
@@ -164,14 +164,14 @@ export const Header = () => {
                   <span className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${isActive ? 'bg-stone-100 text-stone-700' : 'bg-stone-100/80 text-stone-500 group-hover:text-stone-700'}`}>
                     <Icon className="w-3.5 h-3.5" />
                   </span>
-                  <span className="hidden 2xl:inline">{cat.name}</span>
+                  <span>{cat.name}</span>
                 </Link>
               );
             })}
           </nav>
 
           {/* Right Actions */}
-          <div className="flex items-center gap-2 md:gap-2 xl:gap-3 shrink-0">
+          <div className="flex items-center gap-3 md:gap-4 shrink-0">
             {/* Discover Button - Hidden on mobile (in bottom nav) */}
             <Link
               to="/discover"
@@ -179,11 +179,11 @@ export const Header = () => {
               onMouseEnter={prefetchDiscoverRoute}
               onFocus={prefetchDiscoverRoute}
               onClick={() => markRouteNavigation('/discover', 'header-discover-btn')}
-              className="hidden md:flex items-center gap-1.5 2xl:gap-2 px-3 2xl:px-4 py-2 2xl:py-2.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.10)] hover:bg-blue-100 transition-colors"
+              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.10)] hover:bg-blue-100 transition-colors"
               data-testid="discover-btn"
             >
               <DiscoverIcon className="w-4 h-4" />
-              <span className="hidden 2xl:inline text-sm font-medium">Discover</span>
+              <span className="text-sm font-medium">Discover</span>
             </Link>
 
             {/* Reels Button - Hidden on mobile (in bottom nav) */}
@@ -193,11 +193,11 @@ export const Header = () => {
               onMouseEnter={prefetchReelsRoute}
               onFocus={prefetchReelsRoute}
               onClick={() => markRouteNavigation('/reels', 'header-reels-btn')}
-              className="hidden md:flex items-center gap-1.5 2xl:gap-2 px-3 2xl:px-4 py-2 2xl:py-2.5 rounded-full bg-secondary/10 text-secondary border border-orange-100 shadow-[0_6px_18px_rgba(249,115,22,0.14)] hover:bg-secondary/15 transition-colors"
+              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-secondary/10 text-secondary border border-orange-100 shadow-[0_6px_18px_rgba(249,115,22,0.14)] hover:bg-secondary/15 transition-colors"
               data-testid="reels-btn"
             >
               <Play className="w-4 h-4" />
-              <span className="hidden 2xl:inline text-sm font-medium">Reels</span>
+              <span className="text-sm font-medium">Reels</span>
             </Link>
 
             {/* Chat - Available on mobile and desktop */}
@@ -241,7 +241,7 @@ export const Header = () => {
                       <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center shrink-0">
                         <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
                       </div>
-                      <span className="hidden 2xl:block text-sm font-medium text-primary truncate">
+                      <span className="hidden md:block text-sm font-medium text-primary truncate">
                         {user?.name?.split(' ')[0]}
                       </span>
                     </button>
