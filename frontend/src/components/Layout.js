@@ -326,8 +326,8 @@ export const Footer = () => {
       <div className="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-emerald-500/30 via-transparent to-transparent" />
 
       <div className="container-main relative py-8 md:py-10">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-7">
-          <div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 md:gap-7">
+          <div className="col-span-2 lg:col-span-1">
             <div className="mb-4 inline-flex items-center rounded-xl bg-white/95 px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.18)]">
               <OptimizedImage publicId={gruvoraLogo} alt="Gruvora" className="h-9 w-auto max-w-[180px] object-contain" width={180} sizes="180px" />
             </div>
