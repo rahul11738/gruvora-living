@@ -352,12 +352,6 @@ export const OwnerDashboard = () => {
               <p className="text-muted-foreground">Welcome back, {user?.name?.split(' ')[0]}</p>
             </div>
             <div className="flex items-center gap-2">
-              <Link to={`/owner/${user?.id}`}>
-                <Button variant="outline" className="gap-2">
-                  <Play className="w-4 h-4" />
-                  My Reel Profile
-                </Button>
-              </Link>
               <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
                 <Button className="btn-primary" data-testid="add-listing-btn" onClick={handleOpenCreateDialog} disabled={subscriptionStatusLoading}>
                   <Plus className="w-5 h-5 mr-2" />
