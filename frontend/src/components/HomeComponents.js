@@ -36,8 +36,6 @@ import {
   Calendar,
   Video,
   CheckCircle,
-  ChevronLeft,
-  ChevronRight,
   Award,
   Globe,
 } from 'lucide-react';
@@ -545,7 +543,7 @@ const CategoryCard = memo(({ cat, index, isActive, reduceMotion }) => {
   );
 });
 
-const SectionHeader = memo(({ canScrollLeft, canScrollRight, onSlide, reduceMotion }) => {
+const SectionHeader = memo(({ reduceMotion }) => {
   const ref = useRef(null);
   const inView = useInView(ref, { once: true, margin: '-80px' });
 
@@ -584,25 +582,6 @@ const SectionHeader = memo(({ canScrollLeft, canScrollRight, onSlide, reduceMoti
           </p>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
-          {[
-            { dir: -1, can: canScrollLeft, label: 'Previous' },
-            { dir: 1, can: canScrollRight, label: 'Next' },
-          ].map(({ dir, can, label }) => (
-            <button
-              key={dir}
-              onClick={() => onSlide(dir)}
-              disabled={!can}
-              aria-label={label}
-              className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all duration-200 active:scale-90 ${can
-                ? 'bg-white border-stone-200 text-stone-700 shadow-sm hover:shadow-md hover:border-stone-300'
-                : 'bg-stone-100 border-stone-100 text-stone-300 cursor-not-allowed'
-                }`}
-            >
-              {dir === -1 ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          ))}
-        </div>
       </div>
     </motion.div>
   );
@@ -646,8 +625,6 @@ export const CategoriesSection = () => {
   const location = useLocation();
   const [categories, setCategories] = useState([]);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
   const railRef = useRef(null);
 
   useEffect(() => {
@@ -666,8 +643,6 @@ export const CategoriesSection = () => {
   const syncScrollState = useCallback(() => {
     const el = railRef.current;
     if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
 
     const firstCard = el.firstElementChild;
     if (!firstCard) return;
@@ -694,10 +669,6 @@ export const CategoriesSection = () => {
       ro.disconnect();
     };
   }, [syncScrollState]);
-
-  const slide = useCallback((dir) => {
-    railRef.current?.scrollBy({ left: dir * 340, behavior: 'smooth' });
-  }, []);
 
   const displayCategories = categories.length > 0 ? categories : defaultCategories;
 
@@ -734,12 +705,7 @@ export const CategoriesSection = () => {
       </div>
 
       <div className="container-main relative z-10">
-        <SectionHeader
-          canScrollLeft={canScrollLeft}
-          canScrollRight={canScrollRight}
-          onSlide={slide}
-          reduceMotion={reduceMotion}
-        />
+        <SectionHeader reduceMotion={reduceMotion} />
 
         <div
           ref={railRef}
@@ -1216,16 +1182,6 @@ export const ReelsPromoSection = () => {
                 </li>
               </ul>
 
-              <Button
-                type="button"
-                onMouseEnter={prefetchReelsRoute}
-                onFocus={prefetchReelsRoute}
-                onClick={handleWatchReels}
-                className="h-12 rounded-full px-7 text-base font-semibold bg-emerald-500 hover:bg-emerald-400 text-stone-950"
-              >
-                <Play className="w-5 h-5 mr-2" />
-                Watch Reels
-              </Button>
             </div>
 
             <div className="relative">
