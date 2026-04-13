@@ -110,8 +110,8 @@ export const OwnerDashboard = () => {
         bookingsAPI.getOwnerBookings(),
       ]);
       setStats(statsRes.data);
-      const ownerListings = (listingsRes.data.listings || []).filter((item) => item.owner_id === user?.id);
-      setListings(ownerListings);
+      // Endpoint is already owner-scoped; avoid client-side owner_id filtering.
+      setListings(listingsRes.data.listings || []);
       setBookings(bookingsRes.data.bookings);
 
       // Generate mock leads from bookings for demo
