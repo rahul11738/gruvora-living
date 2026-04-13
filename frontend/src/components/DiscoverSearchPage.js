@@ -90,7 +90,7 @@ export const DiscoverSearchPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50" data-testid="discover-search-page">
+    <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="discover-search-page">
       <Header />
 
       <div className="bg-white border-b sticky top-16 z-20">
@@ -110,7 +110,7 @@ export const DiscoverSearchPage = () => {
             <select
               value={selectedCity}
               onChange={(e) => setSelectedCity(e.target.value)}
-              className="h-12 px-4 border rounded-lg bg-white text-stone-700"
+              className="h-12 w-full md:w-auto px-4 border rounded-lg bg-white text-stone-700"
               data-testid="city-selector"
             >
               {gujaratCities.map((city) => (
@@ -118,7 +118,7 @@ export const DiscoverSearchPage = () => {
               ))}
             </select>
 
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar md:scrollbar-hide">
               <button
                 type="button"
                 onClick={() => setSelectedCategory(null)}

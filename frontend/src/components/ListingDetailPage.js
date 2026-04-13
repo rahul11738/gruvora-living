@@ -235,7 +235,7 @@ export const ListingDetailPage = () => {
     : ['gharshetu/placeholders/listing-detail'];
 
   return (
-    <div className="min-h-screen bg-stone-50" data-testid="listing-detail-page">
+    <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="listing-detail-page">
       <Header />
 
       {/* Back Button */}
@@ -337,17 +337,17 @@ export const ListingDetailPage = () => {
           <div className="lg:col-span-2 space-y-8">
             {/* Title & Price */}
             <div>
-              <div className="flex items-start justify-between gap-4 mb-4">
-                <div>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+                <div className="min-w-0">
                   <h1 className="font-heading text-3xl md:text-4xl font-bold text-stone-900">
                     {listing.title}
                   </h1>
-                  <div className="flex items-center gap-2 mt-2 text-muted-foreground">
+                  <div className="flex items-center gap-2 mt-2 text-muted-foreground flex-wrap">
                     <MapPin className="w-5 h-5" />
                     <span>{listing.location}, {listing.city}, {listing.state}</span>
                   </div>
                 </div>
-                <div className="text-right">
+                <div className="text-left sm:text-right">
                   <p className="font-heading text-2xl md:text-3xl font-bold text-primary">
                     {formatPrice(listing.price, listing.listing_type)}
                   </p>
@@ -360,7 +360,7 @@ export const ListingDetailPage = () => {
               </div>
 
               {/* Stats */}
-              <div className="flex items-center gap-6 text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-muted-foreground">
                 <span className="flex items-center gap-1">
                   <Eye className="w-4 h-4" />
                   {listing.views} views
@@ -414,7 +414,7 @@ export const ListingDetailPage = () => {
                   <CardTitle>Specifications</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {Object.entries(listing.specifications).map(([key, value]) => (
                       <div key={key} className="flex justify-between border-b pb-2">
                         <span className="text-muted-foreground capitalize">{key.replace('_', ' ')}</span>

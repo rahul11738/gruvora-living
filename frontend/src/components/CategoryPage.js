@@ -361,7 +361,7 @@ export const CategoryPage = () => {
         <div className="container-main py-4">
           <div className="rounded-2xl border border-stone-200 bg-white p-3 md:p-4 flex items-center gap-3 md:gap-4 flex-wrap shadow-sm">
             {/* Search */}
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-0 w-full sm:w-auto">
               <SmartSearchInput
                 value={filters.search}
                 onChange={(value) => handleFilterChange('search', value)}
@@ -377,7 +377,7 @@ export const CategoryPage = () => {
               value={filters.sub_category || "all"}
               onValueChange={(value) => handleFilterChange('sub_category', value === "all" ? "" : value)}
             >
-              <SelectTrigger className="w-[180px] rounded-xl" data-testid="subcategory-filter">
+              <SelectTrigger className="w-full sm:w-[180px] rounded-xl" data-testid="subcategory-filter">
                 <SelectValue placeholder="Sub Category" />
               </SelectTrigger>
               <SelectContent>
@@ -396,7 +396,7 @@ export const CategoryPage = () => {
                 value={filters.listing_type || "all"}
                 onValueChange={(value) => handleFilterChange('listing_type', value === "all" ? "" : value)}
               >
-                <SelectTrigger className="w-[140px] rounded-xl" data-testid="type-filter">
+                <SelectTrigger className="w-full sm:w-[140px] rounded-xl" data-testid="type-filter">
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>

@@ -25,7 +25,7 @@ import {
   LogOut, Loader2, Bell, Ban, Trash2,
   RotateCcw, Search, ChevronLeft, ChevronRight,
   AlertTriangle, Activity, BarChart3, Mail, Phone, MapPin,
-  IndianRupee, TrendingUp, CreditCard, Settings, Save, Video,
+  IndianRupee, TrendingUp, CreditCard, Settings, Save, Video, Menu,
 } from 'lucide-react';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import OptimizedImage from './OptimizedImage';

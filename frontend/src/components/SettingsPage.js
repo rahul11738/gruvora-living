@@ -265,9 +265,9 @@ export const SettingsPage = () => {
   const visibleTabs = useMemo(() => (isOwner ? tabs : tabs.filter((item) => item.id !== 'listings')), [isOwner]);
 
   return (
-    <div className="min-h-screen bg-stone-50" data-testid="settings-page">
+    <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="settings-page">
       <Header />
-      <div className="container-main py-8">
+      <div className="container-main py-6 md:py-8">
         <div className="mb-6">
           <h1 className="font-heading text-3xl font-bold text-stone-900">Settings</h1>
           <p className="text-muted-foreground mt-1">Manage your profile, security, notifications, and account preferences.</p>
@@ -277,7 +277,7 @@ export const SettingsPage = () => {
           <aside className="lg:col-span-1">
             <Card>
               <CardContent className="p-3">
-                <div className="space-y-1">
+                <div className="flex lg:block gap-2 overflow-x-auto lg:overflow-visible pb-1 lg:pb-0">
                   {visibleTabs.map((tab) => {
                     const Icon = tab.icon;
                     const active = activeTab === tab.id;
@@ -286,7 +286,7 @@ export const SettingsPage = () => {
                         key={tab.id}
                         type="button"
                         onClick={() => setActiveTab(tab.id)}
-                        className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${active ? 'bg-primary text-white' : 'hover:bg-stone-100 text-stone-700'
+                        className={`w-auto lg:w-full whitespace-nowrap text-left flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${active ? 'bg-primary text-white' : 'hover:bg-stone-100 text-stone-700'
                           }`}
                       >
                         <Icon className="w-4 h-4" />
@@ -494,7 +494,7 @@ export const SettingsPage = () => {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleNotificationSave} className="space-y-5">
-                    <div className="flex items-center justify-between border rounded-lg p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border rounded-lg p-4">
                       <div>
                         <p className="font-medium">Enable Notifications</p>
                         <p className="text-sm text-muted-foreground">Receive platform and chat notifications.</p>
@@ -507,7 +507,7 @@ export const SettingsPage = () => {
                       />
                     </div>
 
-                    <div className="flex items-center justify-between border rounded-lg p-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border rounded-lg p-4">
                       <div>
                         <p className="font-medium">Auto Reply</p>
                         <p className="text-sm text-muted-foreground">Send automated response when you are offline.</p>
@@ -567,7 +567,7 @@ export const SettingsPage = () => {
                             <p className="font-medium text-stone-900">{listing.title}</p>
                             <p className="text-sm text-muted-foreground">{listing.location}, {listing.city}</p>
                           </div>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-3">
                             <Badge className="capitalize">{listing.status || 'pending'}</Badge>
                             <p className="font-semibold text-primary">
                               ₹{Number(listing.price || 0).toLocaleString('en-IN')}

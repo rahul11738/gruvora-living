@@ -195,7 +195,7 @@ export const NotificationsPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-stone-50" data-testid="notifications-page">
+    <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="notifications-page">
       <Header />
       <div className="container-main py-6 max-w-2xl">
         <Card>
@@ -214,7 +214,7 @@ export const NotificationsPage = () => {
               </Button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 mt-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3">
               <button
                 type="button"
                 onClick={() => setFilter('unread')}
@@ -285,14 +285,14 @@ export const NotificationsPage = () => {
                       type="button"
                       onClick={() => openNotif(notif)}
                       disabled={!target}
-                      className={`w-full text-left flex items-start gap-3 px-4 py-4 hover:bg-stone-50 transition-colors ${!isRead ? 'bg-primary/3' : ''
+                      className={`w-full text-left flex items-start gap-3 px-3 sm:px-4 py-4 hover:bg-stone-50 transition-colors ${!isRead ? 'bg-primary/3' : ''
                         } ${!target ? 'cursor-default' : ''}`}
                     >
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${cls}`}>
                         <Icon className="w-5 h-5" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm ${!isRead ? 'font-semibold text-stone-900' : 'font-medium text-stone-700'}`}>
+                        <p className={`text-sm break-words ${!isRead ? 'font-semibold text-stone-900' : 'font-medium text-stone-700'}`}>
                           {safeTitle}
                         </p>
                         <p className="text-sm text-stone-500 mt-0.5 line-clamp-2 leading-relaxed">
