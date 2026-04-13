@@ -399,7 +399,7 @@ export const AdminDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-stone-100 flex overflow-x-hidden" data-testid="admin-dashboard-v2">
+    <div className="min-h-screen bg-stone-100 overflow-x-hidden" data-testid="admin-dashboard-v2">
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between gap-3 px-4 py-3 border-b border-stone-200 bg-stone-100/95 backdrop-blur">
         <Link to="/" className="flex items-center gap-2 min-w-0">
           <OptimizedImage
@@ -421,181 +421,183 @@ export const AdminDashboard = () => {
         </button>
       </div>
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-stone-900 text-white shadow-2xl transition-transform duration-200 overflow-y-auto lg:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-        <div className="p-6 border-b border-stone-700 relative">
-          <Link to="/" className="flex items-center gap-2">
-            <OptimizedImage
-              publicId={gruvoraLogo}
-              alt="Gruvora"
-              className="h-8 w-auto max-w-[140px] object-contain rounded-md"
-              width={140}
-              sizes="140px"
+      <div className="flex min-w-0">
+        <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-stone-900 text-white shadow-2xl transition-transform duration-200 overflow-y-auto lg:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+          <div className="p-6 border-b border-stone-700 relative">
+            <Link to="/" className="flex items-center gap-2">
+              <OptimizedImage
+                publicId={gruvoraLogo}
+                alt="Gruvora"
+                className="h-8 w-auto max-w-[140px] object-contain rounded-md"
+                width={140}
+                sizes="140px"
+              />
+              <div>
+                <p className="text-xs text-stone-400">Admin Panel</p>
+              </div>
+            </Link>
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden absolute top-4 right-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-700 text-stone-300 hover:text-white hover:bg-stone-800"
+              aria-label="Close admin navigation"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <nav className="flex-1 p-4 space-y-1">
+            {TABS.map((tab) => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabSelect(tab.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${activeTab === tab.id
+                    ? 'bg-primary text-white'
+                    : 'text-stone-400 hover:bg-stone-800 hover:text-white'
+                    }`}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  <span className="flex-1 text-left">{tab.label}</span>
+                  {tab.badge > 0 && (
+                    <span className={`text-xs text-white rounded-full px-1.5 py-0.5 ${tab.badgeColor || 'bg-stone-600'}`}>
+                      {tab.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="p-4 border-t border-stone-700">
+            <p className="text-xs text-stone-400 truncate mb-2">{user?.email}</p>
+            <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-stone-400 hover:text-red-400 text-sm rounded-lg hover:bg-stone-800 transition-colors">
+              <LogOut className="w-4 h-4" />
+              Logout
+            </button>
+          </div>
+        </aside>
+
+        <main className="w-full flex-1 min-w-0 lg:ml-64 p-4 lg:p-8 pt-4 lg:pt-8 pb-24 lg:pb-8 min-h-screen">
+          {activeTab === 'overview' && (
+            <OverviewTab
+              stats={stats}
+              onNavigate={handleTabSelect}
+              onNavigateWithFilter={(tab, filters = {}) => {
+                handleTabSelect(tab);
+                if (filters.role !== undefined) {
+                  setUserRoleFilter(filters.role);
+                  setBlockStatusFilter('');
+                  fetchUsers(1, userSearch, filters.role, '');
+                }
+                if (filters.blockStatus !== undefined) {
+                  setBlockStatusFilter(filters.blockStatus);
+                  setUserRoleFilter('');
+                  fetchUsers(1, userSearch, '', filters.blockStatus);
+                }
+              }}
             />
-            <div>
-              <p className="text-xs text-stone-400">Admin Panel</p>
-            </div>
-          </Link>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(false)}
-            className="lg:hidden absolute top-4 right-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-700 text-stone-300 hover:text-white hover:bg-stone-800"
-            aria-label="Close admin navigation"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+          )}
 
-        <nav className="flex-1 p-4 space-y-1">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabSelect(tab.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${activeTab === tab.id
-                  ? 'bg-primary text-white'
-                  : 'text-stone-400 hover:bg-stone-800 hover:text-white'
-                  }`}
-              >
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                <span className="flex-1 text-left">{tab.label}</span>
-                {tab.badge > 0 && (
-                  <span className={`text-xs text-white rounded-full px-1.5 py-0.5 ${tab.badgeColor || 'bg-stone-600'}`}>
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
+          {activeTab === 'users' && (
+            <UsersTab
+              users={users}
+              total={usersTotal}
+              page={usersPage}
+              search={userSearch}
+              roleFilter={userRoleFilter}
+              blockStatusFilter={blockStatusFilter}
+              onSearch={(v) => { setUserSearch(v); fetchUsers(1, v, userRoleFilter, blockStatusFilter); }}
+              onRoleFilter={(v) => { setUserRoleFilter(v); fetchUsers(1, userSearch, v, ''); }}
+              onBlockStatusFilter={(v) => { setBlockStatusFilter(v); fetchUsers(1, userSearch, '', v); }}
+              onPageChange={(p) => fetchUsers(p)}
+              onVerifyEmail={handleVerifyEmail}
+              onViewProfile={openProfile}
+              onBlock={(u) => setBlockModal({ userId: u.id, userName: u.name })}
+              onUnblock={handleUnblock}
+              onDelete={(userId) => handleDeleteUser(userId, 'Removed by admin')}
+            />
+          )}
 
-        <div className="p-4 border-t border-stone-700">
-          <p className="text-xs text-stone-400 truncate mb-2">{user?.email}</p>
-          <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-stone-400 hover:text-red-400 text-sm rounded-lg hover:bg-stone-800 transition-colors">
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
-        </div>
-      </aside>
+          {activeTab === 'owners' && (
+            <OwnersTab
+              owners={pendingOwners}
+              total={pendingOwnersTotal}
+              onVerify={(id) => handleAadharVerify(id, 'verified')}
+              onReject={(owner) => setRejectModal({ ownerId: owner.id, ownerName: owner.name })}
+              onViewProfile={openProfile}
+            />
+          )}
 
-      <main className="flex-1 min-w-0 lg:ml-64 p-4 lg:p-8 pt-4 lg:pt-8 pb-24 lg:pb-8 min-h-screen">
-        {activeTab === 'overview' && (
-          <OverviewTab
-            stats={stats}
-            onNavigate={handleTabSelect}
-            onNavigateWithFilter={(tab, filters = {}) => {
-              handleTabSelect(tab);
-              if (filters.role !== undefined) {
-                setUserRoleFilter(filters.role);
-                setBlockStatusFilter('');
-                fetchUsers(1, userSearch, filters.role, '');
-              }
-              if (filters.blockStatus !== undefined) {
-                setBlockStatusFilter(filters.blockStatus);
-                setUserRoleFilter('');
-                fetchUsers(1, userSearch, '', filters.blockStatus);
-              }
-            }}
-          />
-        )}
+          {activeTab === 'listings' && (
+            <ListingsTab
+              listings={listings}
+              pendingListings={pendingListings}
+              total={listingsTotal}
+              page={listingsPage}
+              statusFilter={listingStatusFilter}
+              onStatusFilter={(v) => { setListingStatusFilter(v); fetchListings(1, v); }}
+              onPageChange={(p) => fetchListings(p)}
+              onAction={handleListingAction}
+            />
+          )}
 
-        {activeTab === 'users' && (
-          <UsersTab
-            users={users}
-            total={usersTotal}
-            page={usersPage}
-            search={userSearch}
-            roleFilter={userRoleFilter}
-            blockStatusFilter={blockStatusFilter}
-            onSearch={(v) => { setUserSearch(v); fetchUsers(1, v, userRoleFilter, blockStatusFilter); }}
-            onRoleFilter={(v) => { setUserRoleFilter(v); fetchUsers(1, userSearch, v, ''); }}
-            onBlockStatusFilter={(v) => { setBlockStatusFilter(v); fetchUsers(1, userSearch, '', v); }}
-            onPageChange={(p) => fetchUsers(p)}
-            onVerifyEmail={handleVerifyEmail}
-            onViewProfile={openProfile}
-            onBlock={(u) => setBlockModal({ userId: u.id, userName: u.name })}
-            onUnblock={handleUnblock}
-            onDelete={(userId) => handleDeleteUser(userId, 'Removed by admin')}
-          />
-        )}
+          {activeTab === 'revenue' && (
+            <RevenueTab
+              data={revenueData}
+              onRefresh={fetchRevenue}
+            />
+          )}
 
-        {activeTab === 'owners' && (
-          <OwnersTab
-            owners={pendingOwners}
-            total={pendingOwnersTotal}
-            onVerify={(id) => handleAadharVerify(id, 'verified')}
-            onReject={(owner) => setRejectModal({ ownerId: owner.id, ownerName: owner.name })}
-            onViewProfile={openProfile}
-          />
-        )}
+          {activeTab === 'settings' && (
+            <SettingsTab
+              settings={settings}
+              onUpdate={updateSettings}
+            />
+          )}
 
-        {activeTab === 'listings' && (
-          <ListingsTab
-            listings={listings}
-            pendingListings={pendingListings}
-            total={listingsTotal}
-            page={listingsPage}
-            statusFilter={listingStatusFilter}
-            onStatusFilter={(v) => { setListingStatusFilter(v); fetchListings(1, v); }}
-            onPageChange={(p) => fetchListings(p)}
-            onAction={handleListingAction}
-          />
-        )}
+          {activeTab === 'notifications' && (
+            <NotificationsTab
+              target={notifTarget}
+              title={notifTitle}
+              message={notifMessage}
+              type={notifType}
+              sending={sendingNotif}
+              onTargetChange={setNotifTarget}
+              onTitleChange={setNotifTitle}
+              onMessageChange={setNotifMessage}
+              onTypeChange={setNotifType}
+              onSend={handleSendNotification}
+              stats={stats}
+            />
+          )}
 
-        {activeTab === 'revenue' && (
-          <RevenueTab
-            data={revenueData}
-            onRefresh={fetchRevenue}
-          />
-        )}
+          {activeTab === 'reels' && (
+            <AdminReelsTab
+              userId={reelSearchUserId}
+              reels={reels}
+              loading={reelsLoading}
+              total={reelsTotal}
+              page={reelsPage}
+              onUserIdChange={setReelSearchUserId}
+              onSearch={(userId) => fetchUserReels(userId, 1)}
+              onPageChange={(page) => fetchUserReels(reelSearchUserId, page)}
+              onHide={handleAdminHideReel}
+              onDelete={handleAdminDeleteReel}
+            />
+          )}
 
-        {activeTab === 'settings' && (
-          <SettingsTab
-            settings={settings}
-            onUpdate={updateSettings}
-          />
-        )}
-
-        {activeTab === 'notifications' && (
-          <NotificationsTab
-            target={notifTarget}
-            title={notifTitle}
-            message={notifMessage}
-            type={notifType}
-            sending={sendingNotif}
-            onTargetChange={setNotifTarget}
-            onTitleChange={setNotifTitle}
-            onMessageChange={setNotifMessage}
-            onTypeChange={setNotifType}
-            onSend={handleSendNotification}
-            stats={stats}
-          />
-        )}
-
-        {activeTab === 'reels' && (
-          <AdminReelsTab
-            userId={reelSearchUserId}
-            reels={reels}
-            loading={reelsLoading}
-            total={reelsTotal}
-            page={reelsPage}
-            onUserIdChange={setReelSearchUserId}
-            onSearch={(userId) => fetchUserReels(userId, 1)}
-            onPageChange={(page) => fetchUserReels(reelSearchUserId, page)}
-            onHide={handleAdminHideReel}
-            onDelete={handleAdminDeleteReel}
-          />
-        )}
-
-        {activeTab === 'logs' && (
-          <LogsTab
-            logs={activityLogs}
-            total={logsTotal}
-            page={logsPage}
-            onPageChange={fetchActivityLogs}
-          />
-        )}
-      </main>
+          {activeTab === 'logs' && (
+            <LogsTab
+              logs={activityLogs}
+              total={logsTotal}
+              page={logsPage}
+              onPageChange={fetchActivityLogs}
+            />
+          )}
+        </main>
+      </div>
 
       {sidebarOpen && (
         <button
