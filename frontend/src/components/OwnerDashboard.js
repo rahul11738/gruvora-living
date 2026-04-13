@@ -225,7 +225,7 @@ export const OwnerDashboard = () => {
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white/95 backdrop-blur border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 shadow-2xl overflow-y-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+        <aside className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white/95 backdrop-blur border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 shadow-2xl overflow-y-auto pb-24 lg:pb-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="p-6 min-h-full relative flex flex-col">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
               <OptimizedImage
@@ -320,7 +320,7 @@ export const OwnerDashboard = () => {
               )}
             </nav>
 
-            <div className="mt-6 pt-4 border-t border-stone-200">
+            <div className="mt-6 pt-4 pb-2 border-t border-stone-200">
               <div className="p-4 bg-stone-50 rounded-xl mb-4">
                 <p className="font-medium">{user?.name}</p>
                 <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
@@ -337,7 +337,7 @@ export const OwnerDashboard = () => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 min-w-0 p-4 lg:p-8">
+        <main className="flex-1 min-w-0 p-4 lg:p-8 pb-24 lg:pb-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>

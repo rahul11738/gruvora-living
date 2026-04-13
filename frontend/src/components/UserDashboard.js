@@ -108,7 +108,7 @@ export const UserDashboard = () => {
     <div className="min-h-screen bg-stone-50" data-testid="user-dashboard">
       <Header />
 
-      <div className="container-main py-8">
+      <div className="container-main py-8 pb-24 lg:pb-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar */}
           <aside className="lg:col-span-1">
