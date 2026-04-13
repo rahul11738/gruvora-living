@@ -627,16 +627,16 @@ const SectionHeader = memo(({ canScrollLeft, canScrollRight, onSlide, reduceMoti
   );
 });
 
-const DotIndicators = ({ categories, activeCategoryId, railRef }) => (
+const DotIndicators = ({ categories, activeIndex, railRef, onDotSelect }) => (
   <div className="flex justify-center gap-2 mt-6 md:hidden" aria-hidden="true">
     {categories.map((cat, i) => {
-      const theme = categoryThemes[cat.id] || categoryThemes.home;
-      const isActive = activeCategoryId === cat.id;
+      const isActive = activeIndex === i;
 
       return (
         <button
           key={cat.id}
           onClick={() => {
+            onDotSelect?.(i);
             const railEl = railRef.current;
             if (!railEl) return;
             const firstCard = railEl.firstElementChild;
@@ -651,7 +651,8 @@ const DotIndicators = ({ categories, activeCategoryId, railRef }) => (
             width: isActive ? 24 : 6,
             height: 6,
             borderRadius: 999,
-            background: isActive ? theme.accent : '#d4d4d4',
+            background: isActive ? '#ffffff' : '#d4d4d4',
+            boxShadow: isActive ? '0 0 0 1px rgba(15,23,42,0.18)' : 'none',
           }}
         />
       );
@@ -663,6 +664,7 @@ export const CategoriesSection = () => {
   const reduceMotion = useReducedMotion();
   const location = useLocation();
   const [categories, setCategories] = useState([]);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const railRef = useRef(null);
@@ -685,7 +687,19 @@ export const CategoriesSection = () => {
     if (!el) return;
     setCanScrollLeft(el.scrollLeft > 4);
     setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
-  }, []);
+
+    const firstCard = el.firstElementChild;
+    if (!firstCard) return;
+    const cardWidth = firstCard.getBoundingClientRect().width;
+    const computedStyle = window.getComputedStyle(el);
+    const gap = parseFloat(computedStyle.columnGap || computedStyle.gap || '0') || 0;
+    const step = cardWidth + gap;
+    if (step <= 0) return;
+    const index = Math.round(el.scrollLeft / step);
+    const totalCards = categories.length > 0 ? categories.length : defaultCategories.length;
+    const safeIndex = Math.max(0, Math.min(index, totalCards - 1));
+    setActiveCardIndex(safeIndex);
+  }, [categories.length]);
 
   useEffect(() => {
     const el = railRef.current;
@@ -769,8 +783,9 @@ export const CategoriesSection = () => {
 
         <DotIndicators
           categories={displayCategories}
-          activeCategoryId={activeCategoryId}
+          activeIndex={activeCardIndex}
           railRef={railRef}
+          onDotSelect={setActiveCardIndex}
         />
       </div>
     </section>
