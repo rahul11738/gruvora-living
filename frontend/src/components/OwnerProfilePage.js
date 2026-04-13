@@ -151,12 +151,12 @@ export const OwnerProfilePage = () => {
   const followLoading = Boolean(pendingFollowMap[ownerId]);
 
   return (
-    <div className="min-h-screen bg-stone-50" data-testid="owner-profile-page">
+    <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="owner-profile-page">
       <Header />
 
       {/* Profile Header */}
       <div className="bg-white border-b">
-        <div className="container-main py-8">
+        <div className="container-main py-6 md:py-8">
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-10">
             {/* Profile Picture */}
             <motion.div
@@ -189,8 +189,8 @@ export const OwnerProfilePage = () => {
             </motion.div>
 
             {/* Profile Info */}
-            <div className="flex-1 text-center md:text-left">
-              <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+            <div className="flex-1 text-center md:text-left min-w-0">
+              <div className="flex flex-col md:flex-row md:items-center gap-3 mb-4">
                 <h1 className="font-heading text-2xl md:text-3xl font-bold" data-testid="owner-name">
                   {owner.name}
                 </h1>
@@ -226,20 +226,20 @@ export const OwnerProfilePage = () => {
               </div>
 
               {/* Stats */}
-              <div className="flex items-center justify-center md:justify-start gap-8 mb-4">
-                <div className="text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div className="text-center rounded-xl bg-stone-50 px-3 py-3">
                   <p className="font-bold text-xl">{owner.reels?.length || 0}</p>
                   <p className="text-muted-foreground text-sm">Reels</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center rounded-xl bg-stone-50 px-3 py-3">
                   <p className="font-bold text-xl">{listings.length}</p>
                   <p className="text-muted-foreground text-sm">Listings</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center rounded-xl bg-stone-50 px-3 py-3">
                   <p className="font-bold text-xl">{owner.followers_count || 0}</p>
                   <p className="text-muted-foreground text-sm">Followers</p>
                 </div>
-                <div className="text-center">
+                <div className="text-center rounded-xl bg-stone-50 px-3 py-3">
                   <p className="font-bold text-xl">{owner.following_count || 0}</p>
                   <p className="text-muted-foreground text-sm">Following</p>
                 </div>
@@ -278,10 +278,10 @@ export const OwnerProfilePage = () => {
       {/* Tabs */}
       <div className="bg-white border-b sticky top-16 z-10">
         <div className="container-main">
-          <div className="flex items-center justify-center gap-8">
+          <div className="flex items-center justify-start gap-4 overflow-x-auto hide-scrollbar whitespace-nowrap py-1">
             <button
               onClick={() => setActiveTab('reels')}
-              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${activeTab === 'reels'
+              className={`flex items-center gap-2 py-4 border-b-2 transition-colors shrink-0 ${activeTab === 'reels'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
@@ -292,7 +292,7 @@ export const OwnerProfilePage = () => {
             </button>
             <button
               onClick={() => setActiveTab('listings')}
-              className={`flex items-center gap-2 py-4 border-b-2 transition-colors ${activeTab === 'listings'
+              className={`flex items-center gap-2 py-4 border-b-2 transition-colors shrink-0 ${activeTab === 'listings'
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
                 }`}
@@ -308,7 +308,7 @@ export const OwnerProfilePage = () => {
       {/* Content */}
       <div className="container-main py-8">
         {activeTab === 'reels' && (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4" data-testid="reels-grid">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4" data-testid="reels-grid">
             {owner.reels?.length > 0 ? (
               owner.reels.map((reel) => (
                 <ReelCard
@@ -332,7 +332,7 @@ export const OwnerProfilePage = () => {
         )}
 
         {activeTab === 'listings' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" data-testid="listings-grid">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6" data-testid="listings-grid">
             {listings.length > 0 ? (
               listings.map((listing) => (
                 <ListingCard key={listing.id} listing={listing} />

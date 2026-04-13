@@ -87,6 +87,7 @@ export const AdminDashboard = () => {
   const [reelsPage, setReelsPage] = useState(1);
   const [reelsTotal, setReelsTotal] = useState(0);
   const [reelsLoading, setReelsLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [profileModal, setProfileModal] = useState(null);
   const [profileData, setProfileData] = useState(null);
@@ -372,6 +373,11 @@ export const AdminDashboard = () => {
     navigate('/');
   }, [logout, navigate]);
 
+  const handleTabSelect = useCallback((tabId) => {
+    setActiveTab(tabId);
+    setSidebarOpen(false);
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-100 flex items-center justify-center">
@@ -393,8 +399,29 @@ export const AdminDashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-stone-100 flex" data-testid="admin-dashboard-v2">
-      <aside className="w-64 bg-stone-900 text-white flex flex-col fixed h-screen z-40">
+    <div className="min-h-screen bg-stone-100 flex overflow-x-hidden" data-testid="admin-dashboard-v2">
+      <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between gap-3 px-4 py-3 border-b border-stone-200 bg-stone-100/95 backdrop-blur">
+        <Link to="/" className="flex items-center gap-2 min-w-0">
+          <OptimizedImage
+            publicId={gruvoraLogo}
+            alt="Gruvora"
+            className="h-8 w-auto max-w-[120px] object-contain rounded-md"
+            width={120}
+            sizes="120px"
+          />
+          <span className="text-xs font-medium text-stone-500 truncate">Admin Panel</span>
+        </Link>
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-stone-200 bg-white shadow-sm"
+          aria-label="Open admin navigation"
+        >
+          <Menu className="h-5 w-5 text-stone-700" />
+        </button>
+      </div>
+
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-stone-900 text-white shadow-2xl transition-transform duration-200 overflow-y-auto lg:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
         <div className="p-6 border-b border-stone-700">
           <Link to="/" className="flex items-center gap-2">
             <OptimizedImage
@@ -416,7 +443,7 @@ export const AdminDashboard = () => {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabSelect(tab.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${activeTab === tab.id
                   ? 'bg-primary text-white'
                   : 'text-stone-400 hover:bg-stone-800 hover:text-white'
@@ -443,13 +470,13 @@ export const AdminDashboard = () => {
         </div>
       </aside>
 
-      <main className="flex-1 ml-64 p-8 min-h-screen">
+      <main className="flex-1 min-w-0 lg:ml-64 p-4 lg:p-8 pt-4 lg:pt-8 min-h-screen">
         {activeTab === 'overview' && (
           <OverviewTab
             stats={stats}
-            onNavigate={setActiveTab}
+            onNavigate={handleTabSelect}
             onNavigateWithFilter={(tab, filters = {}) => {
-              setActiveTab(tab);
+              handleTabSelect(tab);
               if (filters.role !== undefined) {
                 setUserRoleFilter(filters.role);
                 setBlockStatusFilter('');
@@ -562,6 +589,15 @@ export const AdminDashboard = () => {
         )}
       </main>
 
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-label="Close admin navigation"
+        />
+      )}
+
       <Dialog open={!!profileModal} onOpenChange={() => { setProfileModal(null); setProfileData(null); }}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -593,7 +629,7 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-stone-900">Dashboard Overview</h1>
           <p className="text-stone-500 text-sm mt-1">Real-time platform health</p>
@@ -611,7 +647,7 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
           { label: 'Total Users', value: stats.total_users, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50', delta: stats.new_users_7d, tab: 'users' },
           { label: 'Total Owners', value: stats.total_owners, icon: Shield, color: 'text-green-600', bg: 'bg-green-50', delta: stats.new_owners_7d, tab: 'owners' },
@@ -644,7 +680,7 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
       <Card>
         <CardHeader><CardTitle className="text-base">Owner Types (5 categories)</CardTitle></CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
             {Object.entries(OWNER_ROLE_LABELS).map(([role, label]) => (
               <div
                 key={role}
@@ -720,7 +756,7 @@ const OverviewTab = ({ stats, onNavigate, onNavigateWithFilter }) => {
         </Card>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[
           {
             label: 'Email Verified', value: stats.email_verified || 0, color: 'text-green-600',
@@ -763,15 +799,15 @@ const UsersTab = ({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Users</h1>
           <p className="text-stone-500 text-sm">{total.toLocaleString()} total</p>
         </div>
       </div>
 
-      <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48">
+      <div className="flex flex-col gap-3 md:flex-row md:flex-wrap">
+        <div className="relative flex-1 min-w-0 md:min-w-48">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
           <Input
             placeholder="Search name, email, phone..."
@@ -783,7 +819,7 @@ const UsersTab = ({
         <select
           value={roleFilter}
           onChange={(e) => { onRoleFilter(e.target.value); onBlockStatusFilter(''); }}
-          className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+          className="h-9 w-full md:w-auto rounded-md border border-stone-300 bg-white px-3 text-sm"
         >
           <option value="">All roles</option>
           <option value="user">User</option>
@@ -796,7 +832,7 @@ const UsersTab = ({
         <select
           value={blockStatusFilter}
           onChange={(e) => { onBlockStatusFilter(e.target.value); onRoleFilter(''); }}
-          className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+          className="h-9 w-full md:w-auto rounded-md border border-stone-300 bg-white px-3 text-sm"
         >
           <option value="">All status</option>
           <option value="temporary">Temp Blocked</option>
@@ -806,7 +842,56 @@ const UsersTab = ({
 
       <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="md:hidden divide-y">
+            {users.length === 0 ? (
+              <p className="text-center py-12 text-stone-400">No users found</p>
+            ) : users.map((u) => (
+              <div key={u.id} className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{u.name}</p>
+                    <p className="text-xs text-stone-400 truncate">{u.phone || '--'}</p>
+                  </div>
+                  <Badge className={OWNER_ROLE_COLORS[u.role] || 'bg-blue-100 text-blue-700'}>
+                    {OWNER_ROLE_LABELS[u.role] || u.role}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-xs text-stone-500">
+                  <span className="truncate">{u.email}</span>
+                  <span>{u.created_at ? new Date(u.created_at).toLocaleDateString('en-IN') : '--'}</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {u.block_status === 'permanent' && <Badge className="bg-red-100 text-red-700">Perm. Blocked</Badge>}
+                  {u.block_status === 'temporary' && <Badge className="bg-orange-100 text-orange-700">Temp. Blocked</Badge>}
+                  {!u.block_status && <Badge className="bg-green-100 text-green-700">Active</Badge>}
+                  {u.is_email_verified ? <Badge className="bg-emerald-100 text-emerald-700">Email verified</Badge> : <Badge className="bg-yellow-100 text-yellow-700">Email pending</Badge>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={() => onViewProfile(u.id)}>
+                    <Eye className="w-4 h-4 mr-1" /> Profile
+                  </Button>
+                  {!u.is_email_verified && (
+                    <Button size="sm" variant="outline" onClick={() => onVerifyEmail(u.id)}>
+                      <Mail className="w-4 h-4 mr-1" /> Verify
+                    </Button>
+                  )}
+                  {u.block_status ? (
+                    <Button size="sm" variant="outline" onClick={() => onUnblock(u.id)}>
+                      <RotateCcw className="w-4 h-4 mr-1" /> Unblock
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="outline" onClick={() => onBlock(u)}>
+                      <Ban className="w-4 h-4 mr-1" /> Block
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => onDelete(u.id)}>
+                    <Trash2 className="w-4 h-4 mr-1" /> Delete
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-stone-50">
@@ -881,7 +966,7 @@ const UsersTab = ({
             </table>
           </div>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border-t">
               <p className="text-sm text-stone-500">Page {page} of {totalPages} - {total} total</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
@@ -918,7 +1003,7 @@ const OwnersTab = ({ owners = [], total, onVerify, onReject, onViewProfile }) =>
         {owners.map((owner) => (
           <Card key={owner.id}>
             <CardContent className="pt-5">
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-semibold">{owner.name}</h3>
@@ -927,7 +1012,7 @@ const OwnersTab = ({ owners = [], total, onVerify, onReject, onViewProfile }) =>
                     </Badge>
                     <Badge className="bg-yellow-100 text-yellow-700">Pending Aadhar</Badge>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-stone-600">
+                  <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-stone-600">
                     <span className="flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{owner.email}</span>
                     <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{owner.phone}</span>
                     <span className="flex items-center gap-1"><Shield className="w-3.5 h-3.5" />
@@ -945,7 +1030,7 @@ const OwnersTab = ({ owners = [], total, onVerify, onReject, onViewProfile }) =>
                     Registered: {owner.created_at ? new Date(owner.created_at).toLocaleDateString('en-IN') : '--'}
                   </p>
                 </div>
-                <div className="flex flex-col gap-2 flex-shrink-0">
+                <div className="flex flex-col gap-2 flex-shrink-0 w-full lg:w-auto">
                   <Button size="sm" onClick={() => onViewProfile(owner.id)} variant="outline">
                     <Eye className="w-4 h-4 mr-1" /> Profile
                   </Button>
@@ -988,7 +1073,7 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
               {pendingListings.slice(0, 10).map((l) => {
                 const Icon = CATEGORY_ICONS[l.category] || FileText;
                 return (
-                  <div key={l.id} className="flex items-center gap-3 p-3 bg-yellow-50 rounded-lg">
+                  <div key={l.id} className="flex flex-col gap-3 p-3 bg-yellow-50 rounded-lg sm:flex-row sm:items-center">
                     <div className="w-14 h-14 rounded overflow-hidden flex-shrink-0">
                       <OptimizedImage
                         publicId={l.images?.[0] || 'gharshetu/placeholders/listing-default'}
@@ -1008,7 +1093,7 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
                         <p className="text-xs text-stone-400">Owner: {l.owner_info.email}</p>
                       )}
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex flex-wrap gap-2 flex-shrink-0">
                       <Button size="sm" onClick={() => onAction(l.id, 'approved')} className="bg-green-600 hover:bg-green-700">
                         <CheckCircle className="w-3.5 h-3.5 mr-1" /> Approve
                       </Button>
@@ -1024,11 +1109,11 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
         </Card>
       )}
 
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilter(e.target.value)}
-          className="h-9 rounded-md border border-stone-300 bg-white px-3 text-sm"
+          className="h-9 w-full sm:w-auto rounded-md border border-stone-300 bg-white px-3 text-sm"
         >
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
@@ -1045,7 +1130,7 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
             ) : listings.map((l) => {
               const Icon = CATEGORY_ICONS[l.category] || FileText;
               return (
-                <div key={l.id} className="flex items-center gap-4 p-4 hover:bg-stone-50">
+                <div key={l.id} className="flex flex-col gap-4 p-4 hover:bg-stone-50 sm:flex-row sm:items-center">
                   <div className="w-16 h-16 rounded overflow-hidden flex-shrink-0">
                     <OptimizedImage
                       publicId={l.images?.[0] || 'gharshetu/placeholders/listing-default'}
@@ -1068,7 +1153,7 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
                     <p className="font-medium text-sm truncate mt-0.5">{l.title}</p>
                     <p className="text-xs text-stone-500">By {l.owner_name} - INR {l.price?.toLocaleString('en-IN')}</p>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex flex-wrap gap-2 flex-shrink-0">
                     {l.status === 'pending' && (
                       <>
                         <Button size="sm" onClick={() => onAction(l.id, 'approved')} className="bg-green-600 hover:bg-green-700">
@@ -1093,7 +1178,7 @@ const ListingsTab = ({ listings = [], pendingListings = [], total, page, statusF
             })}
           </div>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border-t">
               <p className="text-sm text-stone-500">Page {page} of {totalPages}</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
@@ -1119,7 +1204,7 @@ const NotificationsTab = ({ target, title, message, type, sending, onTargetChang
       <p className="text-stone-500 text-sm">Broadcast messages to users and owners</p>
     </div>
 
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       {[
         { label: 'Total users', value: stats?.total_users || 0 },
         { label: 'Total owners', value: stats?.total_owners || 0 },
@@ -1783,7 +1868,7 @@ const LogsTab = ({ logs, total, page, onPageChange }) => {
             {logs.length === 0 ? (
               <p className="text-center py-12 text-stone-400">No logs found</p>
             ) : logs.map((log) => (
-              <div key={log.id} className="p-4 flex items-center gap-4">
+              <div key={log.id} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <div className="w-9 h-9 bg-stone-100 rounded-full flex items-center justify-center flex-shrink-0">
                   <Activity className="w-4 h-4 text-stone-500" />
                 </div>
@@ -1795,14 +1880,14 @@ const LogsTab = ({ logs, total, page, onPageChange }) => {
                   <p className="text-xs text-stone-400 mt-0.5">By {log.actor_email || log.actor_id}</p>
                   {log.meta?.reason && <p className="text-xs text-stone-500">Reason: {log.meta.reason}</p>}
                 </div>
-                <p className="text-xs text-stone-400 flex-shrink-0">
+                <p className="text-xs text-stone-400 flex-shrink-0 sm:text-right">
                   {log.created_at ? new Date(log.created_at).toLocaleString('en-IN') : '--'}
                 </p>
               </div>
             ))}
           </div>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between p-4 border-t">
               <p className="text-sm text-stone-500">Page {page} of {totalPages}</p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
@@ -1843,13 +1928,14 @@ const AdminReelsTab = ({
 
       <Card>
         <CardContent className="pt-6 space-y-4">
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <Input
               placeholder="Enter owner user ID"
               value={userId}
               onChange={(e) => onUserIdChange(e.target.value)}
+              className="w-full"
             />
-            <Button onClick={() => onSearch(userId)} disabled={!userId.trim() || loading} className="gap-2">
+            <Button onClick={() => onSearch(userId)} disabled={!userId.trim() || loading} className="gap-2 w-full sm:w-auto">
               <Search className="w-4 h-4" />
               Search
             </Button>
@@ -1866,7 +1952,7 @@ const AdminReelsTab = ({
                 {reels.length === 0 ? (
                   <div className="py-10 text-center text-stone-400">No reels for this user.</div>
                 ) : reels.map((reel) => (
-                  <div key={reel.id} className="border rounded-lg bg-white p-3 flex items-center justify-between gap-3">
+                  <div key={reel.id} className="border rounded-lg bg-white p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
                       <div className="font-medium text-stone-900 truncate">{reel.title || 'Untitled Reel'}</div>
                       <div className="text-xs text-stone-500 mt-1 flex items-center gap-2 flex-wrap">
@@ -1877,7 +1963,7 @@ const AdminReelsTab = ({
                         <span>{reel.created_at ? new Date(reel.created_at).toLocaleString('en-IN') : '--'}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex flex-wrap gap-2 flex-shrink-0">
                       <Button variant="outline" size="sm" onClick={() => onHide(reel.id)}>
                         {reel.visibility === 'hidden' || reel.hidden ? 'Unhide' : 'Hide'}
                       </Button>
@@ -1938,7 +2024,7 @@ const ProfileModalContent = ({ data, onVerifyEmail }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
         {[
           { label: 'Email', value: user.email, verified: user.is_email_verified },
           { label: 'Phone', value: user.phone },
@@ -1962,7 +2048,7 @@ const ProfileModalContent = ({ data, onVerifyEmail }) => {
       </div>
 
       {stats && (
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Listings', value: stats.total_listings },
             { label: 'Bookings', value: stats.total_bookings },

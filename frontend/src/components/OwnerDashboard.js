@@ -205,9 +205,9 @@ export const OwnerDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50" data-testid="owner-dashboard">
+    <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="owner-dashboard">
       {/* Mobile Header */}
-      <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+      <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between bg-white/95 backdrop-blur">
         <div className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
           <OptimizedImage
             publicId="/gruvoraLogo.jpeg"
@@ -224,8 +224,8 @@ export const OwnerDashboard = () => {
 
       <div className="flex">
         {/* Sidebar */}
-        <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-          <div className="p-6">
+        <aside className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white/95 backdrop-blur border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 shadow-2xl overflow-y-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+          <div className="p-6 min-h-full relative">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
               <OptimizedImage
                 publicId="/gruvoraLogo.jpeg"
@@ -328,7 +328,7 @@ export const OwnerDashboard = () => {
         </aside>
 
         {/* Main Content */}
-        <main className="flex-1 p-4 lg:p-8">
+        <main className="flex-1 min-w-0 p-4 lg:p-8">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -612,8 +612,8 @@ const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
   };
 
   return (
-    <div className="flex items-center gap-4 p-4 bg-stone-50 rounded-xl" data-testid={`listing-row-${listing.id}`}>
-      <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
+    <div className="flex flex-col gap-4 p-4 bg-stone-50 rounded-xl sm:flex-row sm:items-center" data-testid={`listing-row-${listing.id}`}>
+      <div className="w-full h-40 rounded-lg overflow-hidden flex-shrink-0 sm:w-20 sm:h-20">
         <OptimizedImage
           publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
           alt={listing.title}
@@ -622,7 +622,7 @@ const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
           sizes="80px"
         />
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 text-left">
         <div className="flex items-center gap-2 mb-1">
           <Icon className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm text-muted-foreground capitalize">{listing.category}</span>
@@ -649,7 +649,7 @@ const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
           </span>
         </div>
       </div>
-      <div className="text-right">
+      <div className="text-left sm:text-right">
         <p className="font-bold text-primary">₹{listing.price?.toLocaleString('en-IN')}</p>
         <p className="text-sm text-muted-foreground capitalize">{listing.listing_type}</p>
         {listing.category === 'services' && (
@@ -665,7 +665,7 @@ const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
         )}
       </div>
       {showActions && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <Button variant="ghost" size="icon" onClick={() => navigate(`/listing/${listing.id}`)}>
             <Eye className="w-4 h-4" />
           </Button>
@@ -697,7 +697,7 @@ const BookingRow = memo(({ booking, onStatusChange, showDetails }) => {
   return (
     <Card data-testid={`booking-row-${booking.id}`}>
       <CardContent className="pt-6">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
               {getStatusBadge(booking.status)}
@@ -715,7 +715,7 @@ const BookingRow = memo(({ booking, onStatusChange, showDetails }) => {
             )}
           </div>
           {booking.status === 'pending' && (
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 size="sm"
                 onClick={() => onStatusChange(booking.id, 'confirmed')}
