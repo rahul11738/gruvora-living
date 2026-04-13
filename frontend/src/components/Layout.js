@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { NotificationBell } from './Notifications';
@@ -14,20 +14,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import {
   Home,
   Building2,
   Hotel,
   PartyPopper,
   Wrench,
-  Menu,
   User,
   LogOut,
   Heart,
   Settings,
   LayoutDashboard,
   Play,
+  MessageCircle,
   Compass as DiscoverIcon,
   Youtube,
   Instagram,
@@ -52,7 +51,6 @@ export const Header = () => {
   const { user, isAuthenticated, isOwner, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const discoverLinkRef = useRef(null);
   const reelsLinkRef = useRef(null);
 
@@ -69,6 +67,15 @@ export const Header = () => {
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const handleOpenChat = () => {
+    if (isAuthenticated) {
+      markRouteNavigation('/chat', 'header-chat-btn');
+      navigate('/chat');
+      return;
+    }
+    navigate('/login?next=%2Fchat');
   };
 
   const getDashboardLink = () => {
@@ -146,6 +153,18 @@ export const Header = () => {
               <span className="text-sm font-medium">Reels</span>
             </Link>
 
+            {/* Chat - Available on mobile and desktop */}
+            <button
+              type="button"
+              onClick={handleOpenChat}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors"
+              data-testid="chat-btn"
+              aria-label="Open Chat"
+              title="Open Chat"
+            >
+              <MessageCircle className="w-5 h-5 text-stone-600" />
+            </button>
+
             {isAuthenticated ? (
               <>
                 {/* Wishlist - Hidden on mobile, shown in bottom nav */}
@@ -218,81 +237,6 @@ export const Header = () => {
               </div>
             )}
 
-            {/* Mobile Menu */}
-            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-              <SheetTrigger asChild>
-                <button className="lg:hidden w-10 h-10 flex items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors">
-                  <Menu className="w-5 h-5" />
-                </button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-[88vw] max-w-sm sm:max-w-md p-0 overflow-hidden">
-                <div className="flex flex-col h-full">
-                  <div className="px-5 pt-6 pb-4 border-b border-stone-100 bg-gradient-to-b from-stone-50 to-white">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-emerald-600 font-semibold">Navigation</p>
-                        <span className="font-heading font-bold text-2xl text-stone-950 mt-1 block">Menu</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <nav className="flex flex-col gap-2 px-4 py-4 overflow-y-auto">
-                    {categories.map((cat) => {
-                      const Icon = cat.icon;
-                      const isActive = location.pathname === cat.href;
-                      return (
-                        <Link
-                          key={cat.id}
-                          to={cat.href}
-                          onClick={() => setMobileOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-colors border ${isActive
-                            ? `${categoryNavTheme.active}`
-                            : `${categoryNavTheme.inactive}`
-                            }`}
-                        >
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isActive ? 'bg-white/15 text-white' : 'bg-white/70 text-current'}`}>
-                            <Icon className="w-5 h-5" />
-                          </div>
-                          <div className="min-w-0">
-                            <p className="font-semibold truncate">{cat.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{cat.nameGu}</p>
-                          </div>
-                        </Link>
-                      );
-                    })}
-                  </nav>
-
-                  <div className="mt-auto px-4 pb-5 pt-2 border-t border-stone-100 bg-white">
-                    <Link
-                      to="/reels"
-                      onMouseEnter={prefetchReelsRoute}
-                      onFocus={prefetchReelsRoute}
-                      onClick={() => {
-                        markRouteNavigation('/reels', 'menu-reels-link');
-                        setMobileOpen(false);
-                      }}
-                      className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-secondary/10 text-secondary border border-orange-100"
-                    >
-                      <Play className="w-5 h-5" />
-                      <span className="font-medium">Reels</span>
-                    </Link>
-                  </div>
-
-                  <div className="px-4 pb-5">
-                    {!isAuthenticated && (
-                      <div className="flex flex-col gap-2">
-                        <Link to="/login" onClick={() => setMobileOpen(false)}>
-                          <Button variant="outline" className="w-full rounded-full">Login</Button>
-                        </Link>
-                        <Link to="/register" onClick={() => setMobileOpen(false)}>
-                          <Button className="w-full btn-primary rounded-full">Register</Button>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </SheetContent>
-            </Sheet>
           </div>
         </div>
       </div>
