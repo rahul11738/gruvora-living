@@ -241,9 +241,11 @@ export const HeroSection = () => {
           className="absolute inset-0"
         />
         <OptimizedImage
-          publicId="gharshetu/placeholders/happy-family"
+          publicId="/hero-bg.jpg"
           alt=""
           aria-hidden="true"
+          loading="eager"
+          fetchPriority="high"
           className="absolute inset-0 h-full w-full object-cover"
           width={1920}
           sizes="100vw"
