@@ -219,15 +219,6 @@ export const Header = () => {
 
             {isAuthenticated ? (
               <>
-                {/* Wishlist - Hidden on mobile, shown in bottom nav */}
-                <Link
-                  to="/wishlist"
-                  className="hidden md:flex w-10 h-10 items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors"
-                  data-testid="wishlist-btn"
-                >
-                  <Heart className="w-5 h-5 text-stone-600" />
-                </Link>
-
                 {/* Notifications */}
                 <NotificationBell />
 
@@ -235,13 +226,13 @@ export const Header = () => {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 rounded-full bg-primary/10 border border-primary/10 shadow-[0_6px_18px_rgba(5,150,105,0.08)] hover:bg-primary/15 transition-colors max-w-[170px]"
+                      className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 rounded-full bg-primary/10 border border-primary/10 shadow-[0_6px_18px_rgba(5,150,105,0.08)] hover:bg-primary/15 transition-colors max-w-[140px] xl:max-w-[170px]"
                       data-testid="user-menu-btn"
                     >
                       <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center shrink-0">
                         <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
                       </div>
-                      <span className="hidden md:block text-sm font-medium text-primary truncate">
+                      <span className="hidden xl:block text-sm font-medium text-primary truncate">
                         {user?.name?.split(' ')[0]}
                       </span>
                     </button>
