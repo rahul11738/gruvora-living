@@ -93,14 +93,6 @@ const categoryThemes = {
   },
 };
 
-const categoryStats = {
-  home: { count: '2,400+', label: 'Homes listed' },
-  business: { count: '890+', label: 'Spaces available' },
-  stay: { count: '540+', label: 'Stays ready' },
-  event: { count: '320+', label: 'Venues open' },
-  services: { count: '1,100+', label: 'Providers active' },
-};
-
 const defaultCategories = [
   {
     id: 'home',
@@ -364,7 +356,7 @@ export const HeroSection = () => {
             >
               <div className="hero-search-inner">
                 <div className="w-full pb-1">
-                  <div className="flex w-full flex-nowrap justify-start sm:justify-center items-center gap-2 sm:gap-3 px-1 sm:px-2 py-1 overflow-x-auto hide-scrollbar">
+                  <div className="flex w-full flex-wrap sm:flex-nowrap justify-center items-center gap-2 sm:gap-3 px-1 sm:px-2 py-1 overflow-visible sm:overflow-x-auto hide-scrollbar">
                     {[
                       { id: 'home', label: 'Home' },
                       { id: 'business', label: 'Business' },
@@ -449,37 +441,9 @@ export const HeroSection = () => {
   );
 };
 
-const AnimatedCount = memo(({ value, inView }) => {
-  const [display, setDisplay] = useState('0');
-
-  useEffect(() => {
-    if (!inView) return;
-    const numeric = parseInt(value.replace(/\D/g, ''), 10);
-    const suffix = value.replace(/[\d,]/g, '');
-    let start = 0;
-    const duration = 1200;
-    const step = 16;
-    const increment = numeric / (duration / step);
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= numeric) {
-        clearInterval(timer);
-        setDisplay(numeric.toLocaleString('en-IN') + suffix);
-      } else {
-        setDisplay(Math.floor(start).toLocaleString('en-IN') + suffix);
-      }
-    }, step);
-
-    return () => clearInterval(timer);
-  }, [inView, value]);
-
-  return <span>{display}</span>;
-});
-
 const CategoryCard = memo(({ cat, index, isActive, reduceMotion }) => {
   const Icon = categoryIcons[cat.id] || Home;
   const theme = categoryThemes[cat.id] || categoryThemes.home;
-  const stat = categoryStats[cat.id] || { count: '100+', label: 'Listings' };
   const subCount = cat.sub_categories?.length || 0;
 
   const cardRef = useRef(null);
@@ -527,8 +491,8 @@ const CategoryCard = memo(({ cat, index, isActive, reduceMotion }) => {
           className={`pointer-events-none absolute inset-0 rounded-[1.75rem] bg-gradient-to-br ${theme.gradient} opacity-0 group-hover:opacity-[0.92] transition-opacity duration-500`}
         />
 
-        <div className="relative z-10 flex flex-col flex-1 p-6 md:p-7">
-          <div className="flex items-start justify-between mb-6">
+        <div className="relative z-10 flex flex-col flex-1 p-6 md:p-7 text-center items-center">
+          <div className="flex items-start justify-between mb-6 w-full">
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${theme.badge} transition-all duration-400 group-hover:bg-white/20 group-hover:text-white/90 group-hover:border-white/30`}
             >
@@ -547,7 +511,7 @@ const CategoryCard = memo(({ cat, index, isActive, reduceMotion }) => {
           <motion.div
             whileHover={!reduceMotion ? { scale: 1.12, rotate: 6 } : undefined}
             transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-            className={`w-[60px] h-[60px] rounded-2xl bg-gradient-to-br ${theme.gradient} flex items-center justify-center mb-5 shadow-lg ring-2 ring-white/60 flex-shrink-0`}
+            className={`w-[60px] h-[60px] rounded-2xl bg-gradient-to-br ${theme.gradient} flex items-center justify-center mb-5 shadow-lg ring-2 ring-white/60 flex-shrink-0 mx-auto`}
             style={{ boxShadow: `0 8px 24px -4px ${theme.glow}` }}
           >
             <Icon className="w-7 h-7 text-white drop-shadow-sm" />
@@ -560,25 +524,14 @@ const CategoryCard = memo(({ cat, index, isActive, reduceMotion }) => {
             {cat.name_gu}
           </p>
 
-          <p className="text-[13px] text-stone-500 group-hover:text-white/75 transition-colors duration-300 leading-relaxed line-clamp-2 flex-1">
+          <p className="text-[13px] text-stone-500 group-hover:text-white/75 transition-colors duration-300 leading-relaxed line-clamp-2 flex-1 w-full">
             {cat.description || cat.sub_categories?.slice(0, 4).map((s) => s.name).join(' · ')}
           </p>
 
-          <div className="mt-5 flex items-center justify-between">
-            <div className="flex items-baseline gap-1.5">
-              <span className={`font-heading font-black text-xl leading-none ${theme.stat} group-hover:text-white transition-colors duration-300`}>
-                <AnimatedCount value={stat.count} inView={inView} />
-              </span>
-              <span className="text-[11px] text-stone-400 group-hover:text-white/65 transition-colors duration-300">
-                {stat.label}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 text-stone-400 group-hover:text-white transition-colors duration-300">
-              <span className="text-[13px] font-semibold">Explore</span>
-              <div className="w-7 h-7 rounded-full border border-stone-200 group-hover:border-white/40 group-hover:bg-white/20 flex items-center justify-center transition-all duration-300">
-                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-300" />
-              </div>
+          <div className="mt-5 inline-flex items-center gap-1.5 text-stone-500 group-hover:text-white transition-colors duration-300">
+            <span className="text-[13px] font-semibold">Explore</span>
+            <div className="w-7 h-7 rounded-full border border-stone-200 group-hover:border-white/40 group-hover:bg-white/20 flex items-center justify-center transition-all duration-300">
+              <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform duration-300" />
             </div>
           </div>
         </div>
@@ -791,7 +744,7 @@ export const CategoriesSection = () => {
         <div
           ref={railRef}
           className={[
-            'grid grid-flow-col auto-cols-[82vw] sm:auto-cols-[62vw] gap-4 overflow-x-auto overflow-y-hidden pb-2 px-1 touch-pan-x',
+            'grid grid-flow-col auto-cols-[82vw] sm:auto-cols-[62vw] gap-4 overflow-x-auto overflow-y-hidden pb-2 px-1',
             'md:grid md:grid-cols-5 md:auto-cols-auto md:gap-5 md:overflow-visible',
             'hide-scrollbar',
           ].join(' ')}
