@@ -274,7 +274,7 @@ export const Header = () => {
                       className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-secondary/10 text-secondary border border-orange-100"
                     >
                       <Play className="w-5 h-5" />
-                      <span className="font-medium">GharSetu Reels</span>
+                      <span className="font-medium">Reels</span>
                     </Link>
                   </div>
 
