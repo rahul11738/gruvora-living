@@ -241,7 +241,7 @@ export const HeroSection = () => {
           className="absolute inset-0"
         />
         <OptimizedImage
-          publicId="gharshetu/placeholders/hero-main"
+          publicId="gharshetu/placeholders/happy-family"
           alt=""
           aria-hidden="true"
           className="absolute inset-0 h-full w-full object-cover"
