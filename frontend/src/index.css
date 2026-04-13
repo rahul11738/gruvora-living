@@ -517,4 +517,8 @@
   footer {
     padding-bottom: 70px;
   }
+
+  .home-main {
+    padding-bottom: 0;
+  }
 }

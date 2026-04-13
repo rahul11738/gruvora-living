@@ -31,7 +31,7 @@ const HomePage = memo(function HomePage() {
     return (
         <div className="min-h-screen bg-stone-50" data-testid="home-page">
             <Header />
-            <main>
+            <main className="home-main">
                 <Suspense fallback={<RouteSkeleton />}>
                     <HeroSection />
                     <CategoriesSection />
