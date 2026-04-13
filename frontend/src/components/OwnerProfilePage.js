@@ -53,6 +53,7 @@ const categoryColors = {
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
   PROPERTY_TRANSACTION_CATEGORIES.has(String(category || '').toLowerCase());
+const OWNER_ROLES = new Set(['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner']);
 
 export const OwnerProfilePage = () => {
   const { ownerId } = useParams();
@@ -146,7 +147,11 @@ export const OwnerProfilePage = () => {
   }
 
   const isOwnProfile = user?.id === ownerId;
-  const canModerateReels = Boolean(isAuthenticated && (isOwnProfile || user?.role === 'admin'));
+  const isOwnerRole = OWNER_ROLES.has(String(user?.role || '').toLowerCase());
+  const canModerateReels = Boolean(
+    isAuthenticated
+    && (user?.role === 'admin' || (isOwnProfile && isOwnerRole))
+  );
   const isFollowing = Boolean(followingMap[ownerId]);
   const followLoading = Boolean(pendingFollowMap[ownerId]);
 

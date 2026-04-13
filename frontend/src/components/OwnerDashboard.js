@@ -226,7 +226,7 @@ export const OwnerDashboard = () => {
       <div className="flex">
         {/* Sidebar */}
         <aside className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white/95 backdrop-blur border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 shadow-2xl overflow-y-auto ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-          <div className="p-6 min-h-full relative">
+          <div className="p-6 min-h-full relative flex flex-col">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
               <OptimizedImage
                 publicId="/gruvoraLogo.jpeg"
@@ -244,7 +244,7 @@ export const OwnerDashboard = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <nav className="space-y-2">
+            <nav className="space-y-2 flex-1">
               <button
                 onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'overview' ? 'bg-primary text-white' : 'hover:bg-stone-100'
@@ -320,7 +320,7 @@ export const OwnerDashboard = () => {
               )}
             </nav>
 
-            <div className="absolute bottom-6 left-6 right-6">
+            <div className="mt-6 pt-4 border-t border-stone-200">
               <div className="p-4 bg-stone-50 rounded-xl mb-4">
                 <p className="font-medium">{user?.name}</p>
                 <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
