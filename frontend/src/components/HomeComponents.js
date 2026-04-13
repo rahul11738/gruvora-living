@@ -166,6 +166,7 @@ const revealUp = (reduceMotion, delay = 0, offset = 20) => ({
 export const HeroSection = () => {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+  const [heroImageSrc, setHeroImageSrc] = useState('/hero-bg.jpg');
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('home');
@@ -240,15 +241,18 @@ export const HeroSection = () => {
           transition={reduceMotion ? { duration: 0 } : { duration: 10, ease: 'easeOut' }}
           className="absolute inset-0"
         />
-        <OptimizedImage
-          publicId="/hero-bg.jpg"
+        <img
+          src={heroImageSrc}
           alt=""
           aria-hidden="true"
           loading="eager"
           fetchPriority="high"
           className="absolute inset-0 h-full w-full object-cover"
-          width={1920}
-          sizes="100vw"
+          onError={() => {
+            if (heroImageSrc !== '/gruvoraLogo.jpeg') {
+              setHeroImageSrc('/gruvoraLogo.jpeg');
+            }
+          }}
         />
         <div className="absolute inset-0 bg-stone-950/55" />
         <div className="absolute inset-0 bg-gradient-to-r from-stone-950/95 via-stone-950/78 to-stone-950/40" />
