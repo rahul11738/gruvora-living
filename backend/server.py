@@ -93,6 +93,7 @@ sio = socketio.AsyncServer(
 connected_users: Dict[str, str] = {}  # user_id -> sid
 JWT_EXPIRATION_HOURS = 24
 interaction_locks: Dict[str, asyncio.Lock] = {}
+reel_purge_task = None
 
 
 def _get_interaction_lock(key: str) -> asyncio.Lock:
@@ -504,7 +505,60 @@ VIDEO_LIST_PROJECTION = {
     "created_at": 1,
     "location": 1,
     "hashtags": 1,
+    "visibility": 1,
+    "hidden": 1,
+    "is_deleted": 1,
+    "deleted_at": 1,
 }
+
+PUBLIC_REEL_QUERY: Dict[str, Any] = {
+    "is_deleted": {"$ne": True},
+    "visibility": "public",
+    "hidden": {"$ne": True},
+}
+
+
+def _is_admin_role(role: Any) -> bool:
+    role_value = normalize_role(role.value if isinstance(role, Enum) else role)
+    return role_value == UserRole.ADMIN.value
+
+
+def _reel_visibility_from_doc(video: Dict[str, Any]) -> str:
+    visibility = str(video.get("visibility") or "").strip().lower()
+    if visibility in {"public", "hidden"}:
+        return visibility
+    if bool(video.get("hidden", False)):
+        return "hidden"
+    return "public"
+
+
+def _can_moderate_reel(video: Dict[str, Any], user: Dict[str, Any]) -> bool:
+    return bool(video.get("owner_id") == user.get("id") or _is_admin_role(user.get("role")))
+
+
+async def _write_reel_audit_log(
+    *,
+    action: str,
+    actor: Dict[str, Any],
+    video: Dict[str, Any],
+    meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    await db.admin_audit_logs.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "action": action,
+            "actor_id": actor.get("id"),
+            "actor_email": actor.get("email"),
+            "target_id": video.get("id"),
+            "target_type": "reel",
+            "meta": {
+                "owner_id": video.get("owner_id"),
+                "owner_name": video.get("owner_name"),
+                **(meta or {}),
+            },
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
 
 
 def _parse_pagination(page: Any, limit: Any, *, default_limit: int, max_limit: int):
@@ -620,6 +674,46 @@ def _build_cloudinary_video_playback_url(
     return f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{public_id}.mp4"
 
 
+def _build_cloudinary_reel_adaptive_url(
+    public_id: str, version: Optional[int]
+) -> Optional[str]:
+    if not CLOUDINARY_CLOUD_NAME or not public_id:
+        return None
+    if version is not None:
+        return (
+            f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/"
+            f"f_auto,q_auto:good,vc_auto,br_auto/v{int(version)}/{public_id}.mp4"
+        )
+    return (
+        f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/"
+        f"f_auto,q_auto:good,vc_auto,br_auto/{public_id}.mp4"
+    )
+
+
+def _build_cloudinary_reel_variants(
+    public_id: str, version: Optional[int]
+) -> Dict[str, str]:
+    if not CLOUDINARY_CLOUD_NAME or not public_id:
+        return {}
+
+    def _url_for_height(height: int) -> str:
+        if version is not None:
+            return (
+                f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/"
+                f"c_limit,h_{height},q_auto:eco,f_auto/v{int(version)}/{public_id}.mp4"
+            )
+        return (
+            f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/"
+            f"c_limit,h_{height},q_auto:eco,f_auto/{public_id}.mp4"
+        )
+
+    return {
+        "240p": _url_for_height(240),
+        "480p": _url_for_height(480),
+        "720p": _url_for_height(720),
+    }
+
+
 CLOUDINARY_VIDEO_PUBLIC_ID_ALIASES: Dict[str, Tuple[str, Optional[int]]] = {
     "gharshetu/reels/f83a2271-c448-4c04-99ad-f2c3e4c8a06c": (
         "gharshetu/reels/ggqemxl7p6kvyzl92hux",
@@ -655,13 +749,17 @@ def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, An
                 version = int(alias_version)
 
         canonical_url = _build_cloudinary_video_playback_url(str(public_id), version)
+        adaptive_url = _build_cloudinary_reel_adaptive_url(str(public_id), version)
+        variants = _build_cloudinary_reel_variants(str(public_id), version)
         if canonical_url:
             doc["video_public_id"] = str(public_id)
             doc["video_version"] = version
             doc["public_id"] = str(public_id)
             doc["version"] = f"v{int(version)}" if version is not None else None
-            doc["video_url"] = canonical_url
-            doc["url"] = canonical_url
+            doc["adaptive_url"] = adaptive_url
+            doc["video_variants"] = variants
+            doc["video_url"] = adaptive_url or canonical_url
+            doc["url"] = adaptive_url or canonical_url
             if not doc.get("thumbnail_url") or str(
                 doc.get("thumbnail_url", "")
             ).startswith("http://"):
@@ -684,6 +782,11 @@ def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, An
 
     if doc.get("thumbnail_url"):
         doc["thumbnail_url"] = str(doc["thumbnail_url"]).replace("http://", "https://")
+
+    visibility = _reel_visibility_from_doc(doc)
+    doc["visibility"] = visibility
+    doc["hidden"] = visibility == "hidden"
+    doc["is_deleted"] = bool(doc.get("is_deleted", False))
 
     return doc
 
@@ -1070,6 +1173,36 @@ async def media_delete_retry_worker():
         logger.error(f"Media delete retry worker crashed: {e}")
 
 
+async def soft_delete_reels_purge_worker():
+    """Hard-delete reels after retention window (default 30 days)."""
+    logger.info("Soft-delete reels purge worker started")
+    try:
+        while True:
+            now = datetime.now(timezone.utc)
+            purge_query = {
+                "is_deleted": True,
+                "$or": [
+                    {"delete_after": {"$lte": now}},
+                    {
+                        "deleted_at": {
+                            "$lte": now - timedelta(days=30),
+                        }
+                    },
+                ],
+            }
+            batch = await db.videos.find(purge_query, {"_id": 0, "id": 1}).limit(200).to_list(200)
+            if batch:
+                purge_ids = [item.get("id") for item in batch if item.get("id")]
+                if purge_ids:
+                    await db.videos.delete_many({"id": {"$in": purge_ids}})
+                    logger.info("Purged %s reels after retention window", len(purge_ids))
+            await asyncio.sleep(6 * 60 * 60)
+    except asyncio.CancelledError:
+        logger.info("Soft-delete reels purge worker stopped")
+    except Exception as exc:
+        logger.error("Soft-delete reels purge worker crashed: %s", exc)
+
+
 class MessageCreate(BaseModel):
     receiver_id: Optional[str] = None
     content: Optional[str] = None
@@ -1106,6 +1239,18 @@ class ReelsDebugReportIn(BaseModel):
     hit_rate_history: List[int] = Field(default_factory=list)
     total_captures: Optional[int] = None
     captures: Optional[List[Dict[str, Any]]] = None
+
+
+class ReelPlaybackMetricIn(BaseModel):
+    reel_id: str = Field(..., min_length=1, max_length=128)
+    source_type: str = Field(..., min_length=1, max_length=64)
+    source_index: int = Field(default=0, ge=0, le=20)
+    fallback_count: int = Field(default=0, ge=0, le=20)
+    load_time_ms: Optional[int] = Field(default=None, ge=0, le=120000)
+    had_error: bool = False
+    playback_started: bool = False
+    network_effective_type: Optional[str] = Field(default=None, max_length=24)
+    network_save_data: Optional[bool] = None
 
 
 class AdminSendNotification(BaseModel):
@@ -4146,7 +4291,9 @@ async def upload_multiple_images(
 async def upload_video(
     title: str = Form(...),
     description: str = Form(None),
+    caption: str = Form(None),
     category: str = Form("home"),
+    visibility: str = Form("public"),
     listing_id: str = Form(None),
     video: UploadFile = File(...),
     user: dict = Depends(get_owner_user),
@@ -4179,6 +4326,10 @@ async def upload_video(
     if not video.content_type.startswith("video/"):
         raise HTTPException(status_code=400, detail="File must be a video")
 
+    visibility = str(visibility or "public").strip().lower()
+    if visibility not in {"public", "hidden"}:
+        raise HTTPException(status_code=400, detail="visibility must be 'public' or 'hidden'")
+
     # Check file size (max 100MB)
     content = await video.read()
     if len(content) > 100 * 1024 * 1024:
@@ -4202,10 +4353,22 @@ async def upload_video(
                 chunk_size=6 * 1024 * 1024,
                 eager=[
                     {
-                        "width": 720,
-                        "crop": "scale",
+                        "height": 240,
+                        "crop": "limit",
                         "quality": "auto:eco",
-                        "fetch_format": "auto",
+                        "fetch_format": "mp4",
+                    },
+                    {
+                        "height": 480,
+                        "crop": "limit",
+                        "quality": "auto:eco",
+                        "fetch_format": "mp4",
+                    },
+                    {
+                        "width": 720,
+                        "crop": "limit",
+                        "quality": "auto:eco",
+                        "fetch_format": "mp4",
                     }
                 ],
                 eager_async=True,
@@ -4233,11 +4396,14 @@ async def upload_video(
             "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600"
         )
 
+    adaptive_url = None
+    video_variants = {}
     if CLOUDINARY_CLOUD_NAME and video_public_id:
-        if video_version:
-            video_playback_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/v{video_version}/{video_public_id}.mp4"
-        else:
-            video_playback_url = f"https://res.cloudinary.com/{CLOUDINARY_CLOUD_NAME}/video/upload/{video_public_id}.mp4"
+        adaptive_url = _build_cloudinary_reel_adaptive_url(video_public_id, video_version)
+        video_variants = _build_cloudinary_reel_variants(video_public_id, video_version)
+        video_playback_url = adaptive_url or _build_cloudinary_video_playback_url(
+            video_public_id, video_version
+        )
     else:
         video_playback_url = "https://player.vimeo.com/external/434045526.sd.mp4?s=c27eecc69a27dbc4ff2b87d38afc35f1a9e7c02d&profile_id=165"
 
@@ -4246,10 +4412,12 @@ async def upload_video(
         "owner_id": user["id"],
         "owner_name": user["name"],
         "title": title,
-        "description": description or "",
+        "description": caption or description or "",
         "category": parsed_category.value,
         "video_public_id": video_public_id,
         "video_version": video_version,
+        "adaptive_url": adaptive_url,
+        "video_variants": video_variants,
         "url": video_playback_url,
         "video_url": video_public_id,
         "thumbnail_url": thumbnail_url,
@@ -4259,6 +4427,11 @@ async def upload_video(
         "saves": 0,
         "shares": 0,
         "comments": [],
+        "visibility": visibility,
+        "hidden": visibility == "hidden",
+        "is_deleted": False,
+        "deleted_at": None,
+        "delete_after": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -4271,6 +4444,8 @@ async def upload_video(
         "video_id": video_id,
         "video_public_id": video_public_id,
         "video_version": video_version,
+        "adaptive_url": adaptive_url,
+        "video_variants": video_variants,
         "url": video_playback_url,
         "thumbnail_url": thumbnail_url,
     }
@@ -4322,6 +4497,11 @@ async def create_video(video: VideoCreate, user: dict = Depends(get_owner_user))
         "saves": 0,
         "shares": 0,
         "comments": [],
+        "visibility": "public",
+        "hidden": False,
+        "is_deleted": False,
+        "deleted_at": None,
+        "delete_after": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -4339,7 +4519,7 @@ async def get_videos(
     user: Optional[dict] = Depends(get_optional_current_user),
     response: Response = None,
 ):
-    query = {}
+    query: Dict[str, Any] = dict(PUBLIC_REEL_QUERY)
     if category:
         query["category"] = category
 
@@ -4422,7 +4602,7 @@ async def get_video_feed(
     # Personalized feed based on user preferences
     preferences = user.get("preferences", {})
 
-    query = {}
+    query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
     if preferences.get("category"):
         query["category"] = preferences["category"]
 
@@ -4435,6 +4615,19 @@ async def get_video_feed(
         .to_list(limit)
     )
     videos = [_normalize_video_doc_for_response(video) for video in videos]
+    videos = [
+        v
+        for v in videos
+        if (
+            (v.get("owner_id") == user.get("id"))
+            or _is_admin_role(user.get("role"))
+            or (
+                v.get("visibility") == "public"
+                and not bool(v.get("is_deleted", False))
+                and not bool(v.get("hidden", False))
+            )
+        )
+    ]
 
     if videos:
         user_id = user["id"]
@@ -4483,7 +4676,10 @@ async def get_saved_videos(
     total = len(saved_ids)
     paged_ids = saved_ids[skip : skip + limit]
 
-    videos = await db.videos.find({"id": {"$in": paged_ids}}, VIDEO_LIST_PROJECTION).to_list(limit)
+    videos = await db.videos.find(
+        {"id": {"$in": paged_ids}, "is_deleted": {"$ne": True}},
+        VIDEO_LIST_PROJECTION,
+    ).to_list(limit)
     video_map = {video.get("id"): video for video in videos if video.get("id")}
     ordered = [video_map[vid] for vid in paged_ids if vid in video_map]
     return {
@@ -4524,6 +4720,21 @@ async def get_video_by_id(
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
+    normalized_video = _normalize_video_doc_for_response(video)
+    if normalized_video.get("is_deleted"):
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    if not user:
+        if normalized_video.get("visibility") != "public" or normalized_video.get("hidden"):
+            raise HTTPException(status_code=404, detail="Video not found")
+    else:
+        if (
+            normalized_video.get("owner_id") != user.get("id")
+            and not _is_admin_role(user.get("role"))
+            and (normalized_video.get("visibility") != "public" or normalized_video.get("hidden"))
+        ):
+            raise HTTPException(status_code=404, detail="Video not found")
+
     if user:
         user_id = user["id"]
         like_doc = await db.likes.find_one(
@@ -4533,11 +4744,11 @@ async def get_video_by_id(
             {"follower_id": user_id, "following_id": video.get("owner_id")},
             {"_id": 0, "id": 1},
         )
-        video["user_liked"] = bool(like_doc)
-        video["user_saved"] = video_id in set(user.get("saved_reels", []))
-        video["user_following"] = bool(follow_doc)
+        normalized_video["user_liked"] = bool(like_doc)
+        normalized_video["user_saved"] = video_id in set(user.get("saved_reels", []))
+        normalized_video["user_following"] = bool(follow_doc)
 
-    return video
+    return normalized_video
 
 
 @api_router.get("/interactions/snapshot")
@@ -4620,11 +4831,149 @@ async def persist_reels_debug_session(
     }
 
 
+@api_router.post("/reels/playback-metrics")
+async def ingest_reel_playback_metric(
+    payload: ReelPlaybackMetricIn,
+    request: Request,
+    user: Optional[dict] = Depends(get_optional_current_user),
+):
+    # Best-effort telemetry endpoint to observe adaptive playback behavior.
+    if user and user.get("id"):
+        await enforce_upload_rate_limit(
+            user["id"], "reel_playback_metric", max_requests=240, window_seconds=60
+        )
+
+    now = datetime.now(timezone.utc)
+    client_ip = request.client.host if request.client else "anon"
+    user_agent = str(request.headers.get("user-agent", ""))[:300]
+    effective_type = (
+        str(payload.network_effective_type or "").strip().lower() or None
+    )
+
+    metric_doc = {
+        "id": str(uuid.uuid4()),
+        "reel_id": payload.reel_id,
+        "user_id": (user or {}).get("id"),
+        "source_type": payload.source_type,
+        "source_index": payload.source_index,
+        "fallback_count": payload.fallback_count,
+        "load_time_ms": payload.load_time_ms,
+        "had_error": bool(payload.had_error),
+        "playback_started": bool(payload.playback_started),
+        "network_effective_type": effective_type,
+        "network_save_data": payload.network_save_data,
+        "ip": client_ip,
+        "user_agent": user_agent,
+        "created_at": now,
+    }
+
+    try:
+        await db.reel_playback_metrics.insert_one(metric_doc)
+    except Exception as exc:
+        logger.warning("Failed to store reel playback metric: %s", exc)
+
+    return {"accepted": True, "created_at": now.isoformat()}
+
+
+@api_router.get("/admin/reels/playback-metrics")
+async def get_reel_playback_metrics_summary(
+    since_minutes: int = Query(60, ge=1, le=10080),
+    reel_id: Optional[str] = Query(None),
+    admin: dict = Depends(get_admin_user),
+):
+    del admin
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(minutes=since_minutes)
+
+    query: Dict[str, Any] = {"created_at": {"$gte": since}}
+    if reel_id:
+        query["reel_id"] = reel_id
+
+    pipeline = [
+        {"$match": query},
+        {
+            "$group": {
+                "_id": "$source_type",
+                "events": {"$sum": 1},
+                "errors": {
+                    "$sum": {"$cond": [{"$eq": ["$had_error", True]}, 1, 0]}
+                },
+                "started": {
+                    "$sum": {
+                        "$cond": [{"$eq": ["$playback_started", True]}, 1, 0]
+                    }
+                },
+                "avg_load_ms": {"$avg": "$load_time_ms"},
+                "avg_fallback": {"$avg": "$fallback_count"},
+            }
+        },
+        {"$sort": {"events": -1}},
+    ]
+
+    by_source_docs = await db.reel_playback_metrics.aggregate(pipeline).to_list(50)
+    total = await db.reel_playback_metrics.count_documents(query)
+
+    by_network_docs = await db.reel_playback_metrics.aggregate(
+        [
+            {"$match": query},
+            {
+                "$group": {
+                    "_id": "$network_effective_type",
+                    "events": {"$sum": 1},
+                    "errors": {
+                        "$sum": {
+                            "$cond": [{"$eq": ["$had_error", True]}, 1, 0]
+                        }
+                    },
+                }
+            },
+            {"$sort": {"events": -1}},
+        ]
+    ).to_list(20)
+
+    by_source = [
+        {
+            "source_type": d.get("_id") or "unknown",
+            "events": int(d.get("events", 0)),
+            "errors": int(d.get("errors", 0)),
+            "started": int(d.get("started", 0)),
+            "error_rate": (
+                round(float(d.get("errors", 0)) / max(1, int(d.get("events", 0))), 4)
+            ),
+            "avg_load_ms": round(float(d.get("avg_load_ms") or 0), 2),
+            "avg_fallback": round(float(d.get("avg_fallback") or 0), 3),
+        }
+        for d in by_source_docs
+    ]
+
+    by_network = [
+        {
+            "network": d.get("_id") or "unknown",
+            "events": int(d.get("events", 0)),
+            "errors": int(d.get("errors", 0)),
+            "error_rate": (
+                round(float(d.get("errors", 0)) / max(1, int(d.get("events", 0))), 4)
+            ),
+        }
+        for d in by_network_docs
+    ]
+
+    return {
+        "since_minutes": since_minutes,
+        "reel_id": reel_id,
+        "total_events": total,
+        "by_source": by_source,
+        "by_network": by_network,
+    }
+
+
 @api_router.post("/videos/{video_id}/like")
 async def like_video(video_id: str, user: dict = Depends(get_current_user)):
-    video = await db.videos.find_one({"id": video_id})
+    video = await db.videos.find_one({"id": video_id, "is_deleted": {"$ne": True}})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    if _reel_visibility_from_doc(video) == "hidden" and not _can_moderate_reel(video, user):
+        raise HTTPException(status_code=403, detail="Reel is hidden")
 
     user_id = user["id"]
     await enforce_upload_rate_limit(
@@ -4677,7 +5026,7 @@ async def save_video(video_id: str, user: dict = Depends(get_current_user)):
         user["id"], "video_save", max_requests=80, window_seconds=60
     )
 
-    video = await db.videos.find_one({"id": video_id})
+    video = await db.videos.find_one({"id": video_id, "is_deleted": {"$ne": True}})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -4740,7 +5089,7 @@ async def get_video_comments(video_id: str, page: int = 1, limit: int = 50):
 async def add_video_comment(
     video_id: str, comment_data: CommentCreate, user: dict = Depends(get_current_user)
 ):
-    video = await db.videos.find_one({"id": video_id})
+    video = await db.videos.find_one({"id": video_id, "is_deleted": {"$ne": True}})
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -4817,9 +5166,14 @@ async def record_video_view(
     request: Request,
     user: Optional[dict] = Depends(get_optional_current_user),
 ):
-    video = await db.videos.find_one({"id": video_id}, {"_id": 0, "id": 1})
+    video = await db.videos.find_one(
+        {"id": video_id, "is_deleted": {"$ne": True}},
+        {"_id": 0, "id": 1, "owner_id": 1, "hidden": 1, "visibility": 1},
+    )
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    if _reel_visibility_from_doc(video) == "hidden" and not (user and _can_moderate_reel(video, user)):
+        return {"message": "View ignored", "counted": False}
 
     # Count at most one view per viewer+reel, where viewer is user_id or IP fallback.
     now = datetime.now(timezone.utc)
@@ -4855,9 +5209,14 @@ async def record_video_view(
 
 @api_router.post("/videos/{video_id}/share")
 async def share_video(video_id: str, user: dict = Depends(get_current_user)):
-    video = await db.videos.find_one({"id": video_id}, {"_id": 0, "id": 1})
+    video = await db.videos.find_one(
+        {"id": video_id, "is_deleted": {"$ne": True}},
+        {"_id": 0, "id": 1, "owner_id": 1, "hidden": 1, "visibility": 1},
+    )
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
+    if _reel_visibility_from_doc(video) == "hidden" and not _can_moderate_reel(video, user):
+        raise HTTPException(status_code=403, detail="Reel is hidden")
 
     user_id = user["id"]
     await enforce_upload_rate_limit(
@@ -4892,24 +5251,53 @@ async def share_video(video_id: str, user: dict = Depends(get_current_user)):
 @api_router.patch("/videos/{video_id}/hide")
 async def hide_reel(video_id: str, user: dict = Depends(get_current_user)):
     """Hide/unhide a reel. Owner can hide their own, admin can hide any."""
-    video = await db.videos.find_one({"id": video_id})
+    video = await db.videos.find_one({"id": video_id, "is_deleted": {"$ne": True}})
     if not video:
         raise HTTPException(status_code=404, detail="Reel not found")
 
-    # Check authorization: owner of reel or admin
-    is_owner = video.get("owner_id") == user["id"]
-    is_admin = user.get("role") == UserRole.ADMIN
-
-    if not (is_owner or is_admin):
+    if not _can_moderate_reel(video, user):
         raise HTTPException(status_code=403, detail="Not authorized to hide this reel")
 
-    is_hidden = video.get("hidden", False)
-    await db.videos.update_one({"id": video_id}, {"$set": {"hidden": not is_hidden}})
+    is_hidden = _reel_visibility_from_doc(video) == "hidden"
+    next_visibility = "public" if is_hidden else "hidden"
+    await db.videos.update_one(
+        {"id": video_id},
+        {
+            "$set": {
+                "visibility": next_visibility,
+                "hidden": next_visibility == "hidden",
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+    await _write_reel_audit_log(
+        action="reel_hidden" if next_visibility == "hidden" else "reel_unhidden",
+        actor=user,
+        video=video,
+        meta={"video_id": video_id, "visibility": next_visibility},
+    )
+
+    try:
+        await sio.emit(
+            "reel_moderated",
+            {
+                "video_id": video_id,
+                "visibility": next_visibility,
+                "actor_id": user.get("id"),
+                "owner_id": video.get("owner_id"),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            },
+            room=f"user_{video.get('owner_id')}",
+        )
+    except Exception:
+        pass
+
     await invalidate_video_related_caches()
 
     return {
         "message": f"Reel {'unhidden' if is_hidden else 'hidden'} successfully",
-        "hidden": not is_hidden,
+        "hidden": next_visibility == "hidden",
+        "visibility": next_visibility,
         "video_id": video_id,
     }
 
@@ -4917,28 +5305,168 @@ async def hide_reel(video_id: str, user: dict = Depends(get_current_user)):
 @api_router.delete("/videos/{video_id}")
 async def delete_reel(video_id: str, user: dict = Depends(get_current_user)):
     """Delete a reel. Owner can delete their own, admin can delete any."""
-    video = await db.videos.find_one({"id": video_id})
+    video = await db.videos.find_one({"id": video_id, "is_deleted": {"$ne": True}})
     if not video:
         raise HTTPException(status_code=404, detail="Reel not found")
 
-    # Check authorization: owner of reel or admin
-    is_owner = video.get("owner_id") == user["id"]
-    is_admin = user.get("role") == UserRole.ADMIN
-
-    if not (is_owner or is_admin):
+    is_owner = video.get("owner_id") == user.get("id")
+    if not _can_moderate_reel(video, user):
         raise HTTPException(
             status_code=403, detail="Not authorized to delete this reel"
         )
 
-    # Delete the video
-    await db.videos.delete_one({"id": video_id})
+    now = datetime.now(timezone.utc)
+    hard_delete_after = now + timedelta(days=30)
+    await db.videos.update_one(
+        {"id": video_id},
+        {
+            "$set": {
+                "is_deleted": True,
+                "deleted_at": now,
+                "delete_after": hard_delete_after,
+                "visibility": "hidden",
+                "hidden": True,
+                "updated_at": now.isoformat(),
+            }
+        },
+    )
 
-    # Remove from user's videos if applicable
+    await _write_reel_audit_log(
+        action="reel_soft_deleted",
+        actor=user,
+        video=video,
+        meta={
+            "video_id": video_id,
+            "delete_after": hard_delete_after.isoformat(),
+        },
+    )
+
+    try:
+        await sio.emit(
+            "reel_deleted",
+            {
+                "video_id": video_id,
+                "soft_deleted": True,
+                "actor_id": user.get("id"),
+                "owner_id": video.get("owner_id"),
+                "delete_after": hard_delete_after.isoformat(),
+            },
+            room=f"user_{video.get('owner_id')}",
+        )
+    except Exception:
+        pass
+
+    # Remove from user's videos list (legacy field) if applicable.
     if is_owner:
         await db.users.update_one({"id": user["id"]}, {"$pull": {"videos": video_id}})
     await invalidate_video_related_caches()
 
-    return {"message": "Reel deleted successfully", "video_id": video_id}
+    return {
+        "message": "Reel deleted successfully",
+        "video_id": video_id,
+        "soft_deleted": True,
+        "delete_after": hard_delete_after.isoformat(),
+    }
+
+
+@api_router.post("/reels/upload")
+async def upload_reel_alias(
+    caption: str = Form(""),
+    category: str = Form("home"),
+    visibility: str = Form("public"),
+    listing_id: str = Form(None),
+    video: UploadFile = File(...),
+    user: dict = Depends(get_owner_user),
+):
+    return await upload_video(
+        title=(caption or "Untitled Reel"),
+        description=caption,
+        caption=caption,
+        category=category,
+        visibility=visibility,
+        listing_id=listing_id,
+        video=video,
+        user=user,
+    )
+
+
+@api_router.get("/reels/feed")
+async def get_reels_feed_alias(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=30),
+    user: dict = Depends(get_current_user),
+):
+    return await get_video_feed(user=user, page=page, limit=limit)
+
+
+@api_router.get("/reels/my-reels")
+async def get_my_reels(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    user: dict = Depends(get_owner_user),
+):
+    page, limit, skip = _parse_pagination(page, limit, default_limit=20, max_limit=100)
+    query = {"owner_id": user.get("id"), "is_deleted": {"$ne": True}}
+    reels = (
+        await db.videos.find(query, VIDEO_LIST_PROJECTION)
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+        .to_list(limit)
+    )
+    total = await db.videos.count_documents(query)
+    return {
+        "reels": [_normalize_video_doc_for_response(item) for item in reels],
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+    }
+
+
+@api_router.patch("/reels/{video_id}/hide")
+async def hide_my_reel(video_id: str, user: dict = Depends(get_owner_user)):
+    return await hide_reel(video_id=video_id, user=user)
+
+
+@api_router.delete("/reels/{video_id}")
+async def delete_my_reel(video_id: str, user: dict = Depends(get_owner_user)):
+    return await delete_reel(video_id=video_id, user=user)
+
+
+@api_router.get("/admin/reels/user/{user_id}")
+async def get_admin_user_reels(
+    user_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    admin: dict = Depends(get_admin_user),
+):
+    page, limit, skip = _parse_pagination(page, limit, default_limit=20, max_limit=100)
+    query = {"owner_id": user_id, "is_deleted": {"$ne": True}}
+    reels = (
+        await db.videos.find(query, VIDEO_LIST_PROJECTION)
+        .sort("created_at", -1)
+        .skip(skip)
+        .limit(limit)
+        .to_list(limit)
+    )
+    total = await db.videos.count_documents(query)
+    return {
+        "reels": [_normalize_video_doc_for_response(item) for item in reels],
+        "total": total,
+        "page": page,
+        "pages": (total + limit - 1) // limit,
+        "user_id": user_id,
+    }
+
+
+@api_router.patch("/admin/reels/{video_id}/hide")
+async def admin_hide_reel(video_id: str, admin: dict = Depends(get_admin_user)):
+    return await hide_reel(video_id=video_id, user=admin)
+
+
+@api_router.delete("/admin/reels/{video_id}")
+async def admin_delete_reel(video_id: str, admin: dict = Depends(get_admin_user)):
+    return await delete_reel(video_id=video_id, user=admin)
 
 
 # ============ USER FOLLOW ROUTES ============
@@ -4955,8 +5483,12 @@ async def get_user_profile(
     following_count = await db.follows.count_documents({"follower_id": user_id})
 
     # Get user's reels
+    reel_query: Dict[str, Any] = {"owner_id": user_id, "is_deleted": {"$ne": True}}
+    if not (current_user and (current_user.get("id") == user_id or _is_admin_role(current_user.get("role")))):
+        reel_query.update(dict(PUBLIC_REEL_QUERY))
+
     reels = (
-        await db.videos.find({"owner_id": user_id}, {"_id": 0})
+        await db.videos.find(reel_query, {"_id": 0})
         .sort("created_at", -1)
         .limit(20)
         .to_list(20)
@@ -10369,7 +10901,7 @@ socket_app = socketio.ASGIApp(sio, app)
 
 
 async def startup_services():
-    global redis_client, response_cache, delete_worker_task
+    global redis_client, response_cache, delete_worker_task, reel_purge_task
     redis_client = await create_redis_client(redis_url)
     response_cache = ResponseCacheMiddleware(
         redis_client,
@@ -10392,6 +10924,10 @@ async def startup_services():
     await db.videos.create_index("id", unique=True)
     await db.videos.create_index([("created_at", -1)])
     await db.videos.create_index([("views", -1), ("created_at", -1)])
+    await db.videos.create_index([("owner_id", 1), ("created_at", -1)])
+    await db.videos.create_index([("visibility", 1), ("created_at", -1)])
+    await db.videos.create_index([("is_deleted", 1), ("created_at", -1)])
+    await db.videos.create_index([("delete_after", 1)], sparse=True)
     await db.likes.create_index([("user_id", 1), ("reel_id", 1)], unique=True)
     await db.likes.create_index([("reel_id", 1), ("created_at", -1)])
     await db.follows.create_index(
@@ -10409,6 +10945,16 @@ async def startup_services():
         [("type", 1), ("stress_session_id", 1), ("created_at", -1)]
     )
     await db.debug_session_reports.create_index([("user_id", 1), ("created_at", -1)])
+    await db.reel_playback_metrics.create_index("id", unique=True)
+    await db.reel_playback_metrics.create_index([("created_at", -1)])
+    await db.reel_playback_metrics.create_index([("reel_id", 1), ("created_at", -1)])
+    await db.reel_playback_metrics.create_index(
+        [("source_type", 1), ("created_at", -1)]
+    )
+    await db.reel_playback_metrics.create_index(
+        [("network_effective_type", 1), ("created_at", -1)]
+    )
+    await db.reel_playback_metrics.create_index([("user_id", 1), ("created_at", -1)], sparse=True)
     await db.users.create_index("id", unique=True)
     await db.users.create_index([("id", 1), ("created_at", -1)])
     await db.users.create_index([("createdAt", -1)], sparse=True)
@@ -10552,10 +11098,11 @@ async def startup_services():
         logger.warning(f"Could not create listings text index: {e}")
 
     delete_worker_task = asyncio.create_task(media_delete_retry_worker())
+    reel_purge_task = asyncio.create_task(soft_delete_reels_purge_worker())
 
 
 async def shutdown_db_client():
-    global redis_client, response_cache, delete_worker_task
+    global redis_client, response_cache, delete_worker_task, reel_purge_task
     if delete_worker_task:
         delete_worker_task.cancel()
         try:
@@ -10563,6 +11110,14 @@ async def shutdown_db_client():
         except asyncio.CancelledError:
             pass
         delete_worker_task = None
+
+    if reel_purge_task:
+        reel_purge_task.cancel()
+        try:
+            await reel_purge_task
+        except asyncio.CancelledError:
+            pass
+        reel_purge_task = None
 
     client.close()
     response_cache = None

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { videosAPI } from '../../lib/api';
+import { reelsAPI, videosAPI } from '../../lib/api';
 
 export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot, preferredListingId = '' }) => {
   const [videos, setVideos] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const pageRef = useRef(1);
   const [isMuted, setIsMuted] = useState(false);
   const [commentCountMap, setCommentCountMap] = useState({});
   const containerRef = useRef(null);
@@ -17,18 +20,45 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
     };
   }, []);
 
+  const mergeReels = useCallback((incoming = []) => {
+    setVideos((prev) => {
+      const seen = new Set(prev.map((v) => v.id));
+      const next = [...prev];
+      for (const item of incoming) {
+        if (!item?.id || seen.has(item.id)) continue;
+        next.push(item);
+        seen.add(item.id);
+      }
+      return next;
+    });
+  }, []);
+
+  const applyOrdering = useCallback((items) => {
+    const matchListingId = (video) => {
+      const candidate = video?.listing_id || video?.listingId || video?.listing?.id;
+      return String(candidate || '') === String(preferredListingId || '');
+    };
+
+    return preferredListingId
+      ? [...items.filter(matchListingId), ...items.filter((video) => !matchListingId(video))]
+      : items;
+  }, [preferredListingId]);
+
+  const hydrateInteractionState = useCallback(async (list) => {
+    primeFromVideos(list);
+    if (isAuthenticated && list.length) {
+      const reelIds = list.map((v) => v.id).filter(Boolean);
+      const ownerIds = list.map((v) => v.owner_id).filter(Boolean);
+      await hydrateSnapshot({ ownerIds, reelIds });
+    }
+  }, [hydrateSnapshot, isAuthenticated, primeFromVideos]);
+
   const fetchVideos = useCallback(async () => {
     try {
-      const response = await videosAPI.getAll({ limit: 20 });
-      const vids = response.data.videos || [];
-      const matchListingId = (video) => {
-        const candidate = video?.listing_id || video?.listingId || video?.listing?.id;
-        return String(candidate || '') === String(preferredListingId || '');
-      };
-
-      const orderedVideos = preferredListingId
-        ? [...vids.filter(matchListingId), ...vids.filter((video) => !matchListingId(video))]
-        : vids;
+      pageRef.current = 1;
+      const response = await reelsAPI.getFeed({ page: 1, limit: 10 });
+      const vids = response?.data?.videos || [];
+      const orderedVideos = applyOrdering(vids);
 
       setVideos(orderedVideos);
       setCommentCountMap(() => {
@@ -38,31 +68,70 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
         });
         return next;
       });
-      primeFromVideos(orderedVideos);
-
-      if (isAuthenticated && orderedVideos.length) {
-        const reelIds = orderedVideos.map((v) => v.id).filter(Boolean);
-        const ownerIds = orderedVideos.map((v) => v.owner_id).filter(Boolean);
-        await hydrateSnapshot({ ownerIds, reelIds });
-      }
+      setHasMore((response?.data?.page || 1) < (response?.data?.pages || 1));
+      await hydrateInteractionState(orderedVideos);
     } catch (error) {
-      console.error('Failed to fetch videos:', error);
+      try {
+        const fallback = await videosAPI.getAll({ limit: 20 });
+        const vids = fallback?.data?.videos || [];
+        const orderedVideos = applyOrdering(vids);
+        setVideos(orderedVideos);
+        setHasMore(false);
+        await hydrateInteractionState(orderedVideos);
+      } catch (fallbackError) {
+        console.error('Failed to fetch videos:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }
-  }, [hydrateSnapshot, isAuthenticated, preferredListingId, primeFromVideos]);
+  }, [applyOrdering, hydrateInteractionState]);
+
+  const fetchNextPage = useCallback(async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = pageRef.current + 1;
+      const response = await reelsAPI.getFeed({ page: nextPage, limit: 10 });
+      const nextVideos = applyOrdering(response?.data?.videos || []);
+      if (nextVideos.length) {
+        mergeReels(nextVideos);
+        setCommentCountMap((prev) => {
+          const next = { ...prev };
+          nextVideos.forEach((v) => {
+            if (typeof next[v.id] !== 'number') {
+              next[v.id] = typeof v.comments_count === 'number' ? v.comments_count : 0;
+            }
+          });
+          return next;
+        });
+      }
+      pageRef.current = nextPage;
+      setHasMore((response?.data?.page || nextPage) < (response?.data?.pages || nextPage));
+    } catch (error) {
+      setHasMore(false);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [applyOrdering, hasMore, loadingMore, mergeReels]);
 
   useEffect(() => {
     fetchVideos();
   }, [fetchVideos]);
 
   useEffect(() => {
+    if (!videos.length) return;
+    if (currentIndex >= Math.max(0, videos.length - 3)) {
+      fetchNextPage();
+    }
+  }, [currentIndex, fetchNextPage, videos.length]);
+
+  useEffect(() => {
     const nextVideo = videos[currentIndex + 1];
-    if (!nextVideo?.video_url && !nextVideo?.url) {
+    if (!nextVideo?.adaptive_url && !nextVideo?.video_url && !nextVideo?.url) {
       return undefined;
     }
 
-    const preloadUrl = nextVideo.video_url || nextVideo.url;
+    const preloadUrl = nextVideo.adaptive_url || nextVideo.video_url || nextVideo.url;
     const link = document.createElement('link');
     link.rel = 'preload';
     link.as = 'video';
@@ -111,17 +180,37 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
     }
   }, [videos.length]);
 
+  const removeVideo = useCallback((videoId) => {
+    if (!videoId) return;
+    setVideos((prev) => prev.filter((item) => item.id !== videoId));
+    setCommentCountMap((prev) => {
+      const next = { ...prev };
+      delete next[videoId];
+      return next;
+    });
+  }, []);
+
+  const patchVideo = useCallback((videoId, patch) => {
+    if (!videoId) return;
+    setVideos((prev) => prev.map((item) => (item.id === videoId ? { ...item, ...patch } : item)));
+  }, []);
+
   return {
     videos,
     currentIndex,
     loading,
+    loadingMore,
+    hasMore,
     isMuted,
     commentCountMap,
     containerRef,
     fetchVideos,
+    fetchNextPage,
     setCurrentIndex,
     setIsMuted,
     setCommentCountMap,
+    removeVideo,
+    patchVideo,
     handleTouchStart,
     handleTouchEnd,
     handleScroll,

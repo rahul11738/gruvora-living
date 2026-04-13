@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { io } from 'socket.io-client';
 import { AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
@@ -18,12 +19,35 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
+import api from '../lib/api';
+
+const normalizeSocketBaseUrl = (rawUrl) => {
+  const base = String(rawUrl || '').trim();
+  if (!base) return '';
+  return base
+    .replace(/\/api\/?$/i, '')
+    .replace(/\/+$/, '')
+    .replace('://localhost', '://127.0.0.1');
+};
+
+const resolveBackendUrl = () => {
+  const clientBase = String(api?.defaults?.baseURL || '').trim();
+  if (clientBase) return clientBase.replace(/\/api\/?$/i, '');
+  if (process.env.REACT_APP_BACKEND_URL) return process.env.REACT_APP_BACKEND_URL;
+  if (typeof window !== 'undefined') {
+    const stored = window.localStorage.getItem('gharsetu_backend_url');
+    if (stored) return stored;
+  }
+  return 'http://127.0.0.1:8000';
+};
+
+const SOCKET_API_URL = normalizeSocketBaseUrl(resolveBackendUrl());
 
 // ============ MAIN REELS PAGE ============
 export const ReelsPage = () => {
   const [searchParams] = useSearchParams();
   const preferredListingId = searchParams.get('listingId') || '';
-  const { isAuthenticated, isOwner, isAdmin, user } = useAuth();
+  const { isAuthenticated, isOwner, isAdmin, user, token } = useAuth();
   const canCreateReel = isAuthenticated && (isOwner || isAdmin);
   const isDev = process.env.NODE_ENV === 'development';
   const debugEnabled = isDev && process.env.REACT_APP_ENABLE_REELS_DEBUG === 'true';
@@ -53,10 +77,14 @@ export const ReelsPage = () => {
     videos,
     currentIndex,
     loading,
+    loadingMore,
+    hasMore,
     isMuted,
     commentCountMap,
     containerRef,
     fetchVideos,
+    removeVideo,
+    patchVideo,
     setIsMuted,
     setCommentCountMap,
     setCurrentIndex,
@@ -181,6 +209,51 @@ export const ReelsPage = () => {
     });
   }, [setCommentCountMap]);
 
+  const handleReelHidden = useCallback((videoId, hidden) => {
+    patchVideo(videoId, { hidden, visibility: hidden ? 'hidden' : 'public' });
+  }, [patchVideo]);
+
+  const handleReelDeleted = useCallback((videoId) => {
+    removeVideo(videoId);
+  }, [removeVideo]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !token) return undefined;
+
+    const socket = io(SOCKET_API_URL, {
+      transports: ['polling', 'websocket'],
+      path: '/socket.io',
+      autoConnect: true,
+      reconnection: true,
+    });
+
+    socket.on('connect', () => {
+      socket.emit('authenticate', { token });
+    });
+
+    const onReelModerated = (payload) => {
+      const videoId = payload?.video_id;
+      if (!videoId) return;
+      const hidden = payload?.visibility === 'hidden';
+      patchVideo(videoId, { hidden, visibility: hidden ? 'hidden' : 'public' });
+    };
+
+    const onReelDeleted = (payload) => {
+      const videoId = payload?.video_id;
+      if (!videoId) return;
+      removeVideo(videoId);
+    };
+
+    socket.on('reel_moderated', onReelModerated);
+    socket.on('reel_deleted', onReelDeleted);
+
+    return () => {
+      socket.off('reel_moderated', onReelModerated);
+      socket.off('reel_deleted', onReelDeleted);
+      socket.disconnect();
+    };
+  }, [isAuthenticated, token, patchVideo, removeVideo]);
+
   const handleResetDebug = useCallback(() => {
     interactionDebug?.reset?.();
     resetLocalDebugState();
@@ -205,7 +278,7 @@ export const ReelsPage = () => {
           <ChevronLeft className="w-6 h-6" />
           <span>Reels</span>
         </Link>
-        
+
         <div className="flex items-center gap-3">
           {canCreateReel && (
             <button
@@ -283,9 +356,23 @@ export const ReelsPage = () => {
                 onLike={handleLikeToggle}
                 onFollow={handleFollowToggle}
                 isAdmin={isAdmin}
+                onReelHidden={handleReelHidden}
+                onReelDeleted={handleReelDeleted}
               />
             </div>
           ))}
+          {hasMore && (
+            <div className="h-20 flex items-center justify-center bg-black/50">
+              {loadingMore ? (
+                <div className="flex items-center gap-2 text-white/80 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading more reels...
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-white/15 animate-pulse" />
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="h-full flex items-center justify-center">

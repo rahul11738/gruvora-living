@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -22,10 +22,59 @@ import {
   EyeOff,
   Trash2,
 } from 'lucide-react';
-import { videosAPI } from '../../lib/api';
+import { videosAPI, reelsAPI, adminAPI } from '../../lib/api';
 import FollowButton from './FollowButton';
 
 const viewedReelsInSession = new Set();
+
+const getPreferredVariantKey = () => {
+  if (typeof navigator === 'undefined') return '720p';
+  const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  const effectiveType = String(connection?.effectiveType || '').toLowerCase();
+  const saveData = Boolean(connection?.saveData);
+
+  if (saveData || effectiveType.includes('2g')) return '240p';
+  if (effectiveType.includes('3g')) return '480p';
+  return '720p';
+};
+
+const buildReelSourceCandidates = (video) => {
+  const variants = video?.video_variants || {};
+  const fallbackOrder = ['720p', '480p', '240p'];
+  const preferred = getPreferredVariantKey();
+  const preferredOrder = [
+    preferred,
+    ...fallbackOrder.filter((label) => label !== preferred),
+  ];
+
+  const candidates = [];
+
+  // Keep adaptive URL as first-class source for capable connections/CDNs.
+  if (video?.adaptive_url) {
+    candidates.push(video.adaptive_url);
+  }
+
+  preferredOrder.forEach((label) => {
+    const variantUrl = variants?.[label];
+    if (variantUrl) candidates.push(variantUrl);
+  });
+
+  if (video?.video_url) candidates.push(video.video_url);
+  if (video?.url) candidates.push(video.url);
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+};
+
+const detectSourceType = (url = '', video = {}) => {
+  const normalized = String(url || '');
+  if (!normalized) return 'unknown';
+  if (video?.adaptive_url && normalized === video.adaptive_url) return 'adaptive';
+  const variants = video?.video_variants || {};
+  if (variants['720p'] && normalized === variants['720p']) return '720p';
+  if (variants['480p'] && normalized === variants['480p']) return '480p';
+  if (variants['240p'] && normalized === variants['240p']) return '240p';
+  return 'direct';
+};
 
 const ReelCard = React.memo(({
   video,
@@ -47,6 +96,8 @@ const ReelCard = React.memo(({
   onLike,
   onFollow,
   isAdmin = false,
+  onReelHidden,
+  onReelDeleted,
 }) => {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -60,15 +111,50 @@ const ReelCard = React.memo(({
   const [hideLoading, setHideLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [isHidden, setIsHidden] = useState(video.hidden || false);
+  const [sourceIndex, setSourceIndex] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
   const [hasVideoError, setHasVideoError] = useState(false);
   const lastTap = useRef(0);
   const menuRef = useRef(null);
+  const loadStartAtRef = useRef(Date.now());
+  const metricSentRef = useRef(false);
+  const sourceCandidates = useMemo(() => buildReelSourceCandidates(video), [video]);
+  const activeSource = sourceCandidates[sourceIndex] || '';
 
   useEffect(() => {
     setIsLoaded(false);
     setHasVideoError(false);
+    setSourceIndex(0);
+    loadStartAtRef.current = Date.now();
+    metricSentRef.current = false;
   }, [videoId]);
+
+  useEffect(() => {
+    loadStartAtRef.current = Date.now();
+  }, [sourceIndex]);
+
+  const sendPlaybackMetric = async ({ playbackStarted, hadError }) => {
+    if (metricSentRef.current && !hadError) return;
+    const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+    try {
+      await reelsAPI.reportPlaybackMetric({
+        reel_id: videoId,
+        source_type: detectSourceType(activeSource, video),
+        source_index: sourceIndex,
+        fallback_count: sourceIndex,
+        load_time_ms: Math.max(0, Date.now() - loadStartAtRef.current),
+        had_error: Boolean(hadError),
+        playback_started: Boolean(playbackStarted),
+        network_effective_type: String(connection?.effectiveType || ''),
+        network_save_data: Boolean(connection?.saveData),
+      });
+      if (playbackStarted) {
+        metricSentRef.current = true;
+      }
+    } catch {
+      // Telemetry should never break playback UX.
+    }
+  };
 
   useEffect(() => {
     if (videoRef.current) {
@@ -208,9 +294,11 @@ const ReelCard = React.memo(({
     setHideLoading(true);
 
     try {
-      await videosAPI.hideReel(videoId);
-      setIsHidden(!isHidden);
-      toast.success(isHidden ? 'Reel unhidden' : 'Reel hidden');
+      const res = isAdmin ? await adminAPI.hideReel(videoId) : await reelsAPI.hideOwn(videoId);
+      const nextHidden = Boolean(res?.data?.hidden);
+      setIsHidden(nextHidden);
+      onReelHidden?.(videoId, nextHidden);
+      toast.success(nextHidden ? 'Reel hidden' : 'Reel unhidden');
       setShowMenu(false);
     } catch (error) {
       console.error('Hide failed:', error);
@@ -229,11 +317,14 @@ const ReelCard = React.memo(({
     setDeleteLoading(true);
 
     try {
-      await videosAPI.deleteReel(videoId);
+      if (isAdmin) {
+        await adminAPI.deleteReel(videoId);
+      } else {
+        await reelsAPI.deleteOwn(videoId);
+      }
       toast.success('Reel deleted successfully');
+      onReelDeleted?.(videoId);
       setShowMenu(false);
-      // Optionally, you can call a callback to remove the reel from the list
-      // onReelDeleted?.(videoId);
     } catch (error) {
       console.error('Delete failed:', error);
       toast.error('Failed to delete reel');
@@ -315,7 +406,7 @@ const ReelCard = React.memo(({
 
         <video
           ref={videoRef}
-          src={shouldLoad ? normalizeMediaUrl(video.video_url || video.url) : undefined}
+          src={shouldLoad ? normalizeMediaUrl(activeSource) : undefined}
           poster={normalizeMediaUrl(video.thumbnail_url)}
           loop
           muted={isMuted}
@@ -327,10 +418,16 @@ const ReelCard = React.memo(({
           onLoadedData={() => {
             setIsLoaded(true);
             setHasVideoError(false);
+            sendPlaybackMetric({ playbackStarted: true, hadError: false });
           }}
           onError={(e) => {
             console.error('Video load error:', videoId);
             const el = e.currentTarget;
+            if (sourceIndex < sourceCandidates.length - 1) {
+              setSourceIndex((prev) => prev + 1);
+              return;
+            }
+            sendPlaybackMetric({ playbackStarted: false, hadError: true });
             if (!el.dataset.fallbackApplied) {
               el.dataset.fallbackApplied = 'true';
               el.src = '/fallback-video.mp4';

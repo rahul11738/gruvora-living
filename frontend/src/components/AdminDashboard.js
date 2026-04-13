@@ -25,7 +25,7 @@ import {
   LogOut, Loader2, Bell, Ban, Trash2,
   RotateCcw, Search, ChevronLeft, ChevronRight,
   AlertTriangle, Activity, BarChart3, Mail, Phone, MapPin,
-  IndianRupee, TrendingUp, CreditCard, Settings, Save,
+  IndianRupee, TrendingUp, CreditCard, Settings, Save, Video,
 } from 'lucide-react';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import OptimizedImage from './OptimizedImage';
@@ -82,6 +82,11 @@ export const AdminDashboard = () => {
   const [activityLogs, setActivityLogs] = useState([]);
   const [logsTotal, setLogsTotal] = useState(0);
   const [logsPage, setLogsPage] = useState(1);
+  const [reelSearchUserId, setReelSearchUserId] = useState('');
+  const [reels, setReels] = useState([]);
+  const [reelsPage, setReelsPage] = useState(1);
+  const [reelsTotal, setReelsTotal] = useState(0);
+  const [reelsLoading, setReelsLoading] = useState(false);
 
   const [profileModal, setProfileModal] = useState(null);
   const [profileData, setProfileData] = useState(null);
@@ -195,6 +200,50 @@ export const AdminDashboard = () => {
     }
   }, []);
 
+  const fetchUserReels = useCallback(async (userId, page = 1) => {
+    if (!userId) {
+      setReels([]);
+      setReelsTotal(0);
+      return;
+    }
+    setReelsLoading(true);
+    try {
+      const res = await adminAPI.getUserReels(userId, { page, limit: 20 });
+      setReels(res?.data?.reels || []);
+      setReelsTotal(res?.data?.total || 0);
+      setReelsPage(page);
+    } catch {
+      toast.error('Failed to load user reels');
+    } finally {
+      setReelsLoading(false);
+    }
+  }, []);
+
+  const handleAdminHideReel = useCallback(async (reelId) => {
+    try {
+      const res = await adminAPI.hideReel(reelId);
+      const hidden = Boolean(res?.data?.hidden);
+      setReels((prev) => prev.map((item) => (item.id === reelId
+        ? { ...item, hidden, visibility: hidden ? 'hidden' : 'public' }
+        : item)));
+      toast.success(hidden ? 'Reel hidden' : 'Reel unhidden');
+    } catch {
+      toast.error('Failed to update reel visibility');
+    }
+  }, []);
+
+  const handleAdminDeleteReel = useCallback(async (reelId) => {
+    if (!window.confirm('Soft delete this reel? It will be purged after 30 days.')) return;
+    try {
+      await adminAPI.deleteReel(reelId);
+      setReels((prev) => prev.filter((item) => item.id !== reelId));
+      setReelsTotal((prev) => Math.max(0, prev - 1));
+      toast.success('Reel soft-deleted');
+    } catch {
+      toast.error('Failed to delete reel');
+    }
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'owners') fetchPendingOwners();
@@ -205,7 +254,8 @@ export const AdminDashboard = () => {
     if (activeTab === 'revenue') fetchRevenue();
     if (activeTab === 'settings') fetchSettings();
     if (activeTab === 'logs') fetchActivityLogs();
-  }, [activeTab, fetchUsers, fetchPendingOwners, fetchListings, fetchPendingListings, fetchActivityLogs, fetchRevenue, fetchSettings]);
+    if (activeTab === 'reels' && reelSearchUserId) fetchUserReels(reelSearchUserId, 1);
+  }, [activeTab, fetchUsers, fetchPendingOwners, fetchListings, fetchPendingListings, fetchActivityLogs, fetchRevenue, fetchSettings, fetchUserReels, reelSearchUserId]);
 
   const openProfile = async (userId) => {
     setProfileModal({ userId });
@@ -338,6 +388,7 @@ export const AdminDashboard = () => {
     { id: 'revenue', label: 'Revenue', icon: IndianRupee },
     { id: 'settings', label: 'Settings', icon: Settings },
     { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'reels', label: 'Reels Moderation', icon: Video },
     { id: 'logs', label: 'Activity Logs', icon: Activity },
   ];
 
@@ -483,6 +534,21 @@ export const AdminDashboard = () => {
             onTypeChange={setNotifType}
             onSend={handleSendNotification}
             stats={stats}
+          />
+        )}
+
+        {activeTab === 'reels' && (
+          <AdminReelsTab
+            userId={reelSearchUserId}
+            reels={reels}
+            loading={reelsLoading}
+            total={reelsTotal}
+            page={reelsPage}
+            onUserIdChange={setReelSearchUserId}
+            onSearch={(userId) => fetchUserReels(userId, 1)}
+            onPageChange={(page) => fetchUserReels(reelSearchUserId, page)}
+            onHide={handleAdminHideReel}
+            onDelete={handleAdminDeleteReel}
           />
         )}
 
@@ -1498,8 +1564,8 @@ const SettingsTab = ({ settings, onUpdate }) => {
             key={cat.id}
             onClick={() => setSelectedCat(cat.id)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCat === cat.id
-                ? 'bg-primary text-white shadow-md'
-                : 'bg-white text-stone-600 hover:bg-stone-50 border border-stone-200'
+              ? 'bg-primary text-white shadow-md'
+              : 'bg-white text-stone-600 hover:bg-stone-50 border border-stone-200'
               }`}
           >
             <cat.icon className="w-4 h-4" />
@@ -1747,6 +1813,95 @@ const LogsTab = ({ logs, total, page, onPageChange }) => {
                 </Button>
               </div>
             </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+const AdminReelsTab = ({
+  userId,
+  reels,
+  loading,
+  total,
+  page,
+  onUserIdChange,
+  onSearch,
+  onPageChange,
+  onHide,
+  onDelete,
+}) => {
+  const totalPages = Math.max(1, Math.ceil((total || 0) / 20));
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold text-stone-900">Reels Moderation</h1>
+        <p className="text-stone-500 text-sm mt-1">Search owner by user ID and moderate reels.</p>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div className="flex gap-3">
+            <Input
+              placeholder="Enter owner user ID"
+              value={userId}
+              onChange={(e) => onUserIdChange(e.target.value)}
+            />
+            <Button onClick={() => onSearch(userId)} disabled={!userId.trim() || loading} className="gap-2">
+              <Search className="w-4 h-4" />
+              Search
+            </Button>
+          </div>
+
+          {loading ? (
+            <div className="py-12 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <>
+              <div className="text-sm text-stone-500">{total.toLocaleString()} reels found</div>
+              <div className="space-y-3">
+                {reels.length === 0 ? (
+                  <div className="py-10 text-center text-stone-400">No reels for this user.</div>
+                ) : reels.map((reel) => (
+                  <div key={reel.id} className="border rounded-lg bg-white p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-stone-900 truncate">{reel.title || 'Untitled Reel'}</div>
+                      <div className="text-xs text-stone-500 mt-1 flex items-center gap-2 flex-wrap">
+                        <span>ID: {reel.id}</span>
+                        <Badge className={reel.visibility === 'hidden' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}>
+                          {reel.visibility || (reel.hidden ? 'hidden' : 'public')}
+                        </Badge>
+                        <span>{reel.created_at ? new Date(reel.created_at).toLocaleString('en-IN') : '--'}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button variant="outline" size="sm" onClick={() => onHide(reel.id)}>
+                        {reel.visibility === 'hidden' || reel.hidden ? 'Unhide' : 'Hide'}
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => onDelete(reel.id)}>
+                        Soft Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                  <p className="text-sm text-stone-500">Page {page} of {totalPages}</p>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => onPageChange(page - 1)} disabled={page <= 1}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => onPageChange(page + 1)} disabled={page >= totalPages}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

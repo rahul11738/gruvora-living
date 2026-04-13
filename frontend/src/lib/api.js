@@ -353,6 +353,17 @@ export const videosAPI = {
   deleteComment: (videoId, commentId) => api.delete(`/videos/${videoId}/comments/${commentId}`),
 };
 
+export const reelsAPI = {
+  upload: (formData) => api.post('/reels/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+  getFeed: (params) => api.get('/reels/feed', { params }),
+  getMyReels: (params) => api.get('/reels/my-reels', { params }),
+  hideOwn: (id) => api.patch(`/reels/${id}/hide`),
+  deleteOwn: (id) => api.delete(`/reels/${id}`),
+  reportPlaybackMetric: (payload) => api.post('/reels/playback-metrics', payload, { timeout: 3000 }),
+};
+
 // Upload APIs
 export const uploadAPI = {
   uploadImage: (file, folder = 'listings') => {
@@ -508,6 +519,9 @@ export const adminAPI = {
   sendNotification: (data) => api.post('/admin/notifications/send', data),
   getSentNotifications: (params) => api.get('/admin/notifications/sent', { params }),
   getActivityLogs: (params) => api.get('/admin/activity-logs', { params }),
+  getUserReels: (userId, params) => api.get(`/admin/reels/user/${userId}`, { params }),
+  hideReel: (reelId) => api.patch(`/admin/reels/${reelId}/hide`),
+  deleteReel: (reelId) => api.delete(`/admin/reels/${reelId}`),
 };
 
 // Subscription APIs (Service Provider)
