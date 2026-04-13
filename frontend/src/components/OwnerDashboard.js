@@ -42,6 +42,7 @@ import {
   Phone,
   Mail,
   Calendar,
+  Play,
   Rocket,
   Zap,
   Loader2,
@@ -268,6 +269,14 @@ export const OwnerDashboard = () => {
                 <FileText className="w-5 h-5" />
                 My Listings
               </button>
+              <Link
+                to={`/owner/${user?.id}`}
+                onClick={() => setSidebarOpen(false)}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors hover:bg-stone-100 text-stone-700"
+              >
+                <Play className="w-5 h-5" />
+                My Reel Profile
+              </Link>
               <button
                 onClick={() => { setActiveTab('bookings'); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'bookings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
@@ -342,31 +351,39 @@ export const OwnerDashboard = () => {
               </h1>
               <p className="text-muted-foreground">Welcome back, {user?.name?.split(' ')[0]}</p>
             </div>
-            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-              <Button className="btn-primary" data-testid="add-listing-btn" onClick={handleOpenCreateDialog} disabled={subscriptionStatusLoading}>
-                <Plus className="w-5 h-5 mr-2" />
-                Add Listing
-              </Button>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Create New Listing</DialogTitle>
-                  <DialogDescription>
-                    Add a new property or service listing
-                  </DialogDescription>
-                </DialogHeader>
-                <ListingFormRouter
-                  onSuccess={(data) => {
-                    setShowCreateDialog(false);
-                    fetchDashboardData();
-                    if (data?.status === 'awaiting_payment') {
-                      setPaymentListing({ id: data.listing_id });
-                      setShowPaymentModal(true);
-                    }
-                  }}
-                  onClose={() => setShowCreateDialog(false)}
-                />
-              </DialogContent>
-            </Dialog>
+            <div className="flex items-center gap-2">
+              <Link to={`/owner/${user?.id}`}>
+                <Button variant="outline" className="gap-2">
+                  <Play className="w-4 h-4" />
+                  My Reel Profile
+                </Button>
+              </Link>
+              <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+                <Button className="btn-primary" data-testid="add-listing-btn" onClick={handleOpenCreateDialog} disabled={subscriptionStatusLoading}>
+                  <Plus className="w-5 h-5 mr-2" />
+                  Add Listing
+                </Button>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Create New Listing</DialogTitle>
+                    <DialogDescription>
+                      Add a new property or service listing
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ListingFormRouter
+                    onSuccess={(data) => {
+                      setShowCreateDialog(false);
+                      fetchDashboardData();
+                      if (data?.status === 'awaiting_payment') {
+                        setPaymentListing({ id: data.listing_id });
+                        setShowPaymentModal(true);
+                      }
+                    }}
+                    onClose={() => setShowCreateDialog(false)}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
             <PaymentModal
               isOpen={showPaymentModal}
               onClose={() => setShowPaymentModal(false)}
