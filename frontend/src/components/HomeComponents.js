@@ -166,7 +166,6 @@ const revealUp = (reduceMotion, delay = 0, offset = 20) => ({
 export const HeroSection = () => {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
-  const [heroImageSrc, setHeroImageSrc] = useState('/hero-bg.jpg');
   const [searchQuery, setSearchQuery] = useState('');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('home');
@@ -242,17 +241,12 @@ export const HeroSection = () => {
           className="absolute inset-0"
         />
         <img
-          src={heroImageSrc}
+          src="https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=1920"
           alt=""
           aria-hidden="true"
           loading="eager"
           fetchPriority="high"
           className="absolute inset-0 h-full w-full object-cover"
-          onError={() => {
-            if (heroImageSrc !== '/gruvoraLogo.jpeg') {
-              setHeroImageSrc('/gruvoraLogo.jpeg');
-            }
-          }}
         />
         <div className="absolute inset-0 bg-stone-950/55" />
         <div className="absolute inset-0 bg-gradient-to-r from-stone-950/95 via-stone-950/78 to-stone-950/40" />
@@ -1237,13 +1231,10 @@ export const ReelsPromoSection = () => {
               <div className="mx-auto w-[230px] sm:w-[260px] rounded-[2.5rem] border border-white/20 bg-stone-900 p-2.5 shadow-[0_28px_60px_rgba(0,0,0,0.45)]">
                 <div className="rounded-[2rem] overflow-hidden aspect-[9/16] relative bg-stone-800">
                   <img
-                    src="/hero-bg.jpg"
+                    src="https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400"
                     alt="Reels Preview"
                     className="w-full h-full object-cover"
                     loading="lazy"
-                    onError={(e) => {
-                      e.currentTarget.src = '/gruvoraLogo.jpeg';
-                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -1387,13 +1378,10 @@ export const TrustSection = () => {
                 className="rounded-2xl shadow-xl border border-stone-200 overflow-hidden"
               >
                 <img
-                  src="/hero-bg.jpg"
+                  src="https://images.unsplash.com/photo-1560518883-ce09059eeffa?w=600"
                   alt="Happy Family"
                   className="w-full h-full object-cover"
                   loading="lazy"
-                  onError={(e) => {
-                    e.currentTarget.src = '/gruvoraLogo.jpeg';
-                  }}
                 />
               </motion.div>
 
