@@ -30,7 +30,6 @@ import {
   Loader2,
   ArrowLeft,
   MoreVertical,
-  Eye,
   EyeOff,
   Trash2,
 } from 'lucide-react';
