@@ -356,7 +356,7 @@ export const HeroSection = () => {
             >
               <div className="hero-search-inner">
                 <div className="w-full pb-1">
-                  <div className="flex w-full flex-wrap sm:flex-nowrap justify-center items-center gap-2 sm:gap-3 px-1 sm:px-2 py-1 overflow-visible sm:overflow-x-auto hide-scrollbar">
+                  <div className="flex w-full flex-nowrap justify-start sm:justify-center items-center gap-2 sm:gap-3 px-1 sm:px-2 py-1 overflow-x-auto hide-scrollbar">
                     {[
                       { id: 'home', label: 'Home' },
                       { id: 'business', label: 'Business' },
