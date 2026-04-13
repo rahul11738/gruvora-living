@@ -33,6 +33,7 @@ const resolveBackendUrl = () => {
 const API_URL = normalizeSocketBaseUrl(resolveBackendUrl());
 const MESSAGE_PAGE_LIMIT = 50;
 const RECONNECT_DELAY_MS = [1000, 2000, 4000, 8000, 16000];
+const CHAT_UNREAD_EVENT = 'gharsetu:chat-unread-updated';
 
 const BLOCKED_WORDS = ['call me', 'whatsapp', 'phone', 'number', 'contact me', '@gmail', '@yahoo', '@outlook', '+91'];
 const PHONE_RE = /(?:\+?\d[\s-]*){10,}/;
@@ -92,6 +93,19 @@ const hasConversationMember = (conv, userId) => {
   return getConversationMembers(conv)
     .map(normalizeMemberId)
     .includes(normalizedTarget);
+};
+
+const getUnreadChatTotal = (conversations = []) =>
+  (Array.isArray(conversations) ? conversations : []).reduce((sum, conv) => {
+    const unread = Number(conv?.unread_count || 0);
+    return sum + (Number.isFinite(unread) ? unread : 0);
+  }, 0);
+
+const publishUnreadChatTotal = (conversations = []) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(CHAT_UNREAD_EVENT, {
+    detail: { unread: getUnreadChatTotal(conversations) },
+  }));
 };
 
 // ─── Socket Manager (singleton per session) ──────────────────────────────────
@@ -197,8 +211,8 @@ const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial }) => {
       )}
       <div className={`relative max-w-[72%] group`}>
         <div className={`px-3.5 py-2 rounded-2xl shadow-sm ${isMine
-            ? 'bg-primary text-white rounded-br-sm'
-            : 'bg-white text-stone-800 rounded-bl-sm border border-stone-100'
+          ? 'bg-primary text-white rounded-br-sm'
+          : 'bg-white text-stone-800 rounded-bl-sm border border-stone-100'
           }`}>
           <p className="text-sm leading-relaxed break-words whitespace-pre-wrap">{msg.content}</p>
           <div className={`flex items-center justify-end gap-1 mt-1 ${isMine ? 'text-white/70' : 'text-stone-400'}`}>
@@ -270,6 +284,7 @@ export const ChatPage = () => {
       const res = await messagesAPI.getConversations();
       const convs = res?.data?.conversations || [];
       setConversations(convs);
+      publishUnreadChatTotal(convs);
       return convs;
     } catch {
       toast.error('Failed to load conversations');
@@ -603,6 +618,15 @@ export const ChatPage = () => {
   }, [activeConv, input, sending, user?.id, loadConversations, loadMessages, setSearchParams, paramReceiverId]);
 
   const handleSelectConv = useCallback((conv) => {
+    if (conv?.id) {
+      setConversations(prev => {
+        const next = (Array.isArray(prev) ? prev : []).map(item =>
+          item?.id === conv.id ? { ...item, unread_count: 0 } : item
+        );
+        publishUnreadChatTotal(next);
+        return next;
+      });
+    }
     setActiveConv(conv);
     setMobileView('chat');
     shouldAutoScroll.current = true;
@@ -611,6 +635,17 @@ export const ChatPage = () => {
     if (conv.id) next.set('conversation_id', conv.id);
     setSearchParams(next, { replace: true });
   }, [setSearchParams]);
+
+  useEffect(() => {
+    if (!activeConv?.id) return;
+    setConversations(prev => {
+      const next = (Array.isArray(prev) ? prev : []).map(item =>
+        item?.id === activeConv.id ? { ...item, unread_count: 0 } : item
+      );
+      publishUnreadChatTotal(next);
+      return next;
+    });
+  }, [activeConv?.id]);
 
   const filteredConvs = conversations.filter(c => {
     if (!searchQuery) return true;

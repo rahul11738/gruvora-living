@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { NotificationBell } from './Notifications';
 import { Button } from './ui/button';
 import { observeRoutePrefetch, prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
+import { messagesAPI } from '../lib/api';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import OptimizedImage from './OptimizedImage';
 import {
@@ -47,12 +48,15 @@ const categoryNavTheme = {
   inactive: 'bg-transparent text-stone-600 border border-transparent hover:bg-white/75 hover:border-stone-200/80',
 };
 
+const CHAT_UNREAD_EVENT = 'gharsetu:chat-unread-updated';
+
 export const Header = () => {
   const { user, isAuthenticated, isOwner, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const discoverLinkRef = useRef(null);
   const reelsLinkRef = useRef(null);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   useEffect(() => {
     const cleanupDiscover = observeRoutePrefetch(discoverLinkRef.current, prefetchDiscoverRoute, '240px');
@@ -63,6 +67,49 @@ export const Header = () => {
       cleanupReels();
     };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadUnreadChatCount = async () => {
+      if (!isAuthenticated) {
+        if (mounted) setUnreadChatCount(0);
+        return;
+      }
+      try {
+        const res = await messagesAPI.getConversations();
+        const conversations = Array.isArray(res?.data?.conversations) ? res.data.conversations : [];
+        const unreadTotal = conversations.reduce((sum, conv) => {
+          const unread = Number(conv?.unread_count || 0);
+          return sum + (Number.isFinite(unread) ? unread : 0);
+        }, 0);
+        if (mounted) setUnreadChatCount(unreadTotal);
+      } catch {
+        if (mounted) setUnreadChatCount(0);
+      }
+    };
+
+    loadUnreadChatCount();
+    const intervalId = setInterval(loadUnreadChatCount, 8000);
+
+    const handleChatUnreadUpdated = (event) => {
+      const nextUnread = Number(event?.detail?.unread);
+      if (!mounted || !Number.isFinite(nextUnread)) return;
+      setUnreadChatCount(Math.max(0, nextUnread));
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener(CHAT_UNREAD_EVENT, handleChatUnreadUpdated);
+    }
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener(CHAT_UNREAD_EVENT, handleChatUnreadUpdated);
+      }
+    };
+  }, [isAuthenticated, user?.id, location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -157,12 +204,17 @@ export const Header = () => {
             <button
               type="button"
               onClick={handleOpenChat}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors"
+              className="relative w-10 h-10 flex items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors"
               data-testid="chat-btn"
               aria-label="Open Chat"
               title="Open Chat"
             >
               <MessageCircle className="w-5 h-5 text-stone-600" />
+              {isAuthenticated && unreadChatCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
+                </span>
+              )}
             </button>
 
             {isAuthenticated ? (

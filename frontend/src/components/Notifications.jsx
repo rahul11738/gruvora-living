@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import api, { notificationsAPI, messagesAPI } from '../lib/api';
+import api, { notificationsAPI } from '../lib/api';
 import { Badge } from './ui/badge';
 import {
   Bell, X, MessageCircle, Calendar,
@@ -77,43 +77,30 @@ const toEpochMs = (value) => {
 
 const asArray = (value) => (Array.isArray(value) ? value : []);
 
-const buildFallbackChatNotifications = (conversations = [], existing = []) => {
-  const existingByConv = new Set(
-    asArray(existing)
-      .filter(Boolean)
-      .filter(n => ['chat', 'message', 'booking_request', 'negotiation', 'negotiation_response', 'booking_update'].includes(n.type))
-      .map(n => String(n.conversation_id || n?.data?.conversation_id || ''))
-      .filter(Boolean)
-  );
+const DIRECT_CHAT_TYPES = ['chat', 'message', 'negotiation', 'negotiation_response'];
+const isDirectChatNotification = (notif) => DIRECT_CHAT_TYPES.includes(String(notif?.type || '').toLowerCase());
+const BOOKING_TYPES = ['booking', 'booking_confirmed', 'booking_request', 'booking_update'];
 
-  return asArray(conversations)
-    .filter(Boolean)
-    .filter(c => String(c?.id || '').trim().length > 0)
-    .filter(c => Number(c?.unread_count || 0) > 0)
-    .filter(c => !existingByConv.has(String(c?.id || '')))
-    .map(c => {
-      const otherName = c?.other_user?.name || 'User';
-      const lastMessage = String(c?.last_message || '').trim();
-      return {
-        id: `fallback-chat-${String(c.id || '')}`,
-        type: 'chat',
-        title: `New message from ${otherName}`,
-        message: lastMessage || 'You have a new message',
-        conversation_id: c?.id,
-        listing_id: c?.listing_id,
-        listing_title: c?.listing_title || '',
-        sender_id: c?.other_user?.id,
-        read: false,
-        is_read: false,
-        created_at: c?.last_message_at || new Date().toISOString(),
-        data: {
-          conversation_id: c?.id,
-          listing_id: c?.listing_id,
-          listing_title: c?.listing_title || '',
-          sender_id: c?.other_user?.id,
-        },
-      };
-    });
+const BOOKING_ALERT_META = {
+  booking_request: { label: 'Request', priority: 500, cls: 'bg-amber-100 text-amber-700' },
+  booking_confirmed: { label: 'Confirmed', priority: 450, cls: 'bg-emerald-100 text-emerald-700' },
+  booking_update: { label: 'Update', priority: 400, cls: 'bg-blue-100 text-blue-700' },
+  booking: { label: 'Booking', priority: 350, cls: 'bg-indigo-100 text-indigo-700' },
+};
+
+const getNotificationPriority = (notif) => {
+  const type = String(notif?.type || '').toLowerCase();
+  if (BOOKING_ALERT_META[type]) return BOOKING_ALERT_META[type].priority;
+  if (type === 'listing_status') return 250;
+  if (type === 'payment' || type === 'commission') return 220;
+  if (type === 'admin_message' || type === 'system') return 180;
+  return 100;
+};
+
+const compareNotifications = (a, b) => {
+  const priorityDiff = getNotificationPriority(b) - getNotificationPriority(a);
+  if (priorityDiff !== 0) return priorityDiff;
+  return toEpochMs(b?.created_at) - toEpochMs(a?.created_at);
 };
 
 /**
@@ -125,7 +112,7 @@ const getNotifNavTarget = (notif) => {
   const convId = notif.conversation_id || notif?.data?.conversation_id;
   const listingId = notif.listing_id || notif.related_listing_id || notif?.data?.listing_id;
   const senderId = notif.sender_id || notif?.data?.sender_id;
-  const CHAT_TYPES = ['chat', 'message', 'booking_request', 'negotiation', 'negotiation_response', 'booking_update'];
+  const CHAT_TYPES = ['chat', 'message', 'negotiation', 'negotiation_response'];
 
   if (CHAT_TYPES.includes(notif.type)) {
     if (convId) return `/chat?conversation_id=${convId}`;
@@ -225,6 +212,7 @@ export const NotificationProvider = ({ children }) => {
         try {
           const n = normalizeNotif(notif);
           if (!n?.id) return;
+          if (isDirectChatNotification(n)) return;
           const target = getNotifNavTarget(n);
           let inserted = false;
           setNotifications(prev => {
@@ -269,12 +257,15 @@ export const NotificationProvider = ({ children }) => {
 
       socket.on('unread_notifications', (data) => {
         try {
-          const normalized = asArray(data?.notifications).map(normalizeNotif).filter(Boolean);
+          const normalized = asArray(data?.notifications)
+            .map(normalizeNotif)
+            .filter(Boolean)
+            .filter(n => !isDirectChatNotification(n));
           setNotifications(prev => {
             // Merge: keep optimistic updates, add server ones
             const existingIds = new Set(asArray(prev).map(p => p?.id).filter(Boolean));
             const newOnes = normalized.filter(n => !existingIds.has(n.id));
-            return [...asArray(prev), ...newOnes].sort((a, b) => toEpochMs(b?.created_at) - toEpochMs(a?.created_at));
+            return [...asArray(prev), ...newOnes].sort(compareNotifications);
           });
           const socketCount = typeof data?.count === 'number' ? data.count : normalized.filter(n => !n.read).length;
           if (socketCount > lastUnreadRef.current) {
@@ -311,16 +302,14 @@ export const NotificationProvider = ({ children }) => {
     if (!force && now - lastFetchRef.current < 15_000) return;
     try {
       fetchingRef.current = true;
-      const [notifRes, convRes] = await Promise.all([
-        notificationsAPI.getAll(1, 50),
-        messagesAPI.getConversations().catch(() => ({ data: { conversations: [] } })),
-      ]);
+      const notifRes = await notificationsAPI.getAll(1, 50);
 
       const data = notifRes?.data || {};
-      const normalized = asArray(data?.notifications).map(normalizeNotif).filter(Boolean);
-      const conversations = asArray(convRes?.data?.conversations);
-      const fallbackChat = buildFallbackChatNotifications(conversations, normalized);
-      const merged = [...fallbackChat, ...normalized].sort((a, b) => toEpochMs(b.created_at) - toEpochMs(a.created_at));
+      const merged = asArray(data?.notifications)
+        .map(normalizeNotif)
+        .filter(Boolean)
+        .filter(n => !isDirectChatNotification(n))
+        .sort(compareNotifications);
 
       let nextNotifications = merged;
       setNotifications(prev => {
@@ -331,16 +320,14 @@ export const NotificationProvider = ({ children }) => {
           !n.is_read &&
           !asArray(merged).some(m => m?.id === n.id)
         );
-        nextNotifications = [...asArray(merged), ...stickyUnreadSynthetic].sort(
-          (a, b) => toEpochMs(b?.created_at) - toEpochMs(a?.created_at)
-        );
+        nextNotifications = [...asArray(merged), ...stickyUnreadSynthetic].sort(compareNotifications);
         return nextNotifications;
       });
 
       const serverUnread = typeof data.unread_count === 'number' ? data.unread_count : 0;
       const mergedUnread = asArray(nextNotifications).filter(n => n && !n.read).length;
       // Never auto-clear unread via background fetch; only user actions reduce it.
-      const nextUnread = Math.max(lastUnreadRef.current, serverUnread, mergedUnread);
+      const nextUnread = Math.max(lastUnreadRef.current, Math.min(serverUnread, mergedUnread), mergedUnread);
       setUnreadCount(nextUnread);
       lastUnreadRef.current = nextUnread;
       lastFetchRef.current = Date.now();
@@ -466,6 +453,7 @@ export const NotificationBell = () => {
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
 const ICON_MAP = {
   booking: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
+  booking_confirmed: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
   booking_request: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
   booking_update: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
   payment: { Icon: CreditCard, cls: 'text-green-600 bg-green-50' },
@@ -555,7 +543,9 @@ const NotificationDropdown = ({ onClose }) => {
             const { Icon, cls } = getIconConfig(notif.type);
             const target = getNotifNavTarget(notif);
             const listingTitle = notif.listing_title || notif?.data?.listing_title || '';
-            const isChatType = ['chat', 'message', 'booking_request', 'negotiation', 'negotiation_response', 'booking_update'].includes(notif.type);
+            const type = String(notif?.type || '').toLowerCase();
+            const bookingMeta = BOOKING_ALERT_META[type] || null;
+            const isBookingType = BOOKING_TYPES.includes(type);
             return (
               <button
                 key={notif.id}
@@ -574,7 +564,12 @@ const NotificationDropdown = ({ onClose }) => {
                   <p className="text-xs text-stone-500 mt-0.5 line-clamp-2 leading-relaxed">
                     {notif.message}
                   </p>
-                  {isChatType && listingTitle && (
+                  {isBookingType && bookingMeta && (
+                    <span className={`inline-flex items-center gap-1 mt-1 mr-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${bookingMeta.cls}`}>
+                      {bookingMeta.label}
+                    </span>
+                  )}
+                  {isBookingType && listingTitle && (
                     <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-medium max-w-full">
                       <Building2 className="w-2.5 h-2.5 flex-shrink-0" />
                       <span className="truncate">{listingTitle}</span>
@@ -583,7 +578,7 @@ const NotificationDropdown = ({ onClose }) => {
                   <p className="text-[11px] text-stone-400 mt-1">{formatRelTime(notif.created_at)}</p>
                   {target && (
                     <p className="text-[11px] text-primary font-medium mt-0.5">
-                      {isChatType ? '→ Reply' : '→ View'}
+                      {isBookingType ? '→ View booking' : '→ View'}
                     </p>
                   )}
                 </div>

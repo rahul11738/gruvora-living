@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from './Layout';
 import { useNotifications } from './Notifications.jsx';
+import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import {
@@ -13,6 +14,7 @@ const asArray = (value) => (Array.isArray(value) ? value : []);
 
 const ICON_MAP = {
   booking: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
+  booking_confirmed: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
   booking_request: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
   booking_update: { Icon: Calendar, cls: 'text-blue-600 bg-blue-50' },
   payment: { Icon: CreditCard, cls: 'text-green-600 bg-green-50' },
@@ -29,8 +31,35 @@ const ICON_MAP = {
 };
 const getIconConfig = (type) => ICON_MAP[type] || { Icon: Bell, cls: 'text-stone-500 bg-stone-100' };
 
-const CHAT_TYPES = ['chat', 'message', 'booking_request', 'negotiation', 'negotiation_response', 'booking_update'];
-const LISTING_TYPES = ['listing_status', 'booking_request', 'booking_update'];
+const DIRECT_CHAT_TYPES = ['chat', 'message', 'negotiation', 'negotiation_response'];
+const BOOKING_TYPES = ['booking', 'booking_confirmed', 'booking_request', 'booking_update'];
+const LISTING_TYPES = ['listing_status'];
+
+const BOOKING_ALERT_META = {
+  booking_request: { label: 'Request', priority: 500, cls: 'bg-amber-100 text-amber-700' },
+  booking_confirmed: { label: 'Confirmed', priority: 450, cls: 'bg-emerald-100 text-emerald-700' },
+  booking_update: { label: 'Update', priority: 400, cls: 'bg-blue-100 text-blue-700' },
+  booking: { label: 'Booking', priority: 350, cls: 'bg-indigo-100 text-indigo-700' },
+};
+
+const getNotificationPriority = (notif) => {
+  const type = String(notif?.type || '').toLowerCase();
+  if (BOOKING_ALERT_META[type]) return BOOKING_ALERT_META[type].priority;
+  if (type === 'listing_status') return 250;
+  if (type === 'payment' || type === 'commission') return 220;
+  if (type === 'admin_message' || type === 'system') return 180;
+  return 100;
+};
+
+const compareNotifications = (a, b) => {
+  const priorityDiff = getNotificationPriority(b) - getNotificationPriority(a);
+  if (priorityDiff !== 0) return priorityDiff;
+  const at = new Date(a?.created_at || 0).getTime();
+  const bt = new Date(b?.created_at || 0).getTime();
+  const safeAt = Number.isFinite(at) ? at : 0;
+  const safeBt = Number.isFinite(bt) ? bt : 0;
+  return safeBt - safeAt;
+};
 
 const toSafeText = (value, fallback = '') => {
   if (value === null || value === undefined) return fallback;
@@ -49,16 +78,17 @@ const toSafeText = (value, fallback = '') => {
 
 const getNavTarget = (notif) => {
   if (!notif || typeof notif !== 'object') return null;
-  const convId    = notif.conversation_id || notif?.data?.conversation_id;
+  const convId = notif.conversation_id || notif?.data?.conversation_id;
   const listingId = notif.listing_id || notif.related_listing_id || notif?.data?.listing_id;
-  const senderId  = notif.sender_id || notif?.data?.sender_id;
+  const senderId = notif.sender_id || notif?.data?.sender_id;
 
-  if (CHAT_TYPES.includes(notif.type)) {
+  if (DIRECT_CHAT_TYPES.includes(notif.type)) {
     if (convId) return `/chat?conversation_id=${convId}`;
     if (listingId && senderId) return `/chat?listing_id=${listingId}&user=${senderId}`;
     if (listingId) return `/chat?listing_id=${listingId}`;
     return '/chat';
   }
+  if (BOOKING_TYPES.includes(notif.type) && listingId) return `/listing/${listingId}`;
   if (notif.type === 'listing_status' && listingId) return `/listing/${listingId}`;
   if (notif.type === 'new_follower' && notif?.data?.follower_id) return `/user/${notif.data.follower_id}`;
   if (notif.type === 'new_comment' && notif?.data?.video_id) return `/reels?video=${notif.data.video_id}`;
@@ -79,8 +109,36 @@ const formatTime = (dateStr) => {
 
 export const NotificationsPage = () => {
   const navigate = useNavigate();
+  const { isOwner, isAdmin } = useAuth();
   const { notifications, unreadCount, fetchNotifications, markAsRead, markAllAsRead } = useNotifications();
-  const [filter, setFilter] = useState('all'); // 'all' | 'unread' | 'chat' | 'listing'
+  const [filter, setFilter] = useState('all'); // 'all' | 'unread' | 'booking' | 'system'
+
+  const roleView = isAdmin ? 'admin' : (isOwner ? 'owner' : 'user');
+
+  const roleConfig = useMemo(() => {
+    if (roleView === 'admin') {
+      return {
+        defaultFilter: 'system',
+        bookingLabel: 'Booking Ops',
+        systemLabel: 'Platform Ops',
+        subtitle: 'Monitor platform operations and booking lifecycle events.',
+      };
+    }
+    if (roleView === 'owner') {
+      return {
+        defaultFilter: 'booking',
+        bookingLabel: 'Lead Bookings',
+        systemLabel: 'Owner Updates',
+        subtitle: 'Track booking demand, confirmations, and owner-side updates.',
+      };
+    }
+    return {
+      defaultFilter: 'booking',
+      bookingLabel: 'My Bookings',
+      systemLabel: 'Account Updates',
+      subtitle: 'Stay updated on bookings and important account notifications.',
+    };
+  }, [roleView]);
 
   useEffect(() => { fetchNotifications(true); }, [fetchNotifications]);
 
@@ -90,14 +148,32 @@ export const NotificationsPage = () => {
     }
   }, [unreadCount, filter]);
 
+  useEffect(() => {
+    setFilter(roleConfig.defaultFilter);
+  }, [roleConfig.defaultFilter]);
+
+  const counters = useMemo(() => {
+    const list = asArray(notifications).filter(Boolean);
+    const unread = list.filter(n => !n.read).length;
+    const booking = list.filter(n => BOOKING_TYPES.includes(String(n?.type || '').toLowerCase()) || LISTING_TYPES.includes(String(n?.type || '').toLowerCase())).length;
+    const actionRequired = list.filter(n => String(n?.type || '').toLowerCase() === 'booking_request' && !n.read).length;
+    const system = list.filter(n => {
+      const type = String(n?.type || '').toLowerCase();
+      return !BOOKING_TYPES.includes(type) && !LISTING_TYPES.includes(type) && !DIRECT_CHAT_TYPES.includes(type);
+    }).length;
+    return { unread, booking, actionRequired, system };
+  }, [notifications]);
+
   const items = useMemo(() => {
     return asArray(notifications).filter(n => {
       if (!n || typeof n !== 'object') return false;
       if (filter === 'unread') return !n.read;
-      if (filter === 'chat') return CHAT_TYPES.includes(n.type);
-      if (filter === 'listing') return LISTING_TYPES.includes(n.type);
+      if (filter === 'booking') return BOOKING_TYPES.includes(n.type) || LISTING_TYPES.includes(n.type);
+      if (filter === 'system') {
+        return !BOOKING_TYPES.includes(n.type) && !LISTING_TYPES.includes(n.type) && !DIRECT_CHAT_TYPES.includes(n.type);
+      }
       return true;
-    });
+    }).sort(compareNotifications);
   }, [notifications, filter]);
 
   const openNotif = async (notif) => {
@@ -114,8 +190,8 @@ export const NotificationsPage = () => {
   const FILTERS = [
     { id: 'all', label: 'All' },
     { id: 'unread', label: `Unread (${unreadCount})` },
-    { id: 'chat', label: 'Messages' },
-    { id: 'listing', label: 'Listings' },
+    { id: 'booking', label: roleConfig.bookingLabel },
+    { id: 'system', label: roleConfig.systemLabel },
   ];
 
   return (
@@ -131,10 +207,38 @@ export const NotificationsPage = () => {
                   Notifications
                 </CardTitle>
                 <p className="text-sm text-stone-500 mt-0.5">{unreadCount} unread</p>
+                <p className="text-xs text-stone-400 mt-1">{roleConfig.subtitle}</p>
               </div>
               <Button size="sm" onClick={markAllAsRead} disabled={unreadCount === 0}>
                 Mark all read
               </Button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => setFilter('unread')}
+                className="rounded-xl border border-amber-100 bg-amber-50 px-2 py-2 text-left hover:bg-amber-100/70 transition-colors"
+              >
+                <p className="text-[10px] uppercase tracking-wide text-amber-700 font-semibold">Action</p>
+                <p className="text-base font-bold text-amber-800 leading-tight">{counters.actionRequired}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter('booking')}
+                className="rounded-xl border border-blue-100 bg-blue-50 px-2 py-2 text-left hover:bg-blue-100/70 transition-colors"
+              >
+                <p className="text-[10px] uppercase tracking-wide text-blue-700 font-semibold">Bookings</p>
+                <p className="text-base font-bold text-blue-800 leading-tight">{counters.booking}</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilter('system')}
+                className="rounded-xl border border-stone-200 bg-stone-50 px-2 py-2 text-left hover:bg-stone-100 transition-colors"
+              >
+                <p className="text-[10px] uppercase tracking-wide text-stone-600 font-semibold">System</p>
+                <p className="text-base font-bold text-stone-800 leading-tight">{counters.system}</p>
+              </button>
             </div>
 
             {/* Filter pills - horizontal scroll without wrapping on small screens */}
@@ -145,11 +249,10 @@ export const NotificationsPage = () => {
                     key={f.id}
                     type="button"
                     onClick={() => setFilter(f.id)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${
-                      filter === f.id
-                        ? 'bg-primary text-white'
-                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-                    }`}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap ${filter === f.id
+                      ? 'bg-primary text-white'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      }`}
                   >
                     {f.label}
                   </button>
@@ -172,7 +275,9 @@ export const NotificationsPage = () => {
                   const listingTitle = toSafeText(notif.listing_title || notif?.data?.listing_title, '');
                   const safeTitle = toSafeText(notif.title, 'Notification');
                   const safeMessage = toSafeText(notif.message, '');
-                  const isChatType = CHAT_TYPES.includes(notif.type);
+                  const type = String(notif?.type || '').toLowerCase();
+                  const bookingMeta = BOOKING_ALERT_META[type] || null;
+                  const isBookingType = BOOKING_TYPES.includes(type);
                   const isRead = Boolean(notif.read || notif.is_read);
                   return (
                     <button
@@ -180,9 +285,8 @@ export const NotificationsPage = () => {
                       type="button"
                       onClick={() => openNotif(notif)}
                       disabled={!target}
-                      className={`w-full text-left flex items-start gap-3 px-4 py-4 hover:bg-stone-50 transition-colors ${
-                        !isRead ? 'bg-primary/3' : ''
-                      } ${!target ? 'cursor-default' : ''}`}
+                      className={`w-full text-left flex items-start gap-3 px-4 py-4 hover:bg-stone-50 transition-colors ${!isRead ? 'bg-primary/3' : ''
+                        } ${!target ? 'cursor-default' : ''}`}
                     >
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${cls}`}>
                         <Icon className="w-5 h-5" />
@@ -194,7 +298,12 @@ export const NotificationsPage = () => {
                         <p className="text-sm text-stone-500 mt-0.5 line-clamp-2 leading-relaxed">
                           {safeMessage}
                         </p>
-                        {isChatType && listingTitle && (
+                        {isBookingType && bookingMeta && (
+                          <span className={`inline-flex items-center gap-1 mt-1 mr-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${bookingMeta.cls}`}>
+                            {bookingMeta.label}
+                          </span>
+                        )}
+                        {isBookingType && listingTitle && (
                           <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-[10px] font-medium max-w-full">
                             <Building2 className="w-2.5 h-2.5 flex-shrink-0" />
                             <span className="truncate">{listingTitle}</span>
@@ -204,9 +313,9 @@ export const NotificationsPage = () => {
                           <p className="text-xs text-stone-400">{formatTime(notif.created_at)}</p>
                           {target && (
                             <span className="text-xs text-primary font-medium">
-                              {isChatType ? '→ Reply' :
-                               notif.type === 'listing_status' ? '→ View listing' :
-                               notif.type === 'new_follower' ? '→ View profile' : '→ Open'}
+                              {isBookingType ? '→ View booking' :
+                                notif.type === 'listing_status' ? '→ View listing' :
+                                  notif.type === 'new_follower' ? '→ View profile' : '→ Open'}
                             </span>
                           )}
                         </div>
