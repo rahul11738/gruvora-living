@@ -1236,12 +1236,14 @@ export const ReelsPromoSection = () => {
             <div className="relative">
               <div className="mx-auto w-[230px] sm:w-[260px] rounded-[2.5rem] border border-white/20 bg-stone-900 p-2.5 shadow-[0_28px_60px_rgba(0,0,0,0.45)]">
                 <div className="rounded-[2rem] overflow-hidden aspect-[9/16] relative bg-stone-800">
-                  <OptimizedImage
-                    publicId="gharshetu/placeholders/reels-preview"
+                  <img
+                    src="/hero-bg.jpg"
                     alt="Reels Preview"
                     className="w-full h-full object-cover"
-                    width={480}
-                    sizes="(max-width: 768px) 60vw, 260px"
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.src = '/gruvoraLogo.jpeg';
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
@@ -1384,12 +1386,14 @@ export const TrustSection = () => {
                 transition={reduceMotion ? { duration: 0 } : { duration: 0.4, ease: 'easeOut' }}
                 className="rounded-2xl shadow-xl border border-stone-200 overflow-hidden"
               >
-                <OptimizedImage
-                  publicId="gharshetu/placeholders/happy-family"
+                <img
+                  src="/hero-bg.jpg"
                   alt="Happy Family"
-                  width={600}
-                  sizes="(max-width: 1024px) 100vw, 600px"
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.src = '/gruvoraLogo.jpeg';
+                  }}
                 />
               </motion.div>
 
