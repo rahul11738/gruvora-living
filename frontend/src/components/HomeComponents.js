@@ -569,25 +569,6 @@ const SectionHeader = memo(({ canScrollLeft, canScrollRight, onSlide, reduceMoti
           </span>
         </div>
 
-        <div className="flex items-center gap-2 md:hidden">
-          {[
-            { dir: -1, can: canScrollLeft, label: 'Previous' },
-            { dir: 1, can: canScrollRight, label: 'Next' },
-          ].map(({ dir, can, label }) => (
-            <button
-              key={dir}
-              onClick={() => onSlide(dir)}
-              disabled={!can}
-              aria-label={label}
-              className={`w-8 h-8 rounded-full border flex items-center justify-center transition-all active:scale-90 ${can
-                ? 'bg-white border-stone-200 text-stone-700 shadow-sm hover:shadow-md hover:border-stone-300'
-                : 'bg-stone-100 border-stone-100 text-stone-300 cursor-not-allowed'
-                }`}
-            >
-              {dir === -1 ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
