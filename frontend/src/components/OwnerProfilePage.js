@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
-import { usersAPI, listingsAPI } from '../lib/api';
+import { usersAPI, listingsAPI, reelsAPI, adminAPI } from '../lib/api';
 import { Header, Footer } from './Layout';
 import { normalizeMediaUrl } from '../lib/media';
 import OptimizedImage from './OptimizedImage';
@@ -29,6 +29,10 @@ import {
   Wrench,
   Loader2,
   ArrowLeft,
+  MoreVertical,
+  Eye,
+  EyeOff,
+  Trash2,
 } from 'lucide-react';
 
 const categoryIcons = {
@@ -143,6 +147,7 @@ export const OwnerProfilePage = () => {
   }
 
   const isOwnProfile = user?.id === ownerId;
+  const canModerateReels = Boolean(isAuthenticated && (isOwnProfile || user?.role === 'admin'));
   const isFollowing = Boolean(followingMap[ownerId]);
   const followLoading = Boolean(pendingFollowMap[ownerId]);
 
@@ -307,7 +312,13 @@ export const OwnerProfilePage = () => {
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 md:gap-4" data-testid="reels-grid">
             {owner.reels?.length > 0 ? (
               owner.reels.map((reel) => (
-                <ReelCard key={reel.id} reel={reel} />
+                <ReelCard
+                  key={reel.id}
+                  reel={reel}
+                  canModerate={canModerateReels}
+                  isOwnProfile={isOwnProfile}
+                  isAdmin={user?.role === 'admin'}
+                />
               ))
             ) : (
               <div className="col-span-full py-16 text-center">
@@ -345,8 +356,50 @@ export const OwnerProfilePage = () => {
   );
 };
 
-const ReelCard = ({ reel }) => {
+const ReelCard = ({ reel, canModerate = false, isOwnProfile = false, isAdmin = false }) => {
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const source = reel.stream_url || reel.adaptive_url || reel.secure_url || reel.url || reel.video_url || '';
+
+  const handleHide = async (event) => {
+    event.stopPropagation();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = isAdmin ? await adminAPI.hideReel(reel.id) : await reelsAPI.hideOwn(reel.id);
+      const hidden = Boolean(res?.data?.hidden);
+      reel.hidden = hidden;
+      reel.visibility = hidden ? 'hidden' : 'public';
+      toast.success(hidden ? 'Reel hidden' : 'Reel unhidden');
+      setMenuOpen(false);
+    } catch (error) {
+      toast.error('Failed to update reel visibility');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async (event) => {
+    event.stopPropagation();
+    if (busy) return;
+    if (!window.confirm('Delete this reel? It will be soft-deleted first.')) return;
+    setBusy(true);
+    try {
+      if (isAdmin) {
+        await adminAPI.deleteReel(reel.id);
+      } else {
+        await reelsAPI.deleteOwn(reel.id);
+      }
+      toast.success('Reel deleted');
+      setMenuOpen(false);
+    } catch (error) {
+      toast.error('Failed to delete reel');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleClick = () => {
     navigate(`/reels?video=${reel.id}`);
@@ -361,6 +414,41 @@ const ReelCard = ({ reel }) => {
       onClick={handleClick}
       data-testid={`reel-card-${reel.id}`}
     >
+      {canModerate && (
+        <div className="absolute top-2 right-2 z-20" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center border border-white/20"
+            aria-label="Moderate reel"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-40 rounded-lg bg-stone-900/95 border border-white/10 shadow-lg overflow-hidden">
+              <button
+                type="button"
+                onClick={handleHide}
+                disabled={busy}
+                className="w-full px-3 py-2 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2"
+              >
+                {reel.hidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                {reel.hidden ? 'Unhide' : 'Hide'}
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={busy}
+                className="w-full px-3 py-2 text-left text-sm text-red-300 hover:bg-white/10 flex items-center gap-2 border-t border-white/10"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {reel.thumbnail_url ? (
         <OptimizedImage
           publicId={normalizeMediaUrl(reel.thumbnail_url)}
@@ -371,7 +459,7 @@ const ReelCard = ({ reel }) => {
         />
       ) : (
         <video
-          src={normalizeMediaUrl(reel.video_url || reel.url)}
+          src={normalizeMediaUrl(source)}
           className="w-full h-full object-cover"
           muted
           preload="metadata"
