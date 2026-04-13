@@ -756,10 +756,11 @@ def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, An
             doc["video_version"] = version
             doc["public_id"] = str(public_id)
             doc["version"] = f"v{int(version)}" if version is not None else None
+            doc["stream_url"] = canonical_url
             doc["adaptive_url"] = adaptive_url
             doc["video_variants"] = variants
-            doc["video_url"] = adaptive_url or canonical_url
-            doc["url"] = adaptive_url or canonical_url
+            doc["video_url"] = canonical_url
+            doc["url"] = canonical_url
             if not doc.get("thumbnail_url") or str(
                 doc.get("thumbnail_url", "")
             ).startswith("http://"):
@@ -777,6 +778,7 @@ def _normalize_video_doc_for_response(video_doc: Dict[str, Any]) -> Dict[str, An
             safe_url = fallback_url.replace("http://", "https://")
             doc["video_url"] = safe_url
             doc["url"] = safe_url
+            doc["stream_url"] = safe_url
         doc["public_id"] = None
         doc["version"] = None
 
@@ -4365,7 +4367,7 @@ async def upload_video(
                         "fetch_format": "mp4",
                     },
                     {
-                        "width": 720,
+                        "height": 720,
                         "crop": "limit",
                         "quality": "auto:eco",
                         "fetch_format": "mp4",
@@ -4376,6 +4378,8 @@ async def upload_video(
             result = await asyncio.get_event_loop().run_in_executor(None, upload_func)
             video_public_id = result.get("public_id", "")
             video_version = result.get("version")
+            eager_items = result.get("eager") or []
+            eager_secure_urls = [item.get("secure_url") for item in eager_items if item.get("secure_url")]
 
             # Generate thumbnail
             thumbnail_url = cloudinary.utils.cloudinary_url(
@@ -4396,14 +4400,14 @@ async def upload_video(
             "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600"
         )
 
+    direct_stream_url = None
     adaptive_url = None
     video_variants = {}
     if CLOUDINARY_CLOUD_NAME and video_public_id:
+        direct_stream_url = _build_cloudinary_video_playback_url(video_public_id, video_version)
         adaptive_url = _build_cloudinary_reel_adaptive_url(video_public_id, video_version)
         video_variants = _build_cloudinary_reel_variants(video_public_id, video_version)
-        video_playback_url = adaptive_url or _build_cloudinary_video_playback_url(
-            video_public_id, video_version
-        )
+        video_playback_url = direct_stream_url or adaptive_url
     else:
         video_playback_url = "https://player.vimeo.com/external/434045526.sd.mp4?s=c27eecc69a27dbc4ff2b87d38afc35f1a9e7c02d&profile_id=165"
 
@@ -4416,11 +4420,13 @@ async def upload_video(
         "category": parsed_category.value,
         "video_public_id": video_public_id,
         "video_version": video_version,
+        "stream_url": direct_stream_url,
         "adaptive_url": adaptive_url,
         "video_variants": video_variants,
         "url": video_playback_url,
         "video_url": video_public_id,
         "thumbnail_url": thumbnail_url,
+        "secure_url": video_playback_url,
         "listing_id": listing_id or "",
         "likes": 0,
         "views": 0,
@@ -4444,10 +4450,12 @@ async def upload_video(
         "video_id": video_id,
         "video_public_id": video_public_id,
         "video_version": video_version,
+        "stream_url": direct_stream_url,
         "adaptive_url": adaptive_url,
         "video_variants": video_variants,
         "url": video_playback_url,
         "thumbnail_url": thumbnail_url,
+        "secure_url": video_playback_url,
     }
 
 
@@ -6607,6 +6615,10 @@ async def invalidate_admin_stats_cache() -> None:
         await redis_client.delete(ADMIN_STATS_CACHE_KEY)
     except Exception:
         return
+
+
+async def delete_cached_admin_stats() -> None:
+    await invalidate_admin_stats_cache()
 
 
 @api_router.get("/admin/users")

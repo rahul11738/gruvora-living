@@ -49,6 +49,10 @@ const buildReelSourceCandidates = (video) => {
 
   const candidates = [];
 
+  if (video?.stream_url) {
+    candidates.push(video.stream_url);
+  }
+
   // Keep adaptive URL as first-class source for capable connections/CDNs.
   if (video?.adaptive_url) {
     candidates.push(video.adaptive_url);
@@ -59,8 +63,9 @@ const buildReelSourceCandidates = (video) => {
     if (variantUrl) candidates.push(variantUrl);
   });
 
-  if (video?.video_url) candidates.push(video.video_url);
+  if (video?.secure_url) candidates.push(video.secure_url);
   if (video?.url) candidates.push(video.url);
+  if (video?.video_url && /^https?:\/\//i.test(String(video.video_url))) candidates.push(video.video_url);
 
   return Array.from(new Set(candidates.filter(Boolean)));
 };
@@ -100,6 +105,9 @@ const ReelCard = React.memo(({
   onReelDeleted,
 }) => {
   const videoRef = useRef(null);
+  const normalizedOwnerId = String(ownerId || video?.owner_id || video?.ownerId || '').trim();
+  const normalizedUserId = String(userId || '').trim();
+  const canModerateOwnReel = Boolean(isAuthenticated && normalizedOwnerId && normalizedUserId && normalizedOwnerId === normalizedUserId);
   const [isPlaying, setIsPlaying] = useState(false);
   const [saved, setSaved] = useState(video.user_saved || false);
   const [shares, setShares] = useState(video.shares || 0);
@@ -253,7 +261,7 @@ const ReelCard = React.memo(({
   };
 
   const handleFollow = async () => {
-    if (ownerId === userId) return;
+    if (normalizedOwnerId === normalizedUserId) return;
     if (followPending) return;
     await onFollow(ownerId);
   };
@@ -365,7 +373,7 @@ const ReelCard = React.memo(({
         </div>
 
         {/* Admin/Owner Moderation Menu */}
-        {isAuthenticated && (ownerId === userId || isAdmin) && (
+        {isAuthenticated && (canModerateOwnReel || isAdmin) && (
           <div className="absolute top-4 right-4 z-30" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
