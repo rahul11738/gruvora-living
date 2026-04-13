@@ -4610,7 +4610,7 @@ async def get_video_feed(
     # Personalized feed based on user preferences
     preferences = user.get("preferences", {})
 
-    query: Dict[str, Any] = {"is_deleted": {"$ne": True}}
+    query: Dict[str, Any] = dict(PUBLIC_REEL_QUERY)
     if preferences.get("category"):
         query["category"] = preferences["category"]
 
@@ -4623,19 +4623,6 @@ async def get_video_feed(
         .to_list(limit)
     )
     videos = [_normalize_video_doc_for_response(video) for video in videos]
-    videos = [
-        v
-        for v in videos
-        if (
-            (v.get("owner_id") == user.get("id"))
-            or _is_admin_role(user.get("role"))
-            or (
-                v.get("visibility") == "public"
-                and not bool(v.get("is_deleted", False))
-                and not bool(v.get("hidden", False))
-            )
-        )
-    ]
 
     if videos:
         user_id = user["id"]

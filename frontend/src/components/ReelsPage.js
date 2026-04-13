@@ -210,8 +210,12 @@ export const ReelsPage = () => {
   }, [setCommentCountMap]);
 
   const handleReelHidden = useCallback((videoId, hidden) => {
-    patchVideo(videoId, { hidden, visibility: hidden ? 'hidden' : 'public' });
-  }, [patchVideo]);
+    if (hidden) {
+      removeVideo(videoId);
+      return;
+    }
+    patchVideo(videoId, { hidden: false, visibility: 'public' });
+  }, [patchVideo, removeVideo]);
 
   const handleReelDeleted = useCallback((videoId) => {
     removeVideo(videoId);
