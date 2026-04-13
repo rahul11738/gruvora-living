@@ -637,8 +637,13 @@ const DotIndicators = ({ categories, activeCategoryId, railRef }) => (
         <button
           key={cat.id}
           onClick={() => {
-            const cardWidth = window.innerWidth * 0.82 + 16;
-            railRef.current?.scrollTo({ left: i * cardWidth, behavior: 'smooth' });
+            const railEl = railRef.current;
+            if (!railEl) return;
+            const firstCard = railEl.firstElementChild;
+            const cardWidth = firstCard ? firstCard.getBoundingClientRect().width : railEl.clientWidth;
+            const computedStyle = window.getComputedStyle(railEl);
+            const gap = parseFloat(computedStyle.columnGap || computedStyle.gap || '0') || 0;
+            railEl.scrollTo({ left: i * (cardWidth + gap), behavior: 'smooth' });
           }}
           aria-label={`Go to ${cat.name}`}
           className="transition-all duration-300"
@@ -744,7 +749,7 @@ export const CategoriesSection = () => {
         <div
           ref={railRef}
           className={[
-            'grid grid-flow-col auto-cols-[82vw] sm:auto-cols-[62vw] gap-4 overflow-x-auto overflow-y-hidden pb-2 px-1',
+            'grid grid-flow-col auto-cols-[100%] sm:auto-cols-[62vw] gap-0 sm:gap-4 overflow-x-auto overflow-y-hidden pb-2 px-0 sm:px-1',
             'md:grid md:grid-cols-5 md:auto-cols-auto md:gap-5 md:overflow-visible',
             'hide-scrollbar',
           ].join(' ')}
