@@ -1211,6 +1211,7 @@ class MessageCreate(BaseModel):
     message: Optional[str] = None
     listing_id: Optional[str] = None
     media_url: Optional[str] = None
+    client_message_id: Optional[str] = None
 
 
 class LockListingRequest(BaseModel):
@@ -5708,6 +5709,9 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
 
         normalized_receiver_id = str(message.receiver_id or "").strip()
         normalized_listing_id = str(message.listing_id or "").strip() or None
+        normalized_client_message_id = (
+            str(message.client_message_id or "").strip() or None
+        )
         raw_content = (
             message.content if message.content is not None else message.message
         )
@@ -5813,6 +5817,25 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
         else:
             conversation_id = conversation["id"]
 
+        # Idempotency: if client retries the same message, return existing row.
+        if normalized_client_message_id:
+            existing_message = await db.messages.find_one(
+                {
+                    "conversation_id": conversation_id,
+                    "sender_id": user["id"],
+                    "client_message_id": normalized_client_message_id,
+                },
+                {"_id": 0},
+            )
+            if existing_message:
+                return {
+                    "message": "Message sent",
+                    "message_id": existing_message.get("id"),
+                    "conversation_id": conversation_id,
+                    "message_data": existing_message,
+                    "idempotent_replay": True,
+                }
+
         # Save message
         message_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -5829,13 +5852,34 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
             "message": normalized_content,
             "media_url": message.media_url,
             "listing_id": normalized_listing_id,
+            "client_message_id": normalized_client_message_id,
             "read": False,
             "is_read": False,
             "seen": False,
             "created_at": now_iso,
         }
 
-        await db.messages.insert_one(message_doc)
+        try:
+            await db.messages.insert_one(message_doc)
+        except DuplicateKeyError:
+            if normalized_client_message_id:
+                replay_message = await db.messages.find_one(
+                    {
+                        "conversation_id": conversation_id,
+                        "sender_id": user["id"],
+                        "client_message_id": normalized_client_message_id,
+                    },
+                    {"_id": 0},
+                )
+                if replay_message:
+                    return {
+                        "message": "Message sent",
+                        "message_id": replay_message.get("id"),
+                        "conversation_id": conversation_id,
+                        "message_data": replay_message,
+                        "idempotent_replay": True,
+                    }
+            raise
         message_doc.pop("_id", None)
         message_persisted = True
 
@@ -5976,6 +6020,7 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
             "message": "Message sent",
             "message_id": message_id,
             "conversation_id": conversation_id,
+            "message_data": message_doc,
         }
 
     except HTTPException:
@@ -5995,6 +6040,21 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
                 "message": "Message sent",
                 "message_id": message_id,
                 "conversation_id": conversation_id,
+                "message_data": {
+                    "id": message_id,
+                    "conversation_id": conversation_id,
+                    "sender_id": user.get("id"),
+                    "receiver_id": getattr(message, "receiver_id", None),
+                    "content": getattr(message, "content", None)
+                    or getattr(message, "message", ""),
+                    "message": getattr(message, "content", None)
+                    or getattr(message, "message", ""),
+                    "client_message_id": getattr(message, "client_message_id", None),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "read": False,
+                    "is_read": False,
+                    "seen": False,
+                },
                 "degraded": True,
             }
 
@@ -10984,6 +11044,11 @@ async def startup_services():
     await db.conversations.create_index([("users", 1), ("last_message_at", -1)])
     await db.messages.create_index("id", unique=True)
     await db.messages.create_index([("conversation_id", 1), ("created_at", -1)])
+    await db.messages.create_index(
+        [("conversation_id", 1), ("sender_id", 1), ("client_message_id", 1)],
+        unique=True,
+        sparse=True,
+    )
     await db.messages.create_index(
         [("receiver_id", 1), ("read", 1), ("created_at", -1)]
     )

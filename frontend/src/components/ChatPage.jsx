@@ -48,6 +48,41 @@ const getBlockedReason = (text) => {
   return null;
 };
 
+const generateClientMessageId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `cmsg-${crypto.randomUUID()}`;
+  }
+  return `cmsg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const mergeMessageByIdentity = (prev, incoming) => {
+  const nextIncoming = {
+    ...incoming,
+    content: incoming?.content ?? incoming?.message ?? '',
+    message_status: 'sent',
+    optimistic: false,
+  };
+
+  const incomingId = String(nextIncoming?.id || '');
+  const incomingClientId = String(nextIncoming?.client_message_id || '');
+
+  const idxById = incomingId
+    ? prev.findIndex((m) => String(m?.id || '') === incomingId)
+    : -1;
+  const idxByClientId = incomingClientId
+    ? prev.findIndex((m) => String(m?.client_message_id || '') === incomingClientId)
+    : -1;
+
+  const replaceIndex = idxById >= 0 ? idxById : idxByClientId;
+  if (replaceIndex >= 0) {
+    const cloned = [...prev];
+    cloned[replaceIndex] = { ...cloned[replaceIndex], ...nextIncoming };
+    return cloned;
+  }
+
+  return [...prev, nextIncoming];
+};
+
 const formatTime = (val) => {
   if (!val) return '';
   const d = new Date(val);
@@ -200,7 +235,8 @@ const ConversationItem = memo(({ conv, isActive, onClick, currentUserId }) => {
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
 const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial }) => {
-  const isTemp = msg.id?.startsWith('tmp-');
+  const isTemp = Boolean(msg?.message_status === 'sending' || msg?.optimistic || msg.id?.startsWith('tmp-'));
+  const isFailed = msg?.message_status === 'failed';
 
   return (
     <div className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
@@ -220,9 +256,11 @@ const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial }) => {
             {isMine && (
               isTemp
                 ? <Circle className="w-3 h-3 opacity-50" />
-                : msg.read
-                  ? <CheckCheck className="w-3.5 h-3.5 text-blue-300" />
-                  : <Check className="w-3.5 h-3.5 opacity-70" />
+                : isFailed
+                  ? <Circle className="w-3 h-3 text-red-300" />
+                  : msg.read
+                    ? <CheckCheck className="w-3.5 h-3.5 text-blue-300" />
+                    : <Check className="w-3.5 h-3.5 opacity-70" />
             )}
           </div>
         </div>
@@ -409,10 +447,7 @@ export const ChatPage = () => {
       // Always refresh conversations for sidebar update
       loadConversations();
       if (msg.conversation_id !== activeConv?.id) return;
-      setMessages(prev => {
-        if (prev.some(m => m.id === msg.id)) return prev;
-        return [...prev, msg];
-      });
+      setMessages(prev => mergeMessageByIdentity(prev, msg));
       if (shouldAutoScroll.current) setTimeout(() => scrollToBottom(), 30);
     };
 
@@ -498,36 +533,37 @@ export const ChatPage = () => {
     sendLockRef.current = true;
 
     const optimisticId = `tmp-${Date.now()}-${Math.random()}`;
+    const clientMessageId = generateClientMessageId();
     const optimistic = {
       id: optimisticId,
+      client_message_id: clientMessageId,
       sender_id: user?.id,
       receiver_id: receiverId,
       content: text,
       read: false,
       created_at: new Date().toISOString(),
       conversation_id: activeConv.id,
+      message_status: 'sending',
+      optimistic: true,
     };
 
     setSending(true);
     setInput('');
     shouldAutoScroll.current = true;
-    setMessages(prev => {
-      const duplicateRecent = prev.some(m =>
-        String(m?.content || '').trim() === text &&
-        String(m?.sender_id || '') === String(user?.id || '') &&
-        (Date.now() - new Date(m?.created_at || 0).getTime()) < 4000
-      );
-      if (duplicateRecent) return prev;
-      return [...prev, optimistic];
-    });
+    setMessages(prev => mergeMessageByIdentity(prev, optimistic));
 
     try {
-      await messagesAPI.send({
+      const sendRes = await messagesAPI.send({
         receiver_id: receiverId,
         listing_id: activeConv.listing_id || undefined,
         content: text,
         message: text,
+        client_message_id: clientMessageId,
       });
+      const serverMsg = sendRes?.data?.message_data;
+      if (serverMsg) {
+        setMessages(prev => mergeMessageByIdentity(prev, serverMsg));
+      }
       // Refresh to get real message + update conversation
       const convs = await loadConversations();
       // Update active conversation with real ID if it was placeholder
@@ -544,7 +580,7 @@ export const ChatPage = () => {
           setSearchParams(next, { replace: true });
         }
       }
-      // Remove optimistic, real message will come via socket or next load
+      // Keep local list in sync when websocket delivery is delayed.
       if (activeConv.id) {
         await loadMessages(activeConv.id, 1, false);
       }
@@ -588,11 +624,6 @@ export const ChatPage = () => {
         reconciled = false;
       }
 
-      if (!reconciled) {
-        setMessages(prev => prev.filter(m => m.id !== optimisticId));
-        setInput(text);
-      }
-
       const detail =
         err?.response?.data?.detail ||
         err?.response?.data?.message ||
@@ -608,6 +639,16 @@ export const ChatPage = () => {
         },
       });
       if (!reconciled) {
+        setMessages(prev => prev.map((m) => {
+          if (m.id !== optimisticId && m.client_message_id !== clientMessageId) return m;
+          return {
+            ...m,
+            message_status: 'failed',
+            optimistic: false,
+            error: detail,
+          };
+        }));
+        setInput(text);
         toast.error(`Failed to send message: ${detail}`);
       }
     } finally {
