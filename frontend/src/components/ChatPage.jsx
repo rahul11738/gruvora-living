@@ -101,6 +101,24 @@ const mergeMessageByIdentity = (prev, incoming) => {
   return [...prev, nextIncoming];
 };
 
+const dedupeMessages = (items) => {
+  const list = Array.isArray(items) ? items : [];
+  const map = new Map();
+  list.forEach((m) => {
+    const id = String(m?.id || '').trim();
+    const clientId = String(m?.client_message_id || '').trim();
+    const fallbackKey = `${String(m?.sender_id || '')}|${String(m?.receiver_id || '')}|${String(m?.content || m?.message || '')}|${String(m?.created_at || '')}`;
+    const key = id ? `id:${id}` : clientId ? `cid:${clientId}` : `f:${fallbackKey}`;
+    if (!map.has(key)) {
+      map.set(key, m);
+      return;
+    }
+    const prev = map.get(key);
+    map.set(key, { ...prev, ...m });
+  });
+  return Array.from(map.values());
+};
+
 const formatTime = (val) => {
   if (!val) return '';
   const d = new Date(val);
@@ -254,7 +272,7 @@ const ConversationItem = memo(({ conv, isActive, onClick, currentUserId }) => {
 });
 
 // ─── MessageBubble ────────────────────────────────────────────────────────────
-const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial }) => {
+const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial, onRetry }) => {
   const isTemp = Boolean(msg?.message_status === 'sending' || msg?.optimistic || msg.id?.startsWith('tmp-'));
   const isFailed = msg?.message_status === 'failed';
 
@@ -284,6 +302,17 @@ const MessageBubble = memo(({ msg, isMine, showAvatar, senderInitial }) => {
             )}
           </div>
         </div>
+        {isMine && isFailed && (
+          <div className="mt-1 flex justify-end">
+            <button
+              type="button"
+              onClick={() => onRetry?.(msg)}
+              className="text-[11px] font-medium text-red-600 hover:text-red-700"
+            >
+              Retry
+            </button>
+          </div>
+        )}
       </div>
       {isMine && <div className="w-7 flex-shrink-0" />}
     </div>
@@ -412,9 +441,9 @@ export const ChatPage = () => {
       const res = await messagesAPI.getMessages(convId, page);
       const msgs = res?.data?.messages || [];
       if (append) {
-        setMessages(prev => [...msgs, ...prev]);
+        setMessages(prev => dedupeMessages([...msgs, ...prev]));
       } else {
-        setMessages(msgs);
+        setMessages(dedupeMessages(msgs));
         setTimeout(() => scrollToBottom('instant'), 50);
       }
       setHasMore(msgs.length >= MESSAGE_PAGE_LIMIT);
@@ -467,7 +496,7 @@ export const ChatPage = () => {
       // Always refresh conversations for sidebar update
       loadConversations();
       if (msg.conversation_id !== activeConv?.id) return;
-      setMessages(prev => mergeMessageByIdentity(prev, msg));
+      setMessages(prev => dedupeMessages(mergeMessageByIdentity(prev, msg)));
       if (shouldAutoScroll.current) setTimeout(() => scrollToBottom(), 30);
     };
 
@@ -570,7 +599,7 @@ export const ChatPage = () => {
     setSending(true);
     setInput('');
     shouldAutoScroll.current = true;
-    setMessages(prev => mergeMessageByIdentity(prev, optimistic));
+    setMessages(prev => dedupeMessages(mergeMessageByIdentity(prev, optimistic)));
 
     try {
       const sendRes = await messagesAPI.send({
@@ -582,7 +611,7 @@ export const ChatPage = () => {
       });
       const serverMsg = sendRes?.data?.message_data;
       if (serverMsg) {
-        setMessages(prev => mergeMessageByIdentity(prev, serverMsg));
+        setMessages(prev => dedupeMessages(mergeMessageByIdentity(prev, serverMsg)));
       }
       // Refresh to get real message + update conversation
       const convs = await loadConversations();
@@ -600,8 +629,8 @@ export const ChatPage = () => {
           setSearchParams(next, { replace: true });
         }
       }
-      // Keep local list in sync when websocket delivery is delayed.
-      if (activeConv.id) {
+      // Keep local list in sync only when API does not return canonical message payload.
+      if (activeConv.id && !serverMsg) {
         await loadMessages(activeConv.id, 1, false);
       }
     } catch (err) {
@@ -677,6 +706,71 @@ export const ChatPage = () => {
       inputRef.current?.focus();
     }
   }, [activeConv, input, sending, user?.id, loadConversations, loadMessages, setSearchParams, paramReceiverId]);
+
+  const handleRetryMessage = useCallback(async (failedMsg) => {
+    if (!failedMsg || sending || sendLockRef.current) return;
+    const text = String(failedMsg?.content || failedMsg?.message || '').trim();
+    if (!text) return;
+
+    const receiverId = failedMsg?.receiver_id || activeConv?.other_user?.id || paramReceiverId;
+    if (!receiverId) {
+      toast.error('Cannot determine recipient');
+      return;
+    }
+
+    const stableClientMessageId = String(failedMsg?.client_message_id || '').trim() || generateClientMessageId();
+
+    setMessages((prev) => prev.map((m) => {
+      const same = m?.id === failedMsg?.id || String(m?.client_message_id || '') === stableClientMessageId;
+      if (!same) return m;
+      return {
+        ...m,
+        message_status: 'sending',
+        optimistic: true,
+        error: null,
+        client_message_id: stableClientMessageId,
+      };
+    }));
+
+    sendLockRef.current = true;
+    setSending(true);
+
+    try {
+      const sendRes = await messagesAPI.send({
+        receiver_id: receiverId,
+        listing_id: activeConv?.listing_id || failedMsg?.listing_id || undefined,
+        content: text,
+        message: text,
+        client_message_id: stableClientMessageId,
+      });
+      const serverMsg = sendRes?.data?.message_data;
+      if (serverMsg) {
+        setMessages((prev) => dedupeMessages(mergeMessageByIdentity(prev, serverMsg)));
+      }
+      await loadConversations();
+    } catch (err) {
+      const detail =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        'Unknown server error';
+      setMessages((prev) => prev.map((m) => {
+        const same = m?.id === failedMsg?.id || String(m?.client_message_id || '') === stableClientMessageId;
+        if (!same) return m;
+        return {
+          ...m,
+          message_status: 'failed',
+          optimistic: false,
+          error: detail,
+          client_message_id: stableClientMessageId,
+        };
+      }));
+      toast.error(`Retry failed: ${detail}`);
+    } finally {
+      setSending(false);
+      sendLockRef.current = false;
+    }
+  }, [activeConv?.listing_id, activeConv?.other_user?.id, loadConversations, paramReceiverId, sending]);
 
   const handleSelectConv = useCallback((conv) => {
     if (conv?.id) {
@@ -920,6 +1014,7 @@ export const ChatPage = () => {
                         isMine={isMine}
                         showAvatar={showAvatar}
                         senderInitial={(activeConv.other_user?.name || '?')[0].toUpperCase()}
+                        onRetry={handleRetryMessage}
                       />
                     );
                   })

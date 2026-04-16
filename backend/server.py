@@ -6069,6 +6069,9 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
         fallback_listing_id = (
             str(getattr(message, "listing_id", "") or "").strip() or None
         )
+        fallback_client_message_id = (
+            str(getattr(message, "client_message_id", "") or "").strip() or None
+        )
 
         if (
             sender_id
@@ -6127,6 +6130,26 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
                         }
                     )
 
+                if fallback_client_message_id:
+                    existing_fallback = await db.messages.find_one(
+                        {
+                            "conversation_id": fallback_conversation_id,
+                            "sender_id": sender_id,
+                            "client_message_id": fallback_client_message_id,
+                        },
+                        {"_id": 0},
+                    )
+                    if existing_fallback:
+                        return {
+                            "message": "Message sent",
+                            "message_id": existing_fallback.get("id"),
+                            "conversation_id": fallback_conversation_id,
+                            "message_data": existing_fallback,
+                            "idempotent_replay": True,
+                            "degraded": True,
+                            "fallback_mode": "minimal",
+                        }
+
                 fallback_message_id = str(uuid.uuid4())
                 fallback_now_iso = datetime.now(timezone.utc).isoformat()
                 await db.messages.insert_one(
@@ -6140,6 +6163,7 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
                         "content": fallback_content,
                         "message": fallback_content,
                         "listing_id": fallback_listing_id,
+                        "client_message_id": fallback_client_message_id,
                         "read": False,
                         "is_read": False,
                         "seen": False,
@@ -6160,6 +6184,20 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
                     "message": "Message sent",
                     "message_id": fallback_message_id,
                     "conversation_id": fallback_conversation_id,
+                    "message_data": {
+                        "id": fallback_message_id,
+                        "conversation_id": fallback_conversation_id,
+                        "sender_id": sender_id,
+                        "receiver_id": fallback_receiver_id,
+                        "content": fallback_content,
+                        "message": fallback_content,
+                        "listing_id": fallback_listing_id,
+                        "client_message_id": fallback_client_message_id,
+                        "created_at": fallback_now_iso,
+                        "read": False,
+                        "is_read": False,
+                        "seen": False,
+                    },
                     "degraded": True,
                     "fallback_mode": "minimal",
                 }
