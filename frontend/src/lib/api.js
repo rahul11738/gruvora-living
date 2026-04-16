@@ -9,18 +9,21 @@ const FALLBACK_LOCAL_BACKEND_URLS = [
 ];
 
 const resolveInitialBackendUrl = () => {
-  if (process.env.REACT_APP_BACKEND_URL) {
-    return process.env.REACT_APP_BACKEND_URL;
-  }
-
   if (typeof window !== 'undefined') {
     const host = window.location.hostname || '';
     const isLocalHost = host === 'localhost' || host === '127.0.0.1';
     if (!isLocalHost) {
+      if (process.env.REACT_APP_BACKEND_URL?.startsWith('/')) {
+        return process.env.REACT_APP_BACKEND_URL;
+      }
       // On Vercel/prod domains, route requests through same-origin rewrite
       // to avoid browser CORS preflight failures.
       return '/backend-proxy';
     }
+  }
+
+  if (process.env.REACT_APP_BACKEND_URL) {
+    return process.env.REACT_APP_BACKEND_URL;
   }
 
   if (typeof window !== 'undefined') {

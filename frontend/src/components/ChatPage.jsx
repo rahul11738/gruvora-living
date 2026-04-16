@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { Header } from './Layout';
-import { messagesAPI } from '../lib/api';
+import api, { messagesAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -22,6 +22,10 @@ const normalizeSocketBaseUrl = (rawUrl) => {
 };
 
 const resolveBackendUrl = () => {
+  const clientBase = String(api?.defaults?.baseURL || '').trim();
+  if (clientBase) {
+    return clientBase.replace(/\/api\/?$/i, '');
+  }
   if (process.env.REACT_APP_BACKEND_URL) return process.env.REACT_APP_BACKEND_URL;
   if (typeof window !== 'undefined') {
     const stored = window.localStorage.getItem('gharsetu_backend_url');
@@ -31,6 +35,20 @@ const resolveBackendUrl = () => {
 };
 
 const API_URL = normalizeSocketBaseUrl(resolveBackendUrl());
+const getSocketConnectionConfig = (apiUrl) => {
+  const safeUrl = String(apiUrl || '').trim();
+  if (safeUrl.startsWith('/')) {
+    const normalizedPath = safeUrl.replace(/\/+$/, '');
+    return {
+      uri: typeof window !== 'undefined' ? window.location.origin : '',
+      path: `${normalizedPath}/socket.io`,
+    };
+  }
+  return {
+    uri: safeUrl,
+    path: '/socket.io',
+  };
+};
 const MESSAGE_PAGE_LIMIT = 50;
 const RECONNECT_DELAY_MS = [1000, 2000, 4000, 8000, 16000];
 const CHAT_UNREAD_EVENT = 'gharsetu:chat-unread-updated';
@@ -151,9 +169,11 @@ let _reconnectTimer = null;
 const getSocket = (token, onConnect, onDisconnect) => {
   if (_socketInstance) return _socketInstance;
 
-  const socket = io(API_URL, {
+  const socketConfig = getSocketConnectionConfig(API_URL);
+
+  const socket = io(socketConfig.uri, {
     transports: ['polling', 'websocket'],
-    path: '/socket.io',
+    path: socketConfig.path,
     autoConnect: true,
     reconnection: false,
   });

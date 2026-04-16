@@ -35,6 +35,21 @@ const resolveBackendUrl = () => {
 
 const API_URL = normalizeSocketBaseUrl(resolveBackendUrl());
 
+const getSocketConnectionConfig = (apiUrl) => {
+  const safeUrl = String(apiUrl || '').trim();
+  if (safeUrl.startsWith('/')) {
+    const normalizedPath = safeUrl.replace(/\/+$/, '');
+    return {
+      uri: typeof window !== 'undefined' ? window.location.origin : '',
+      path: `${normalizedPath}/socket.io`,
+    };
+  }
+  return {
+    uri: safeUrl,
+    path: '/socket.io',
+  };
+};
+
 // ── Reconnect state ──────────────────────────────────────────────────────────
 let _reconnectAttempt = 0;
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
@@ -170,9 +185,11 @@ export const NotificationProvider = ({ children }) => {
       if (socketRef.current?.connected) return;
       if (socketRef.current) { socketRef.current.removeAllListeners(); socketRef.current.disconnect(); }
 
-      const socket = io(API_URL, {
+      const socketConfig = getSocketConnectionConfig(API_URL);
+
+      const socket = io(socketConfig.uri, {
         transports: ['polling', 'websocket'],
-        path: '/socket.io',
+        path: socketConfig.path,
         autoConnect: true,
         reconnection: false,
       });
