@@ -252,12 +252,16 @@ jobs:
           PY
 
       - name: Run auth and security regression tests
+        id: auth_security_tests
+        continue-on-error: true
         run: python -m pytest tests/test_auth_security.py -q --junitxml=../test_reports/pytest_auth_security.xml
         env:
           REACT_APP_BACKEND_URL: ${{ env.BASE_URL }}
           JWT_SECRET: ${{ env.JWT_SECRET }}
 
       - name: Run stress suite
+        id: stress_suite
+        if: always()
         run: python run_reels_stress_suite.py
 
       - name: Publish job summary
@@ -275,6 +279,10 @@ jobs:
 
           preflight_mode = os.environ.get("PREFLIGHT_MODE", "unknown")
           preflight_reason = os.environ.get("PREFLIGHT_REASON", "not provided")
+          auth_step_outcome = os.environ.get("AUTH_TESTS_OUTCOME", "unknown")
+          stress_step_outcome = os.environ.get("STRESS_SUITE_OUTCOME", "unknown")
+          baseline_fetch_outcome = os.environ.get("BASELINE_FETCH_OUTCOME", "unknown")
+          baseline_fetch_status = os.environ.get("BASELINE_FETCH_STATUS", "unknown")
 
           auth_report_path = "../test_reports/pytest_auth_security.xml"
           auth_tests = 0
@@ -305,6 +313,14 @@ jobs:
           report_paths = sorted(glob.glob("../test_reports/reels_stress_suite_*.json"))
 
           with open(summary_path, "a", encoding="utf-8") as out:
+            out.write("## Pipeline Step Outcomes\n\n")
+            out.write("| Step | Outcome |\n")
+            out.write("|---|---|\n")
+            out.write(f"| Auth/security tests | {auth_step_outcome} |\n")
+            out.write(f"| Stress suite | {stress_step_outcome} |\n")
+            out.write(f"| Baseline fetch step | {baseline_fetch_outcome} |\n")
+            out.write(f"| Baseline fetch status | {baseline_fetch_status} |\n\n")
+
             out.write("## Auth and Security Tests\n\n")
             out.write(f"**Status: {auth_status}**\n\n")
             out.write(f"- report: `{auth_report_path}`\n")
@@ -318,6 +334,12 @@ jobs:
             with open(summary_path, "a", encoding="utf-8") as out:
               out.write("## Reels Stress Suite\n\n")
               out.write("No report file found.\n")
+              out.write(
+                "- Tip: check `Run stress suite` step logs for fatal config parsing or runtime errors.\n"
+              )
+              out.write(
+                "- Tip: if auth step failed first, summary still includes its outcome above.\n"
+              )
             raise SystemExit(0)
 
           latest = report_paths[-1]
@@ -392,6 +414,11 @@ jobs:
                   f"| {action} | {delta_success:+.2f} | {delta_error:+.2f} |\n"
                 )
           PY
+        env:
+          AUTH_TESTS_OUTCOME: ${{ steps.auth_security_tests.outcome }}
+          STRESS_SUITE_OUTCOME: ${{ steps.stress_suite.outcome }}
+          BASELINE_FETCH_OUTCOME: ${{ steps.baseline_report.outcome }}
+          BASELINE_FETCH_STATUS: ${{ steps.baseline_report.outputs.status }}
       - name: Fetch previous successful baseline report
         id: baseline_report
         if: always()
@@ -616,6 +643,12 @@ jobs:
         if: steps.regression_gate.outputs.gate_status == 'failed'
         run: |
           echo "Regression gate failed: ${{ steps.regression_gate.outputs.gate_message }}"
+          exit 1
+
+      - name: Fail on auth/security test violations
+        if: steps.auth_security_tests.outcome == 'failure'
+        run: |
+          echo "Auth/security regression tests failed. See pytest_auth_security.xml and test logs."
           exit 1
 
       - name: Upload stress reports

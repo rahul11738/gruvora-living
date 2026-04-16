@@ -48,10 +48,77 @@ WORKERS = os.environ.get("WORKERS", "40").strip()
 TOKENS_FILE = os.environ.get("TOKENS_FILE", "tokens.txt").strip()
 SKIP_PREPARE = os.environ.get("SKIP_PREPARE", "0").strip() == "1"
 REPORT_DIR = os.environ.get("REPORT_DIR", "..\\test_reports").strip()
-MIN_TOKENS = int(os.environ.get("MIN_TOKENS", "1").strip())
-MIN_SUCCESS_RATE = float(os.environ.get("MIN_SUCCESS_RATE", "0.99").strip())
-MAX_ERROR_RATE = float(os.environ.get("MAX_ERROR_RATE", "0.01").strip())
-MAX_ELAPSED_SECONDS = float(os.environ.get("MAX_ELAPSED_SECONDS", "0").strip())
+
+
+def _parse_int_env(name: str, default: int, *, minimum: int | None = None) -> int:
+    raw = os.environ.get(name, str(default))
+    text = "" if raw is None else str(raw).strip()
+    if text == "":
+        text = str(default)
+    try:
+        value = int(text)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be an integer, got '{text}'") from exc
+    if minimum is not None and value < minimum:
+        raise RuntimeError(f"{name} must be >= {minimum}, got {value}")
+    return value
+
+
+def _parse_float_env(name: str, default: float, *, minimum: float | None = None) -> float:
+    raw = os.environ.get(name, str(default))
+    text = "" if raw is None else str(raw).strip()
+    if text == "":
+        text = str(default)
+    try:
+        value = float(text)
+    except ValueError as exc:
+        raise RuntimeError(f"{name} must be numeric, got '{text}'") from exc
+    if minimum is not None and value < minimum:
+        raise RuntimeError(f"{name} must be >= {minimum}, got {value}")
+    return value
+
+
+def _write_failure_report(
+    *,
+    report_dir: Path,
+    started_at: datetime,
+    error_message: str,
+) -> Path:
+    finished_at = datetime.now(timezone.utc)
+    stamp = started_at.strftime("%Y%m%d_%H%M%S")
+    report_path = report_dir / f"reels_stress_suite_{stamp}.json"
+    payload = {
+        "started_at": started_at.isoformat(),
+        "finished_at": finished_at.isoformat(),
+        "duration_seconds": round((finished_at - started_at).total_seconds(), 3),
+        "config": {
+            "base_url": BASE_URL,
+            "reel_id": REEL_ID,
+            "rounds": ROUNDS,
+            "workers": WORKERS,
+            "tokens_file": TOKENS_FILE,
+            "users_file": USERS_FILE,
+            "users_inline_provided": bool(USERS_INLINE),
+            "skip_prepare": SKIP_PREPARE,
+        },
+        "token_count": 0,
+        "prepare": {"skipped": True, "fatal_error": error_message},
+        "stress": {
+            "skipped": True,
+            "script": "stress_test_reels_multiuser.py",
+            "returncode": 1,
+            "elapsed_seconds": 0,
+            "stdout": "",
+            "stderr": error_message,
+        },
+        "overall_from_stress_output": "FAIL",
+        "action_stats": {},
+        "threshold_failures": [error_message],
+        "suite_pass": False,
+    }
+    with report_path.open("w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=True, indent=2)
+    return report_path
 
 
 def run_script(script_name: str, extra_env: Dict[str, str]) -> Dict[str, Any]:
@@ -111,140 +178,162 @@ def count_tokens(path: Path) -> int:
 
 
 def main() -> None:
-    if not REEL_ID:
-        raise RuntimeError("REEL_ID env var is required")
-    if not SKIP_PREPARE and not USERS_FILE and not USERS_INLINE:
-        raise RuntimeError("Provide USERS_FILE or USERS unless SKIP_PREPARE=1")
-
+    started_at = datetime.now(timezone.utc)
     report_dir = Path(REPORT_DIR).resolve()
     report_dir.mkdir(parents=True, exist_ok=True)
 
-    started_at = datetime.now(timezone.utc)
-    started_iso = started_at.isoformat()
+    try:
+        min_tokens = _parse_int_env("MIN_TOKENS", 1, minimum=1)
+        min_success_rate = _parse_float_env("MIN_SUCCESS_RATE", 0.99, minimum=0.0)
+        max_error_rate = _parse_float_env("MAX_ERROR_RATE", 0.01, minimum=0.0)
+        max_elapsed_seconds = _parse_float_env("MAX_ELAPSED_SECONDS", 0.0, minimum=0.0)
 
-    print("=== Reels Stress Suite ===")
-    print(f"BASE_URL={BASE_URL}")
-    print(f"REEL_ID={REEL_ID}")
-    print(f"ROUNDS={ROUNDS}, WORKERS={WORKERS}")
-    print(f"TOKENS_FILE={TOKENS_FILE}")
-    print(f"SKIP_PREPARE={SKIP_PREPARE}")
+        if not REEL_ID:
+            raise RuntimeError("REEL_ID env var is required")
+        if not SKIP_PREPARE and not USERS_FILE and not USERS_INLINE:
+            raise RuntimeError("Provide USERS_FILE or USERS unless SKIP_PREPARE=1")
 
-    prepare_result: Dict[str, Any] = {"skipped": SKIP_PREPARE}
-    if not SKIP_PREPARE:
-        prepare_result = run_script(
-            "prepare_stress_tokens.py",
-            {
-                "BASE_URL": BASE_URL,
-                "USERS_FILE": USERS_FILE,
-                "USERS": USERS_INLINE,
-                "OUT_TOKENS_FILE": TOKENS_FILE,
-            },
+        print("=== Reels Stress Suite ===")
+        print(f"BASE_URL={BASE_URL}")
+        print(f"REEL_ID={REEL_ID}")
+        print(f"ROUNDS={ROUNDS}, WORKERS={WORKERS}")
+        print(f"TOKENS_FILE={TOKENS_FILE}")
+        print(f"SKIP_PREPARE={SKIP_PREPARE}")
+        print(
+            "thresholds="
+            f"min_tokens:{min_tokens},"
+            f"min_success_rate:{min_success_rate},"
+            f"max_error_rate:{max_error_rate},"
+            f"max_elapsed_seconds:{max_elapsed_seconds}"
         )
-        print(f"prepare_stress_tokens.py returncode={prepare_result['returncode']}")
-        if prepare_result["returncode"] != 0:
-            print("Token preparation failed. Suite aborted.")
 
-    tokens_path = Path(TOKENS_FILE)
-    token_count = count_tokens(tokens_path)
-
-    stress_result: Dict[str, Any] = {
-        "skipped": False,
-        "script": "stress_test_reels_multiuser.py",
-        "returncode": 1,
-        "elapsed_seconds": 0,
-        "stdout": "",
-        "stderr": "Skipped due to token preparation failure",
-    }
-
-    can_run_stress = SKIP_PREPARE or (prepare_result.get("returncode", 1) == 0)
-    if can_run_stress:
-        stress_result = run_script(
-            "stress_test_reels_multiuser.py",
-            {
-                "BASE_URL": BASE_URL,
-                "REEL_ID": REEL_ID,
-                "TOKENS_FILE": TOKENS_FILE,
-                "ROUNDS": ROUNDS,
-                "WORKERS": WORKERS,
-            },
-        )
-        print(f"stress_test_reels_multiuser.py returncode={stress_result['returncode']}")
-
-    overall_from_output = parse_overall(stress_result.get("stdout", ""))
-    action_stats = parse_action_stats(stress_result.get("stdout", ""))
-
-    base_ok = (
-        can_run_stress
-        and stress_result.get("returncode", 1) == 0
-        and overall_from_output == "PASS"
-        and token_count >= MIN_TOKENS
-    )
-
-    threshold_failures = []
-    for action, stats in action_stats.items():
-        success_rate = stats["success_rate_bps"] / 10000.0
-        error_rate = stats["error_rate_bps"] / 10000.0
-        if success_rate < MIN_SUCCESS_RATE:
-            threshold_failures.append(
-                f"{action} success_rate={success_rate:.4f} < min={MIN_SUCCESS_RATE:.4f}"
+        prepare_result: Dict[str, Any] = {"skipped": SKIP_PREPARE}
+        if not SKIP_PREPARE:
+            prepare_result = run_script(
+                "prepare_stress_tokens.py",
+                {
+                    "BASE_URL": BASE_URL,
+                    "USERS_FILE": USERS_FILE,
+                    "USERS": USERS_INLINE,
+                    "OUT_TOKENS_FILE": TOKENS_FILE,
+                },
             )
-        if error_rate > MAX_ERROR_RATE:
-            threshold_failures.append(
-                f"{action} error_rate={error_rate:.4f} > max={MAX_ERROR_RATE:.4f}"
-            )
+            print(f"prepare_stress_tokens.py returncode={prepare_result['returncode']}")
+            if prepare_result["returncode"] != 0:
+                print("Token preparation failed. Suite aborted.")
 
-    if MAX_ELAPSED_SECONDS > 0 and stress_result.get("elapsed_seconds", 0) > MAX_ELAPSED_SECONDS:
-        threshold_failures.append(
-            f"stress elapsed_seconds={stress_result.get('elapsed_seconds', 0):.3f} > max={MAX_ELAPSED_SECONDS:.3f}"
+        tokens_path = Path(TOKENS_FILE)
+        token_count = count_tokens(tokens_path)
+
+        stress_result: Dict[str, Any] = {
+            "skipped": False,
+            "script": "stress_test_reels_multiuser.py",
+            "returncode": 1,
+            "elapsed_seconds": 0,
+            "stdout": "",
+            "stderr": "Skipped due to token preparation failure",
+        }
+
+        can_run_stress = SKIP_PREPARE or (prepare_result.get("returncode", 1) == 0)
+        if can_run_stress:
+            stress_result = run_script(
+                "stress_test_reels_multiuser.py",
+                {
+                    "BASE_URL": BASE_URL,
+                    "REEL_ID": REEL_ID,
+                    "TOKENS_FILE": TOKENS_FILE,
+                    "ROUNDS": ROUNDS,
+                    "WORKERS": WORKERS,
+                },
+            )
+            print(f"stress_test_reels_multiuser.py returncode={stress_result['returncode']}")
+
+        overall_from_output = parse_overall(stress_result.get("stdout", ""))
+        action_stats = parse_action_stats(stress_result.get("stdout", ""))
+
+        base_ok = (
+            can_run_stress
+            and stress_result.get("returncode", 1) == 0
+            and overall_from_output == "PASS"
+            and token_count >= min_tokens
         )
 
-    suite_ok = base_ok and len(threshold_failures) == 0
+        threshold_failures = []
+        for action, stats in action_stats.items():
+            success_rate = stats["success_rate_bps"] / 10000.0
+            error_rate = stats["error_rate_bps"] / 10000.0
+            if success_rate < min_success_rate:
+                threshold_failures.append(
+                    f"{action} success_rate={success_rate:.4f} < min={min_success_rate:.4f}"
+                )
+            if error_rate > max_error_rate:
+                threshold_failures.append(
+                    f"{action} error_rate={error_rate:.4f} > max={max_error_rate:.4f}"
+                )
 
-    finished_at = datetime.now(timezone.utc)
-    report = {
-        "started_at": started_iso,
-        "finished_at": finished_at.isoformat(),
-        "duration_seconds": round((finished_at - started_at).total_seconds(), 3),
-        "config": {
-            "base_url": BASE_URL,
-            "reel_id": REEL_ID,
-            "rounds": int(ROUNDS),
-            "workers": int(WORKERS),
-            "tokens_file": str(tokens_path),
-            "users_file": USERS_FILE,
-            "users_inline_provided": bool(USERS_INLINE),
-            "skip_prepare": SKIP_PREPARE,
-            "thresholds": {
-                "min_tokens": MIN_TOKENS,
-                "min_success_rate": MIN_SUCCESS_RATE,
-                "max_error_rate": MAX_ERROR_RATE,
-                "max_elapsed_seconds": MAX_ELAPSED_SECONDS,
+        if max_elapsed_seconds > 0 and stress_result.get("elapsed_seconds", 0) > max_elapsed_seconds:
+            threshold_failures.append(
+                f"stress elapsed_seconds={stress_result.get('elapsed_seconds', 0):.3f} > max={max_elapsed_seconds:.3f}"
+            )
+
+        suite_ok = base_ok and len(threshold_failures) == 0
+
+        finished_at = datetime.now(timezone.utc)
+        report = {
+            "started_at": started_at.isoformat(),
+            "finished_at": finished_at.isoformat(),
+            "duration_seconds": round((finished_at - started_at).total_seconds(), 3),
+            "config": {
+                "base_url": BASE_URL,
+                "reel_id": REEL_ID,
+                "rounds": int(ROUNDS),
+                "workers": int(WORKERS),
+                "tokens_file": str(tokens_path),
+                "users_file": USERS_FILE,
+                "users_inline_provided": bool(USERS_INLINE),
+                "skip_prepare": SKIP_PREPARE,
+                "thresholds": {
+                    "min_tokens": min_tokens,
+                    "min_success_rate": min_success_rate,
+                    "max_error_rate": max_error_rate,
+                    "max_elapsed_seconds": max_elapsed_seconds,
+                },
             },
-        },
-        "token_count": token_count,
-        "prepare": prepare_result,
-        "stress": stress_result,
-        "overall_from_stress_output": overall_from_output,
-        "action_stats": action_stats,
-        "threshold_failures": threshold_failures,
-        "suite_pass": suite_ok,
-    }
+            "token_count": token_count,
+            "prepare": prepare_result,
+            "stress": stress_result,
+            "overall_from_stress_output": overall_from_output,
+            "action_stats": action_stats,
+            "threshold_failures": threshold_failures,
+            "suite_pass": suite_ok,
+        }
 
-    stamp = started_at.strftime("%Y%m%d_%H%M%S")
-    report_path = report_dir / f"reels_stress_suite_{stamp}.json"
-    with report_path.open("w", encoding="utf-8") as f:
-        json.dump(report, f, ensure_ascii=True, indent=2)
+        stamp = started_at.strftime("%Y%m%d_%H%M%S")
+        report_path = report_dir / f"reels_stress_suite_{stamp}.json"
+        with report_path.open("w", encoding="utf-8") as f:
+            json.dump(report, f, ensure_ascii=True, indent=2)
 
-    print(f"token_count={token_count}")
-    print(f"overall_from_stress_output={overall_from_output}")
-    if threshold_failures:
-        print("threshold_failures:")
-        for item in threshold_failures:
-            print(f"- {item}")
-    print(f"suite_pass={suite_ok}")
-    print(f"report={report_path}")
+        print(f"token_count={token_count}")
+        print(f"overall_from_stress_output={overall_from_output}")
+        if threshold_failures:
+            print("threshold_failures:")
+            for item in threshold_failures:
+                print(f"- {item}")
+        print(f"suite_pass={suite_ok}")
+        print(f"report={report_path}")
 
-    if not suite_ok:
+        if not suite_ok:
+            sys.exit(1)
+
+    except Exception as exc:
+        message = f"fatal stress suite error: {exc}"
+        print(message)
+        report_path = _write_failure_report(
+            report_dir=report_dir,
+            started_at=started_at,
+            error_message=message,
+        )
+        print(f"report={report_path}")
         sys.exit(1)
 
 
