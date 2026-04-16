@@ -38,6 +38,35 @@ const resolveInitialBackendUrl = () => {
 
 let activeBackendUrl = resolveInitialBackendUrl();
 let backendDiscoveryPromise = null;
+const BACKEND_OUTAGE_COOLDOWN_MS = 30000;
+const backendOutageState = {
+  cooldownUntil: 0,
+  reason: '',
+};
+
+const isBackendOutageActive = () => Date.now() < backendOutageState.cooldownUntil;
+
+const shouldBypassOutageGuard = (config = {}) => {
+  const url = String(config?.url || '').toLowerCase();
+  if (!url) return false;
+  return url.includes('/health');
+};
+
+const markBackendOutage = (reason = 'upstream-502') => {
+  backendOutageState.cooldownUntil = Date.now() + BACKEND_OUTAGE_COOLDOWN_MS;
+  backendOutageState.reason = reason;
+};
+
+const clearBackendOutage = () => {
+  backendOutageState.cooldownUntil = 0;
+  backendOutageState.reason = '';
+};
+
+export const isBackendUnavailableError = (error) => {
+  if (error?.isBackendCooldown) return true;
+  const status = error?.response?.status;
+  return status === 502 || status === 503 || status === 504;
+};
 
 const setActiveBackendUrl = (nextUrl) => {
   activeBackendUrl = nextUrl;
@@ -135,6 +164,21 @@ const forceHttpsInPayload = (value) => {
 };
 
 api.interceptors.request.use((config) => {
+  if (isBackendOutageActive() && !shouldBypassOutageGuard(config)) {
+    const cooldownError = new Error('Backend temporarily unavailable. Cooling down before next retry.');
+    cooldownError.code = 'ERR_BACKEND_COOLDOWN';
+    cooldownError.isBackendCooldown = true;
+    cooldownError.config = config;
+    cooldownError.response = {
+      status: 503,
+      data: {
+        detail: 'Backend temporarily unavailable',
+        reason: backendOutageState.reason || 'cooldown-active',
+      },
+    };
+    return Promise.reject(cooldownError);
+  }
+
   if (!process.env.REACT_APP_BACKEND_URL && typeof window !== 'undefined') {
     const effectiveBaseUrl = config.baseURL || `${activeBackendUrl}/api`;
     if (!config.url?.startsWith('http')) {
@@ -152,6 +196,9 @@ api.interceptors.request.use((config) => {
 // ✅ Auto token refresh on 401
 api.interceptors.response.use(
   (response) => {
+    if (isBackendOutageActive()) {
+      clearBackendOutage();
+    }
     response.data = forceHttpsInPayload(response.data);
     return response;
   },
@@ -160,6 +207,10 @@ api.interceptors.response.use(
 
     const status = error.response?.status;
     const isTransientGatewayError = !status || status === 502 || status === 503 || status === 504;
+    if (isTransientGatewayError) {
+      markBackendOutage(status ? `http-${status}` : 'network-unreachable');
+    }
+
     if (isTransientGatewayError && !originalRequest._gatewayRetry) {
       originalRequest._gatewayRetry = true;
       await new Promise((resolve) => setTimeout(resolve, 450));
