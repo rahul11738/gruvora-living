@@ -26,7 +26,8 @@ jobs:
     timeout-minutes: 12
     concurrency:
       group: auth-security-${{ github.ref }}
-      cancel-in-progress: true
+      # Keep PR feedback fast, but avoid canceling push runs on main/develop.
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     defaults:
       run:
         working-directory: backend
