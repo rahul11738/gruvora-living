@@ -42,7 +42,7 @@ from collections import defaultdict, Counter
 import hashlib
 import socketio
 from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import DuplicateKeyError, OperationFailure
 from search_engine import (
     normalize_search_query,
     smart_search_listings,
@@ -3908,6 +3908,114 @@ async def create_system_notification(
     return notification
 
 
+async def _backfill_message_client_ids(batch_size: int = 2000) -> int:
+    """Backfill missing client_message_id values in bounded batches.
+
+    This is safe to run online and avoids large full-collection writes during startup.
+    """
+    updated_total = 0
+    while True:
+        docs = (
+            await db.messages.find(
+                {
+                    "$or": [
+                        {"client_message_id": {"$exists": False}},
+                        {"client_message_id": None},
+                        {"client_message_id": ""},
+                    ],
+                    "id": {"$exists": True, "$ne": None},
+                },
+                {"_id": 1, "id": 1},
+            )
+            .limit(batch_size)
+            .to_list(batch_size)
+        )
+
+        if not docs:
+            break
+
+        for item in docs:
+            try:
+                await db.messages.update_one(
+                    {
+                        "_id": item["_id"],
+                        "$or": [
+                            {"client_message_id": {"$exists": False}},
+                            {"client_message_id": None},
+                            {"client_message_id": ""},
+                        ],
+                    },
+                    {"$set": {"client_message_id": f"legacy-{item.get('id')}"}},
+                )
+                updated_total += 1
+            except Exception:
+                logger.warning(
+                    "Failed to backfill client_message_id for _id=%s",
+                    str(item.get("_id")),
+                    exc_info=True,
+                )
+
+        if len(docs) < batch_size:
+            break
+
+    return updated_total
+
+
+async def _ensure_messages_idempotency_index() -> None:
+    """Create idempotency index without crashing app startup.
+
+    Strategy:
+    1. Drop older index variants (safe if absent).
+    2. Try create partial unique index.
+    3. On duplicate conflict, run bounded backfill and retry once.
+    """
+    for idx_name in [
+        "conversation_id_1_sender_id_1_client_message_id_1",
+        "uq_messages_conversation_sender_client_msg_id",
+    ]:
+        try:
+            await db.messages.drop_index(idx_name)
+        except (OperationFailure, Exception):
+            pass
+
+    index_spec = {
+        "name": "uq_messages_conversation_sender_client_msg_id",
+        "unique": True,
+        "partialFilterExpression": {
+            "client_message_id": {
+                "$exists": True,
+                "$type": "string",
+                "$ne": "",
+            }
+        },
+    }
+
+    try:
+        await db.messages.create_index(
+            [("conversation_id", 1), ("sender_id", 1), ("client_message_id", 1)],
+            **index_spec,
+        )
+        return
+    except DuplicateKeyError:
+        logger.warning(
+            "Message idempotency index build conflicted; starting bounded client_message_id backfill"
+        )
+
+    updated = await _backfill_message_client_ids(batch_size=2000)
+    if updated:
+        logger.info("Backfilled %s messages with legacy client_message_id", updated)
+
+    try:
+        await db.messages.create_index(
+            [("conversation_id", 1), ("sender_id", 1), ("client_message_id", 1)],
+            **index_spec,
+        )
+    except DuplicateKeyError:
+        logger.exception(
+            "Unable to create message idempotency index after backfill. Service will continue without startup crash."
+        )
+
+
 @api_router.get("/admin/audit-logs")
 async def get_admin_audit_logs(
     action: Optional[str] = None,
@@ -5709,9 +5817,11 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
 
         normalized_receiver_id = str(message.receiver_id or "").strip()
         normalized_listing_id = str(message.listing_id or "").strip() or None
-        normalized_client_message_id = (
-            str(message.client_message_id or "").strip() or None
-        )
+        normalized_client_message_id = str(message.client_message_id or "").strip()
+        if not normalized_client_message_id:
+            # Enforce non-null idempotency key for every insert path.
+            # Legacy clients that do not provide one still get a stable stored value.
+            normalized_client_message_id = f"srv-{uuid.uuid4()}"
         raw_content = (
             message.content if message.content is not None else message.message
         )
@@ -5971,6 +6081,7 @@ async def send_message(message: MessageCreate, user: dict = Depends(get_current_
                     "receiver_id": user["id"],
                     "content": receiver["auto_reply_message"],
                     "message": receiver["auto_reply_message"],
+                    "client_message_id": f"auto-{auto_id}",
                     "is_auto_reply": True,
                     "listing_id": normalized_listing_id,
                     "read": False,
@@ -11082,11 +11193,7 @@ async def startup_services():
     await db.conversations.create_index([("users", 1), ("last_message_at", -1)])
     await db.messages.create_index("id", unique=True)
     await db.messages.create_index([("conversation_id", 1), ("created_at", -1)])
-    await db.messages.create_index(
-        [("conversation_id", 1), ("sender_id", 1), ("client_message_id", 1)],
-        unique=True,
-        sparse=True,
-    )
+    await _ensure_messages_idempotency_index()
     await db.messages.create_index(
         [("receiver_id", 1), ("read", 1), ("created_at", -1)]
     )
