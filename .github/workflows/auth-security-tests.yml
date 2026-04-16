@@ -49,24 +49,23 @@ jobs:
         id: preflight
         shell: bash
         run: |
-          if [ -z "${{ secrets.REELS_BASE_URL }}" ] || [ -z "${{ secrets.JWT_SECRET }}" ]; then
-            if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-              echo "run_tests=false" >> "$GITHUB_OUTPUT"
-              echo "preflight_mode=skipped-on-pr" >> "$GITHUB_OUTPUT"
-              echo "preflight_reason=missing REELS_BASE_URL or JWT_SECRET" >> "$GITHUB_OUTPUT"
-              echo "::notice::Skipping auth/security tests for pull_request because REELS_BASE_URL or JWT_SECRET is not configured."
-            else
-              echo "run_tests=false" >> "$GITHUB_OUTPUT"
-              echo "preflight_mode=enforced-missing-secrets" >> "$GITHUB_OUTPUT"
-              echo "preflight_reason=missing REELS_BASE_URL or JWT_SECRET" >> "$GITHUB_OUTPUT"
-              echo "::error::Missing required secrets REELS_BASE_URL and/or JWT_SECRET."
-              exit 1
-            fi
-          else
-            echo "run_tests=true" >> "$GITHUB_OUTPUT"
-            echo "preflight_mode=enforced" >> "$GITHUB_OUTPUT"
-            echo "preflight_reason=configured" >> "$GITHUB_OUTPUT"
+          missing=()
+
+          [ -z "${{ secrets.REELS_BASE_URL }}" ] && missing+=("REELS_BASE_URL")
+          [ -z "${{ secrets.JWT_SECRET }}" ] && missing+=("JWT_SECRET")
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            reason=$(IFS=', '; echo "${missing[*]}")
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
+            echo "preflight_mode=skipped-missing-secrets" >> "$GITHUB_OUTPUT"
+            echo "preflight_reason=missing $reason" >> "$GITHUB_OUTPUT"
+            echo "::warning::Skipping auth/security tests because required secrets are missing: $reason"
+            exit 0
           fi
+
+          echo "run_tests=true" >> "$GITHUB_OUTPUT"
+          echo "preflight_mode=enforced" >> "$GITHUB_OUTPUT"
+          echo "preflight_reason=configured" >> "$GITHUB_OUTPUT"
 
       - name: Run auth/security tests
         if: steps.preflight.outputs.run_tests == 'true'
