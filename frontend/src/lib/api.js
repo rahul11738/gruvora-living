@@ -62,6 +62,53 @@ const clearBackendOutage = () => {
   backendOutageState.reason = '';
 };
 
+const readJsonCache = (key, maxAgeMs) => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const ts = Number(parsed?.ts || 0);
+    if (!ts || Date.now() - ts > maxAgeMs) return null;
+    return parsed.value ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const writeJsonCache = (key, value) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify({ ts: Date.now(), value }));
+  } catch {
+    // Ignore storage failures (quota/private mode).
+  }
+};
+
+const fetchWithCacheFallback = async ({ request, cacheKey, maxAgeMs, fallbackValue, onSuccess }) => {
+  try {
+    const response = await request();
+    if (cacheKey && response?.data !== undefined) {
+      writeJsonCache(cacheKey, response.data);
+    }
+    if (typeof onSuccess === 'function') {
+      onSuccess(response?.data);
+    }
+    return response;
+  } catch (error) {
+    if (isBackendUnavailableError(error) && cacheKey) {
+      const cached = readJsonCache(cacheKey, maxAgeMs);
+      if (cached !== null) {
+        return { data: cached, status: 200, cached: true };
+      }
+    }
+    if (isBackendUnavailableError(error) && fallbackValue !== undefined) {
+      return { data: fallbackValue, status: 200, degraded: true };
+    }
+    throw error;
+  }
+};
+
 export const isBackendUnavailableError = (error) => {
   if (error?.isBackendCooldown) return true;
   const status = error?.response?.status;
@@ -211,7 +258,8 @@ api.interceptors.response.use(
       markBackendOutage(status ? `http-${status}` : 'network-unreachable');
     }
 
-    if (isTransientGatewayError && !originalRequest._gatewayRetry) {
+    // Retry once only for transport-level unknown failures, not explicit 502/503/504.
+    if (!status && !originalRequest._gatewayRetry) {
       originalRequest._gatewayRetry = true;
       await new Promise((resolve) => setTimeout(resolve, 450));
       return api(originalRequest);
@@ -265,7 +313,11 @@ export const authAPI = {
   login: (data) => api.post('/auth/login', data),
   register: (data) => api.post('/auth/register', data),
   registerOwner: (data) => api.post('/auth/register/owner', data),
-  getMe: () => api.get('/auth/me'),
+  getMe: () => fetchWithCacheFallback({
+    request: () => api.get('/auth/me'),
+    cacheKey: 'gharsetu_auth_me_cache',
+    maxAgeMs: 15 * 60 * 1000,
+  }),
   verifyEmail: (token) => api.get(`/auth/verify/${token}`),
   updateProfile: (data) => api.put('/auth/profile', data),
   changePassword: (data) => api.put('/auth/change-password', data),
@@ -330,7 +382,12 @@ export const listingsAPI = {
   getAll: (params) => api.get('/listings', { params: sanitizeListingsParams(params) }),
   smartSearch: (query, params = {}) => api.get('/search/smart', { params: { query, ...params } }),
   suggestSearch: (query, params = {}) => api.get('/search/suggest', { params: { query, ...params } }),
-  getTrending: (limit = 10, category) => api.get('/listings/trending', { params: { limit, category } }),
+  getTrending: (limit = 10, category) => fetchWithCacheFallback({
+    request: () => api.get('/listings/trending', { params: { limit, category } }),
+    cacheKey: `gharsetu_trending_cache_${String(category || 'all')}_${String(limit)}`,
+    maxAgeMs: 15 * 60 * 1000,
+    fallbackValue: { listings: [] },
+  }),
   getRecommended: (limit = 10) => api.get('/listings/recommended', { params: { limit } }),
   getNearby: (lat, lng, radius = 5) => api.get('/listings/nearby', { params: { lat, lng, radius } }),
   getDiscoverData: (bounds) => api.get('/listings/map', { params: bounds }),
@@ -493,7 +550,12 @@ export const notificationsAPI = {
 
 // AI Recommendations API
 export const recommendationsAPI = {
-  getRecommendations: (limit = 6) => api.get('/recommendations', { params: { limit } }),
+  getRecommendations: (limit = 6) => fetchWithCacheFallback({
+    request: () => api.get('/recommendations', { params: { limit } }),
+    cacheKey: `gharsetu_recommendations_cache_${String(limit)}`,
+    maxAgeMs: 15 * 60 * 1000,
+    fallbackValue: { recommendations: [] },
+  }),
   getSimilar: (listingId, limit = 4) => api.get(`/recommendations/similar/${listingId}`, { params: { limit } }),
 };
 
@@ -518,7 +580,12 @@ export const searchAPI = {
 
 // Categories API
 export const categoriesAPI = {
-  getAll: () => api.get('/categories'),
+  getAll: () => fetchWithCacheFallback({
+    request: () => api.get('/categories'),
+    cacheKey: 'gharsetu_categories_cache',
+    maxAgeMs: 24 * 60 * 60 * 1000,
+    fallbackValue: { categories: [] },
+  }),
 };
 
 // Platform API

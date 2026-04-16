@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion, useInView } from 'framer-motion';
-import { listingsAPI, categoriesAPI, recommendationsAPI, chatAPI } from '../lib/api';
+import { listingsAPI, categoriesAPI, recommendationsAPI, chatAPI, isBackendUnavailableError } from '../lib/api';
 import { prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { useAuth } from '../context/AuthContext';
@@ -747,9 +747,11 @@ export const TrendingSection = () => {
   const fetchTrending = useCallback(async () => {
     try {
       const response = await listingsAPI.getTrending(8, activeCategory);
-      setListings(response.data.listings);
+      setListings(response?.data?.listings || []);
     } catch (error) {
-      console.error('Failed to fetch trending:', error);
+      if (!isBackendUnavailableError(error)) {
+        console.error('Failed to fetch trending:', error);
+      }
     }
   }, [activeCategory]);
 
