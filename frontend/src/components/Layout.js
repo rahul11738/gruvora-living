@@ -224,13 +224,13 @@ export const Header = () => {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
-                        className="flex max-w-[126px] items-center gap-1.5 rounded-2xl border border-emerald-200/70 bg-gradient-to-b from-emerald-50 to-white px-2 py-1.5 shadow-[0_10px_24px_rgba(5,150,105,0.14)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(5,150,105,0.18)] md:max-w-[140px] md:gap-2 md:px-2.5 md:py-2 xl:max-w-[170px]"
+                        className="flex min-w-0 max-w-[120px] items-center gap-1.5 rounded-2xl border border-emerald-200/70 bg-gradient-to-b from-emerald-50 to-white px-2 py-1.5 shadow-[0_10px_24px_rgba(5,150,105,0.14)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(5,150,105,0.18)] md:max-w-[132px] md:gap-2 md:px-2.5 md:py-2 2xl:max-w-[170px]"
                         data-testid="user-menu-btn"
                       >
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-primary md:h-8 md:w-8">
                           <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
                         </div>
-                        <span className="hidden truncate text-sm font-semibold text-primary xl:block">
+                        <span className="hidden max-w-[92px] truncate text-sm font-semibold text-primary 2xl:block">
                           {user?.name?.split(' ')[0]}
                         </span>
                       </button>
