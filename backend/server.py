@@ -3985,7 +3985,6 @@ async def _ensure_messages_idempotency_index() -> None:
             "client_message_id": {
                 "$exists": True,
                 "$type": "string",
-                "$ne": "",
             }
         },
     }

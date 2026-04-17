@@ -96,7 +96,6 @@ async def rebuild_idempotency_index(db, dry_run: bool) -> None:
             "client_message_id": {
                 "$exists": True,
                 "$type": "string",
-                "$ne": "",
             }
         },
     )
