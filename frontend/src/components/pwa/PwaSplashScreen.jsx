@@ -16,7 +16,7 @@ export default function PwaSplashScreen({ visible = false }) {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.28, ease: 'easeOut' }}
-                    className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black text-white"
+                    className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-black text-white"
                     aria-label="Gruvora Living is starting"
                     role="status"
                 >

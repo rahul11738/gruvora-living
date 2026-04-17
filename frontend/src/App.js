@@ -195,11 +195,16 @@ function AppRoutes() {
 }
 
 function App() {
+  const launchedInStandalone = typeof window !== 'undefined' && (
+    window.matchMedia?.('(display-mode: standalone)')?.matches ||
+    window.matchMedia?.('(display-mode: fullscreen)')?.matches ||
+    window.navigator?.standalone === true
+  );
   const { canPrompt, isInstalled, promptInstall } = usePwaInstallPrompt();
   const [installPending, setInstallPending] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [updateRegistration, setUpdateRegistration] = useState(null);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(!launchedInStandalone);
 
   useEffect(() => {
     const warmRoutes = () => {
@@ -221,12 +226,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!showSplash) {
+      return undefined;
+    }
+
     const splashTimer = window.setTimeout(() => {
       setShowSplash(false);
     }, 1100);
 
     return () => window.clearTimeout(splashTimer);
-  }, []);
+  }, [showSplash]);
 
   useEffect(() => {
     const cleanup = registerServiceWorker({

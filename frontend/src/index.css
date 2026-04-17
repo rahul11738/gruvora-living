@@ -70,7 +70,9 @@
   }
 
   body {
-    overscroll-behavior-y: none;
+    overscroll-behavior-y: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
