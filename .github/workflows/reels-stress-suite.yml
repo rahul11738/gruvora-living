@@ -80,22 +80,62 @@ jobs:
         shell: bash
         run: |
           missing=()
+          EVENT_NAME="${{ github.event_name }}"
 
-          [ -z "$BASE_URL" ] && missing+=("REELS_BASE_URL")
-          [ -z "$USERS" ] && missing+=("REELS_STRESS_USERS")
-          [ -z "$JWT_SECRET" ] && missing+=("JWT_SECRET")
-          [ -z "$RAW_REEL_ID" ] && missing+=("REELS_NIGHTLY_REEL_ID or workflow input reel_id")
+          status_base_url="present"
+          status_users="present"
+          status_jwt="present"
+          status_reel_id="present"
+
+          [ -z "$BASE_URL" ] && missing+=("REELS_BASE_URL") && status_base_url="missing"
+          [ -z "$USERS" ] && missing+=("REELS_STRESS_USERS") && status_users="missing"
+          [ -z "$JWT_SECRET" ] && missing+=("JWT_SECRET") && status_jwt="missing"
+          [ -z "$RAW_REEL_ID" ] && missing+=("REELS_NIGHTLY_REEL_ID or workflow input reel_id") && status_reel_id="missing"
+
+          preflight_mode="enforced"
+          preflight_reason="configured"
 
           if [ ${#missing[@]} -gt 0 ]; then
             reason=$(IFS=', '; echo "${missing[*]}")
-            echo "preflight_mode=enforced-missing-secrets" >> "$GITHUB_OUTPUT"
-            echo "preflight_reason=$reason" >> "$GITHUB_OUTPUT"
-            echo "::error::Missing required configuration: $reason"
-            exit 1
+            preflight_reason="$reason"
+
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              preflight_mode="scheduled-skip-missing-config"
+            else
+              preflight_mode="dispatch-missing-config"
+            fi
           fi
 
-          echo "preflight_mode=enforced" >> "$GITHUB_OUTPUT"
-          echo "preflight_reason=configured" >> "$GITHUB_OUTPUT"
+          if [ -n "$GITHUB_STEP_SUMMARY" ]; then
+            {
+              echo "## Preflight Config Checklist"
+              echo
+              echo "- event: \`$EVENT_NAME\`"
+              echo "- preflight_mode: \`$preflight_mode\`"
+              echo "- preflight_reason: \`$preflight_reason\`"
+              echo
+              echo "| Key | Status |"
+              echo "|---|---|"
+              echo "| REELS_BASE_URL | $status_base_url |"
+              echo "| REELS_STRESS_USERS | $status_users |"
+              echo "| JWT_SECRET | $status_jwt |"
+              echo "| REELS_NIGHTLY_REEL_ID or workflow input reel_id | $status_reel_id |"
+              echo
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+          echo "preflight_mode=$preflight_mode" >> "$GITHUB_OUTPUT"
+          echo "preflight_reason=$preflight_reason" >> "$GITHUB_OUTPUT"
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            if [ "$EVENT_NAME" = "schedule" ]; then
+              echo "::warning::Scheduled run skipped due to missing configuration: $preflight_reason"
+              exit 0
+            fi
+
+            echo "::error::Missing required configuration: $preflight_reason"
+            exit 1
+          fi
 
       - name: Normalize numeric inputs and gate thresholds
         id: normalize
@@ -175,7 +215,7 @@ jobs:
   reels-stress:
     name: Run Reels Stress Suite
     needs: preflight
-    if: needs.preflight.result == 'success'
+    if: needs.preflight.result == 'success' && needs.preflight.outputs.preflight_mode == 'enforced'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     concurrency:
