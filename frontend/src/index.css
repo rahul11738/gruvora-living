@@ -82,9 +82,10 @@
   }
 
   .glass-header {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background-color: rgba(255, 255, 255, 0.96) !important;
+    backdrop-filter: blur(14px) saturate(1.06) !important;
+    -webkit-backdrop-filter: blur(14px) saturate(1.06) !important;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.84)) !important;
+    border-bottom-color: rgba(231, 229, 228, 0.72) !important;
   }
 }
 

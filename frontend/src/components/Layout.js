@@ -49,6 +49,7 @@ const categoryNavTheme = {
 };
 
 const CHAT_UNREAD_EVENT = 'gharsetu:chat-unread-updated';
+const headerActionBtnClass = 'relative h-10 w-10 md:h-11 md:w-11 inline-flex items-center justify-center rounded-2xl border border-stone-200/80 bg-gradient-to-b from-white to-stone-50 text-stone-600 shadow-[0_10px_22px_rgba(15,23,42,0.08)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_28px_rgba(15,23,42,0.12)] hover:text-stone-800';
 
 export const Header = () => {
   const { user, isAuthenticated, isOwner, isAdmin, logout } = useAuth();
@@ -133,18 +134,12 @@ export const Header = () => {
 
   return (
     <>
-      <header className="glass-header fixed top-0 left-0 right-0 z-50 standalone-safe-top backdrop-blur-xl border-b border-white/60 shadow-[0_10px_30px_rgba(15,23,42,0.04)]" data-testid="header">
-        <div className="container-main">
-          <div className="flex items-center justify-between gap-4 h-18 md:h-20">
+      <header className="glass-header fixed top-0 left-0 right-0 z-50 standalone-safe-top" data-testid="header">
+        <div className="container-main py-2 md:py-2.5">
+          <div className="flex h-16 items-center justify-between gap-3 rounded-2xl border border-stone-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.9))] px-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] backdrop-blur-xl md:h-20 md:gap-4 md:px-4">
             {/* Logo */}
-            <Link to="/" className="flex items-center shrink-0" data-testid="logo">
-              <OptimizedImage
-                publicId={gruvoraLogo}
-                alt="Gruvora"
-                className="h-9 md:h-10 w-auto max-w-[170px] object-contain"
-                width={180}
-                sizes="180px"
-              />
+            <Link to="/" className="flex shrink-0 items-center rounded-xl border border-stone-200/80 bg-white px-1.5 py-1 shadow-[0_6px_16px_rgba(15,23,42,0.06)] md:px-2 md:py-1.5" data-testid="logo">
+              <OptimizedImage publicId={gruvoraLogo} alt="Gruvora" className="h-8 w-auto max-w-[146px] object-contain md:h-9 md:max-w-[168px]" width={180} sizes="180px" />
             </Link>
 
             {/* Desktop Navigation */}
@@ -172,7 +167,7 @@ export const Header = () => {
             </nav>
 
             {/* Right Actions */}
-            <div className="flex items-center gap-3 md:gap-4 shrink-0">
+            <div className="flex shrink-0 items-center gap-2 md:gap-3">
               {/* Discover Button - Hidden on mobile (in bottom nav) */}
               <Link
                 to="/discover"
@@ -205,7 +200,7 @@ export const Header = () => {
               <button
                 type="button"
                 onClick={handleOpenChat}
-                className="relative w-10 h-10 flex items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors"
+                className={headerActionBtnClass}
                 data-testid="chat-btn"
                 aria-label="Open Chat"
                 title="Open Chat"
@@ -221,19 +216,21 @@ export const Header = () => {
               {isAuthenticated ? (
                 <>
                   {/* Notifications */}
-                  <NotificationBell />
+                  <div className="[&_button]:!rounded-2xl [&_button]:!border [&_button]:!border-stone-200/80 [&_button]:!bg-gradient-to-b [&_button]:!from-white [&_button]:!to-stone-50 [&_button]:!shadow-[0_10px_22px_rgba(15,23,42,0.08)] [&_button]:hover:!bg-stone-100">
+                    <NotificationBell />
+                  </div>
 
                   {/* User Menu */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button
-                        className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 rounded-full bg-primary/10 border border-primary/10 shadow-[0_6px_18px_rgba(5,150,105,0.08)] hover:bg-primary/15 transition-colors max-w-[140px] xl:max-w-[170px]"
+                        className="flex max-w-[126px] items-center gap-1.5 rounded-2xl border border-emerald-200/70 bg-gradient-to-b from-emerald-50 to-white px-2 py-1.5 shadow-[0_10px_24px_rgba(5,150,105,0.14)] transition-all hover:-translate-y-0.5 hover:shadow-[0_14px_30px_rgba(5,150,105,0.18)] md:max-w-[140px] md:gap-2 md:px-2.5 md:py-2 xl:max-w-[170px]"
                         data-testid="user-menu-btn"
                       >
-                        <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center shrink-0">
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-primary md:h-8 md:w-8">
                           <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
                         </div>
-                        <span className="hidden xl:block text-sm font-medium text-primary truncate">
+                        <span className="hidden truncate text-sm font-semibold text-primary xl:block">
                           {user?.name?.split(' ')[0]}
                         </span>
                       </button>
@@ -271,12 +268,12 @@ export const Header = () => {
                   </DropdownMenu>
                 </>
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 md:gap-2">
                   <Link to="/login">
-                    <Button variant="ghost" className="rounded-full px-4" data-testid="login-btn">Login</Button>
+                    <Button variant="ghost" className="rounded-xl px-3 text-sm font-semibold text-stone-700 hover:bg-stone-100 md:px-4" data-testid="login-btn">Login</Button>
                   </Link>
                   <Link to="/register" className="hidden md:block">
-                    <Button className="btn-primary rounded-full px-5 shadow-[0_8px_20px_rgba(5,150,105,0.18)]" data-testid="register-btn">Register</Button>
+                    <Button className="btn-primary rounded-xl px-5 shadow-[0_10px_22px_rgba(5,150,105,0.2)]" data-testid="register-btn">Register</Button>
                   </Link>
                 </div>
               )}
@@ -286,7 +283,7 @@ export const Header = () => {
         </div>
       </header>
       {/* Spacer keeps content below the fixed header across all routes. */}
-      <div className="h-18 md:h-20" aria-hidden="true" />
+      <div className="h-[80px] md:h-[100px]" aria-hidden="true" />
     </>
   );
 };
