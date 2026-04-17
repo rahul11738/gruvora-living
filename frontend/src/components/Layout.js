@@ -132,158 +132,162 @@ export const Header = () => {
   };
 
   return (
-    <header className="glass-header sticky top-0 z-50 backdrop-blur-xl border-b border-white/60 shadow-[0_10px_30px_rgba(15,23,42,0.04)]" data-testid="header">
-      <div className="container-main">
-        <div className="flex items-center justify-between gap-4 h-18 md:h-20">
-          {/* Logo */}
-          <Link to="/" className="flex items-center shrink-0" data-testid="logo">
-            <OptimizedImage
-              publicId={gruvoraLogo}
-              alt="Gruvora"
-              className="h-9 md:h-10 w-auto max-w-[170px] object-contain"
-              width={180}
-              sizes="180px"
-            />
-          </Link>
+    <>
+      <header className="glass-header fixed top-0 left-0 right-0 z-50 standalone-safe-top backdrop-blur-xl border-b border-white/60 shadow-[0_10px_30px_rgba(15,23,42,0.04)]" data-testid="header">
+        <div className="container-main">
+          <div className="flex items-center justify-between gap-4 h-18 md:h-20">
+            {/* Logo */}
+            <Link to="/" className="flex items-center shrink-0" data-testid="logo">
+              <OptimizedImage
+                publicId={gruvoraLogo}
+                alt="Gruvora"
+                className="h-9 md:h-10 w-auto max-w-[170px] object-contain"
+                width={180}
+                sizes="180px"
+              />
+            </Link>
 
-          {/* Desktop Navigation */}
-          <nav className="relative hidden xl:flex items-center gap-1.5 rounded-full p-1.5 bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur-md">
-            {categories.map((cat) => {
-              const isActive = location.pathname === cat.href;
-              const Icon = cat.icon;
-              return (
-                <Link
-                  key={cat.id}
-                  to={cat.href}
-                  className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-semibold tracking-wide transition-all duration-200 ${isActive
-                    ? categoryNavTheme.active
-                    : categoryNavTheme.inactive
-                    }`}
-                  data-testid={`nav-${cat.id}`}
-                >
-                  <span className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${isActive ? 'bg-stone-100 text-stone-700' : 'bg-stone-100/80 text-stone-500 group-hover:text-stone-700'}`}>
-                    <Icon className="w-3.5 h-3.5" />
+            {/* Desktop Navigation */}
+            <nav className="relative hidden xl:flex items-center gap-1.5 rounded-full p-1.5 bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 shadow-[0_16px_36px_rgba(15,23,42,0.08)] backdrop-blur-md">
+              {categories.map((cat) => {
+                const isActive = location.pathname === cat.href;
+                const Icon = cat.icon;
+                return (
+                  <Link
+                    key={cat.id}
+                    to={cat.href}
+                    className={`group relative flex items-center gap-2 px-4 py-2.5 rounded-full text-[13px] font-semibold tracking-wide transition-all duration-200 ${isActive
+                      ? categoryNavTheme.active
+                      : categoryNavTheme.inactive
+                      }`}
+                    data-testid={`nav-${cat.id}`}
+                  >
+                    <span className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${isActive ? 'bg-stone-100 text-stone-700' : 'bg-stone-100/80 text-stone-500 group-hover:text-stone-700'}`}>
+                      <Icon className="w-3.5 h-3.5" />
+                    </span>
+                    <span>{cat.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+
+            {/* Right Actions */}
+            <div className="flex items-center gap-3 md:gap-4 shrink-0">
+              {/* Discover Button - Hidden on mobile (in bottom nav) */}
+              <Link
+                to="/discover"
+                ref={discoverLinkRef}
+                onMouseEnter={prefetchDiscoverRoute}
+                onFocus={prefetchDiscoverRoute}
+                onClick={() => markRouteNavigation('/discover', 'header-discover-btn')}
+                className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.10)] hover:bg-blue-100 transition-colors"
+                data-testid="discover-btn"
+              >
+                <DiscoverIcon className="w-4 h-4" />
+                <span className="text-sm font-medium">Discover</span>
+              </Link>
+
+              {/* Reels Button - Hidden on mobile (in bottom nav) */}
+              <Link
+                to="/reels"
+                ref={reelsLinkRef}
+                onMouseEnter={prefetchReelsRoute}
+                onFocus={prefetchReelsRoute}
+                onClick={() => markRouteNavigation('/reels', 'header-reels-btn')}
+                className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-secondary/10 text-secondary border border-orange-100 shadow-[0_6px_18px_rgba(249,115,22,0.14)] hover:bg-secondary/15 transition-colors"
+                data-testid="reels-btn"
+              >
+                <Play className="w-4 h-4" />
+                <span className="text-sm font-medium">Reels</span>
+              </Link>
+
+              {/* Chat - Available on mobile and desktop */}
+              <button
+                type="button"
+                onClick={handleOpenChat}
+                className="relative w-10 h-10 flex items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors"
+                data-testid="chat-btn"
+                aria-label="Open Chat"
+                title="Open Chat"
+              >
+                <MessageCircle className="w-5 h-5 text-stone-600" />
+                {isAuthenticated && unreadChatCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
+                    {unreadChatCount > 99 ? '99+' : unreadChatCount}
                   </span>
-                  <span>{cat.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+                )}
+              </button>
 
-          {/* Right Actions */}
-          <div className="flex items-center gap-3 md:gap-4 shrink-0">
-            {/* Discover Button - Hidden on mobile (in bottom nav) */}
-            <Link
-              to="/discover"
-              ref={discoverLinkRef}
-              onMouseEnter={prefetchDiscoverRoute}
-              onFocus={prefetchDiscoverRoute}
-              onClick={() => markRouteNavigation('/discover', 'header-discover-btn')}
-              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.10)] hover:bg-blue-100 transition-colors"
-              data-testid="discover-btn"
-            >
-              <DiscoverIcon className="w-4 h-4" />
-              <span className="text-sm font-medium">Discover</span>
-            </Link>
+              {isAuthenticated ? (
+                <>
+                  {/* Notifications */}
+                  <NotificationBell />
 
-            {/* Reels Button - Hidden on mobile (in bottom nav) */}
-            <Link
-              to="/reels"
-              ref={reelsLinkRef}
-              onMouseEnter={prefetchReelsRoute}
-              onFocus={prefetchReelsRoute}
-              onClick={() => markRouteNavigation('/reels', 'header-reels-btn')}
-              className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-secondary/10 text-secondary border border-orange-100 shadow-[0_6px_18px_rgba(249,115,22,0.14)] hover:bg-secondary/15 transition-colors"
-              data-testid="reels-btn"
-            >
-              <Play className="w-4 h-4" />
-              <span className="text-sm font-medium">Reels</span>
-            </Link>
-
-            {/* Chat - Available on mobile and desktop */}
-            <button
-              type="button"
-              onClick={handleOpenChat}
-              className="relative w-10 h-10 flex items-center justify-center rounded-full bg-stone-100 border border-stone-200 shadow-sm hover:bg-stone-200 transition-colors"
-              data-testid="chat-btn"
-              aria-label="Open Chat"
-              title="Open Chat"
-            >
-              <MessageCircle className="w-5 h-5 text-stone-600" />
-              {isAuthenticated && unreadChatCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none">
-                  {unreadChatCount > 99 ? '99+' : unreadChatCount}
-                </span>
-              )}
-            </button>
-
-            {isAuthenticated ? (
-              <>
-                {/* Notifications */}
-                <NotificationBell />
-
-                {/* User Menu */}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 rounded-full bg-primary/10 border border-primary/10 shadow-[0_6px_18px_rgba(5,150,105,0.08)] hover:bg-primary/15 transition-colors max-w-[140px] xl:max-w-[170px]"
-                      data-testid="user-menu-btn"
-                    >
-                      <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center shrink-0">
-                        <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
+                  {/* User Menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        className="flex items-center gap-2 px-2.5 md:px-3 py-1.5 md:py-2 rounded-full bg-primary/10 border border-primary/10 shadow-[0_6px_18px_rgba(5,150,105,0.08)] hover:bg-primary/15 transition-colors max-w-[140px] xl:max-w-[170px]"
+                        data-testid="user-menu-btn"
+                      >
+                        <div className="w-7 h-7 md:w-8 md:h-8 bg-primary rounded-full flex items-center justify-center shrink-0">
+                          <User className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
+                        </div>
+                        <span className="hidden xl:block text-sm font-medium text-primary truncate">
+                          {user?.name?.split(' ')[0]}
+                        </span>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-60 rounded-2xl border border-stone-200 shadow-2xl p-2">
+                      <div className="px-3 py-2">
+                        <p className="font-semibold text-stone-900 truncate">{user?.name}</p>
+                        <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
                       </div>
-                      <span className="hidden xl:block text-sm font-medium text-primary truncate">
-                        {user?.name?.split(' ')[0]}
-                      </span>
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-60 rounded-2xl border border-stone-200 shadow-2xl p-2">
-                    <div className="px-3 py-2">
-                      <p className="font-semibold text-stone-900 truncate">{user?.name}</p>
-                      <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
-                    </div>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem asChild>
-                      <Link to={getDashboardLink()} className="flex items-center gap-2 rounded-lg px-2 py-2">
-                        <LayoutDashboard className="w-4 h-4" />
-                        Dashboard
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/wishlist" className="flex items-center gap-2 rounded-lg px-2 py-2">
-                        <Heart className="w-4 h-4" />
-                        Wishlist
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link to="/settings" className="flex items-center gap-2 rounded-lg px-2 py-2">
-                        <Settings className="w-4 h-4" />
-                        Settings
-                      </Link>
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleLogout} className="text-destructive rounded-lg px-2 py-2">
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Logout
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </>
-            ) : (
-              <div className="flex items-center gap-2">
-                <Link to="/login">
-                  <Button variant="ghost" className="rounded-full px-4" data-testid="login-btn">Login</Button>
-                </Link>
-                <Link to="/register" className="hidden md:block">
-                  <Button className="btn-primary rounded-full px-5 shadow-[0_8px_20px_rgba(5,150,105,0.18)]" data-testid="register-btn">Register</Button>
-                </Link>
-              </div>
-            )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link to={getDashboardLink()} className="flex items-center gap-2 rounded-lg px-2 py-2">
+                          <LayoutDashboard className="w-4 h-4" />
+                          Dashboard
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/wishlist" className="flex items-center gap-2 rounded-lg px-2 py-2">
+                          <Heart className="w-4 h-4" />
+                          Wishlist
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/settings" className="flex items-center gap-2 rounded-lg px-2 py-2">
+                          <Settings className="w-4 h-4" />
+                          Settings
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={handleLogout} className="text-destructive rounded-lg px-2 py-2">
+                        <LogOut className="w-4 h-4 mr-2" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <Link to="/login">
+                    <Button variant="ghost" className="rounded-full px-4" data-testid="login-btn">Login</Button>
+                  </Link>
+                  <Link to="/register" className="hidden md:block">
+                    <Button className="btn-primary rounded-full px-5 shadow-[0_8px_20px_rgba(5,150,105,0.18)]" data-testid="register-btn">Register</Button>
+                  </Link>
+                </div>
+              )}
 
+            </div>
           </div>
         </div>
-      </div>
-    </header>
+      </header>
+      {/* Spacer keeps content below the fixed header across all routes. */}
+      <div className="h-18 md:h-20" aria-hidden="true" />
+    </>
   );
 };
 
