@@ -75,6 +75,8 @@ export function usePwaInstallPrompt() {
         isInstalled,
         isStandalone: isInstalled,
         promptInstall,
-        isSupported: typeof window !== 'undefined' && 'beforeinstallprompt' in window,
+        // Do not rely on `'beforeinstallprompt' in window` because many browsers
+        // still fire the event without exposing the property on window.
+        isSupported: canPrompt,
     };
 }

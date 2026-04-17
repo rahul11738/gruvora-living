@@ -195,7 +195,7 @@ function AppRoutes() {
 }
 
 function App() {
-  const { canPrompt, isInstalled, promptInstall, isSupported } = usePwaInstallPrompt();
+  const { canPrompt, isInstalled, promptInstall } = usePwaInstallPrompt();
   const [installPending, setInstallPending] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [updateRegistration, setUpdateRegistration] = useState(null);
@@ -281,7 +281,7 @@ function App() {
                 <MobileBottomNav />
                 <Toaster position="top-right" richColors />
                 <PwaStatusBar
-                  isInstallable={isSupported && canPrompt}
+                  isInstallable={canPrompt}
                   isInstalled={isInstalled}
                   onInstall={handleInstall}
                   installPending={installPending}
@@ -289,7 +289,7 @@ function App() {
                   onApplyUpdate={handleApplyUpdate}
                   onDismissUpdate={() => setUpdateRegistration(null)}
                   isOffline={isOffline}
-                  installHint={!isSupported && !isInstalled ? 'Use your browser menu to add Gruvora Living to the home screen.' : ''}
+                  installHint={!canPrompt && !isInstalled ? 'Use your browser menu to add Gruvora Living to the home screen.' : ''}
                 />
                 <PwaSplashScreen visible={showSplash} />
               </NotificationProvider>
