@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect } from "react";
+import React, { lazy, Suspense, useEffect, useState } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
@@ -9,6 +9,9 @@ import { InteractionProvider } from "./context/InteractionContext";
 import { NotificationProvider } from "./components/Notifications.jsx";
 import { RouteSkeleton } from "./components/SkeletonLoaders";
 import { prefetchDiscoverRoute, prefetchReelsRoute } from "./lib/routePrefetch";
+import PwaStatusBar from "./components/pwa/PwaStatusBar";
+import { registerServiceWorker } from "./serviceWorker";
+import { usePwaInstallPrompt } from "./pwaInstall";
 
 // Pages
 import { MobileBottomNav } from "./components/Layout";
@@ -191,6 +194,11 @@ function AppRoutes() {
 }
 
 function App() {
+  const { canPrompt, isInstalled, promptInstall, isSupported } = usePwaInstallPrompt();
+  const [installPending, setInstallPending] = useState(false);
+  const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [updateRegistration, setUpdateRegistration] = useState(null);
+
   useEffect(() => {
     const warmRoutes = () => {
       prefetchDiscoverRoute();
@@ -210,6 +218,48 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, []);
 
+  useEffect(() => {
+    const cleanup = registerServiceWorker({
+      onReady: () => {
+        // The service worker is active and the shell can cache repeat visits.
+      },
+      onUpdate: ({ registration, applyUpdate }) => {
+        setUpdateRegistration({ registration, applyUpdate });
+      },
+      onError: (error) => {
+        console.warn('Service worker registration failed:', error);
+      },
+    });
+
+    return cleanup;
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    setInstallPending(true);
+    try {
+      await promptInstall();
+    } finally {
+      setInstallPending(false);
+    }
+  };
+
+  const handleApplyUpdate = () => {
+    updateRegistration?.applyUpdate?.();
+  };
+
   return (
     <BrowserRouter>
       <AuthProvider>
@@ -220,6 +270,16 @@ function App() {
                 <AppRoutes />
                 <MobileBottomNav />
                 <Toaster position="top-right" richColors />
+                <PwaStatusBar
+                  isInstallable={isSupported && canPrompt}
+                  isInstalled={isInstalled}
+                  onInstall={handleInstall}
+                  installPending={installPending}
+                  updateAvailable={Boolean(updateRegistration)}
+                  onApplyUpdate={handleApplyUpdate}
+                  onDismissUpdate={() => setUpdateRegistration(null)}
+                  isOffline={isOffline}
+                />
               </NotificationProvider>
             </AppErrorBoundary>
           </InteractionProvider>

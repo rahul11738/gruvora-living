@@ -419,7 +419,9 @@ const ReelCard = React.memo(({
           loop
           muted={isMuted}
           playsInline
-          preload={isActive ? 'auto' : 'metadata'}
+          preload={isActive ? 'auto' : shouldLoad ? 'metadata' : 'none'}
+          disablePictureInPicture
+          controlsList="nodownload noplaybackrate noremoteplayback"
           className="h-full w-auto max-w-full max-h-screen object-contain bg-black mx-auto"
           onClick={togglePlay}
           onTimeUpdate={handleTimeUpdate}

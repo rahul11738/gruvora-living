@@ -47,6 +47,7 @@
   body {
     @apply bg-background text-foreground font-body antialiased;
     overflow-x: hidden;
+    min-height: 100vh;
     background-image:
       radial-gradient(circle at top left, rgba(16, 185, 129, 0.08), transparent 28%),
       radial-gradient(circle at top right, rgba(14, 165, 233, 0.06), transparent 24%),
@@ -56,6 +57,20 @@
 
   #root {
     overflow-x: clip;
+    min-height: 100vh;
+  }
+}
+
+@media (display-mode: standalone) {
+
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+
+  body {
+    overscroll-behavior-y: none;
   }
 }
 
@@ -239,11 +254,21 @@
     scroll-snap-type: y mandatory;
     overflow-y: scroll;
     height: 100vh;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
   }
 
   .reel-item {
     scroll-snap-align: start;
     height: 100vh;
+  }
+
+  .standalone-safe-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+
+  .standalone-safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }
 
