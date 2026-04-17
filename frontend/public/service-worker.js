@@ -9,7 +9,7 @@
     - Sensitive authenticated API responses are never cached.
 */
 
-const CACHE_VERSION = 'gruvora-living-v2';
+const CACHE_VERSION = 'gruvora-living-v3';
 const PRECACHE_NAME = `${CACHE_VERSION}-precache`;
 const STATIC_NAME = `${CACHE_VERSION}-static`;
 const API_NAME = `${CACHE_VERSION}-api`;

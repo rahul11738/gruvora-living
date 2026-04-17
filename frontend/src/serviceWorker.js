@@ -1,4 +1,5 @@
-const SERVICE_WORKER_URL = '/service-worker.js';
+const SERVICE_WORKER_VERSION = '2026-04-17-v3';
+const SERVICE_WORKER_URL = `/service-worker.js?v=${SERVICE_WORKER_VERSION}`;
 
 /**
  * Register the production service worker after the window load event.
