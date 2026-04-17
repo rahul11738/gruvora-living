@@ -229,7 +229,7 @@ export const HeroSection = () => {
   };
 
   return (
-    <section className="hero-container relative flex min-h-[88vh] items-center overflow-hidden bg-stone-950 md:min-h-[90vh]" data-testid="hero-section">
+    <section className="hero-container relative min-h-[90vh] flex items-center overflow-hidden bg-stone-950" data-testid="hero-section">
       {/* Animated Background */}
       <div className="absolute inset-0">
         <motion.div
@@ -275,7 +275,7 @@ export const HeroSection = () => {
         />
       </div>
 
-      <div className="container-main relative z-10 py-14 pt-20 md:py-16 md:pt-24">
+      <div className="container-main relative z-10 py-16 pt-16 md:pt-20">
         <div className="grid grid-cols-1 gap-10 items-center justify-items-center">
           <motion.div
             initial={reduceMotion ? false : { opacity: 0, x: -50 }}
@@ -287,26 +287,26 @@ export const HeroSection = () => {
               initial={reduceMotion ? false : { opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.2 }}
-              className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-4 py-2 md:backdrop-blur-sm"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/8 md:backdrop-blur-sm border border-white/15 mb-8"
             >
               <Sparkles className="w-4 h-4 text-secondary" />
-              <span className="text-sm font-medium text-white/90">Gruvora Living • Offline-ready smart platform</span>
+              <span className="text-white/90 text-sm font-medium">Gujarat's #1 Property Platform</span>
             </motion.div>
 
             <motion.h1
               initial={reduceMotion ? false : { opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.3, duration: 0.6 }}
-              className="mb-7 font-heading text-4xl font-bold leading-tight text-white md:text-6xl lg:text-7xl"
+              className="font-heading text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight mb-8"
             >
-              Find, Compare,
+              Find Your
               <motion.span
                 initial={reduceMotion ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
                 className="block bg-gradient-to-r from-secondary to-orange-400 bg-clip-text text-transparent"
               >
-                and Move Faster
+                Perfect Space
               </motion.span>
             </motion.h1>
 
@@ -314,16 +314,24 @@ export const HeroSection = () => {
               initial={reduceMotion ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.5 }}
-              className="mx-auto mb-5 max-w-3xl text-lg leading-relaxed text-stone-200 md:text-xl"
+              className="text-lg md:text-xl text-stone-200 mb-6 leading-relaxed max-w-3xl mx-auto"
             >
-              Discover homes, business spaces, stays, events, and trusted services in one conversion-focused platform built for fast decisions.
+              Discover homes, business spaces, hotels, event venues, and professional services - all in one place.
+            </motion.p>
+            <motion.p
+              initial={reduceMotion ? false : { opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={reduceMotion ? { duration: 0 } : { delay: 0.6 }}
+              className="text-stone-300/80 mb-10"
+            >
+              {/* a��a��a�+a��a�� a�+a��a��a��a��a��a�� a��a��a��a��a�+ a��a��a��a�� - a��a��, a��a�+a��a��a��a�+, a��a��a��a��a�+a��a��a��, a��a��a��a��a��a�� a��a��a�� a�+a��a��a�+a�� */}
             </motion.p>
 
             <motion.div
               initial={reduceMotion ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.66, duration: 0.4 }}
-              className="mb-7 flex flex-wrap items-center justify-center gap-2"
+              className="flex flex-wrap items-center justify-center gap-2 mb-8"
             >
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-100 border border-emerald-400/35 md:backdrop-blur-sm">
                 <Shield className="w-3.5 h-3.5" /> Verified Owners
@@ -334,29 +342,6 @@ export const HeroSection = () => {
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 md:backdrop-blur-sm">
                 <TrendingUp className="w-3.5 h-3.5" /> Fast Discovery
               </span>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-stone-100 border border-white/25 md:backdrop-blur-sm">
-                <Award className="w-3.5 h-3.5" /> Secure Transactions
-              </span>
-            </motion.div>
-
-            <motion.div
-              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={reduceMotion ? { duration: 0 } : { delay: 0.68, duration: 0.4 }}
-              className="mb-8 grid w-full max-w-3xl grid-cols-3 gap-2.5 text-left"
-            >
-              <div className="rounded-2xl border border-white/15 bg-white/7 px-3 py-2.5 md:backdrop-blur-sm">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Active Listings</p>
-                <p className="mt-1 text-sm font-semibold text-white">10k+ live inventory</p>
-              </div>
-              <div className="rounded-2xl border border-white/15 bg-white/7 px-3 py-2.5 md:backdrop-blur-sm">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Trust Layer</p>
-                <p className="mt-1 text-sm font-semibold text-white">Verified owners</p>
-              </div>
-              <div className="rounded-2xl border border-white/15 bg-white/7 px-3 py-2.5 md:backdrop-blur-sm">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-white/55">Response Speed</p>
-                <p className="mt-1 text-sm font-semibold text-white">Quick lead routing</p>
-              </div>
             </motion.div>
 
             {/* Search Form with Category Filter */}
@@ -365,7 +350,7 @@ export const HeroSection = () => {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={reduceMotion ? { duration: 0 } : { delay: 0.7, duration: 0.55, ease: 'easeOut' }}
               onSubmit={handleSearch}
-              className="hero-search-shell hero-search-shell--premium mx-auto w-full max-w-5xl"
+              className="hero-search-shell w-full max-w-5xl mx-auto"
             >
               <div className="hero-search-inner">
                 <div className="w-full pb-1">
