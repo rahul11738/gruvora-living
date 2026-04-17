@@ -27,12 +27,14 @@ export default function PwaStatusBar({
     onApplyUpdate,
     onDismissUpdate,
     isOffline,
+    installHint = '',
 }) {
     const showInstall = isInstallable && !isInstalled;
+    const showHint = Boolean(installHint) && !isInstallable && !isInstalled;
 
     return (
         <AnimatePresence>
-            {(showInstall || updateAvailable || isOffline) && (
+            {(showInstall || showHint || updateAvailable || isOffline) && (
                 <div className="fixed bottom-4 left-4 right-4 z-[70] mx-auto flex max-w-xl flex-col gap-3 sm:left-auto sm:right-4 sm:w-[420px]">
                     {isOffline && (
                         <BaseCard>
@@ -99,6 +101,20 @@ export default function PwaStatusBar({
                                     <Download className="h-3.5 w-3.5" />
                                     {installPending ? 'Opening' : 'Install'}
                                 </button>
+                            </div>
+                        </BaseCard>
+                    )}
+
+                    {showHint && (
+                        <BaseCard>
+                            <div className="flex items-start gap-3 p-4">
+                                <div className="rounded-xl bg-white/10 p-2 text-white">
+                                    <Download className="h-5 w-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-semibold tracking-wide">Install available from browser menu</p>
+                                    <p className="mt-1 text-sm text-white/70">{installHint}</p>
+                                </div>
                             </div>
                         </BaseCard>
                     )}

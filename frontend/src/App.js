@@ -10,6 +10,7 @@ import { NotificationProvider } from "./components/Notifications.jsx";
 import { RouteSkeleton } from "./components/SkeletonLoaders";
 import { prefetchDiscoverRoute, prefetchReelsRoute } from "./lib/routePrefetch";
 import PwaStatusBar from "./components/pwa/PwaStatusBar";
+import PwaSplashScreen from "./components/pwa/PwaSplashScreen";
 import { registerServiceWorker } from "./serviceWorker";
 import { usePwaInstallPrompt } from "./pwaInstall";
 
@@ -198,6 +199,7 @@ function App() {
   const [installPending, setInstallPending] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [updateRegistration, setUpdateRegistration] = useState(null);
+  const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     const warmRoutes = () => {
@@ -216,6 +218,14 @@ function App() {
 
     const timeoutId = window.setTimeout(warmRoutes, 1500);
     return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    const splashTimer = window.setTimeout(() => {
+      setShowSplash(false);
+    }, 1100);
+
+    return () => window.clearTimeout(splashTimer);
   }, []);
 
   useEffect(() => {
@@ -279,7 +289,9 @@ function App() {
                   onApplyUpdate={handleApplyUpdate}
                   onDismissUpdate={() => setUpdateRegistration(null)}
                   isOffline={isOffline}
+                  installHint={!isSupported && !isInstalled ? 'Use your browser menu to add Gruvora Living to the home screen.' : ''}
                 />
+                <PwaSplashScreen visible={showSplash} />
               </NotificationProvider>
             </AppErrorBoundary>
           </InteractionProvider>
