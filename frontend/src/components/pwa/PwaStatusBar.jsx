@@ -1,5 +1,5 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useMemo, useState } from 'react';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Download, RefreshCw, WifiOff } from 'lucide-react';
 
 const panelMotion = {
@@ -29,6 +29,38 @@ export default function PwaStatusBar({
     isOffline,
     installHint = '',
 }) {
+    const prefersReducedMotion = useReducedMotion();
+    const [isLowPowerMode, setIsLowPowerMode] = useState(false);
+
+    useEffect(() => {
+        if (typeof navigator === 'undefined') {
+            return undefined;
+        }
+
+        const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+
+        const computeLowPowerMode = () => {
+            const saveData = Boolean(connection?.saveData);
+            const networkType = String(connection?.effectiveType || '').toLowerCase();
+            const isSlowNetwork = networkType.includes('2g') || networkType.includes('3g');
+            const lowDeviceMemory = typeof navigator.deviceMemory === 'number' && navigator.deviceMemory <= 4;
+
+            setIsLowPowerMode(saveData || isSlowNetwork || lowDeviceMemory);
+        };
+
+        computeLowPowerMode();
+
+        connection?.addEventListener?.('change', computeLowPowerMode);
+        return () => {
+            connection?.removeEventListener?.('change', computeLowPowerMode);
+        };
+    }, []);
+
+    const enableAmbientMotion = useMemo(
+        () => !prefersReducedMotion && !isLowPowerMode,
+        [isLowPowerMode, prefersReducedMotion],
+    );
+
     const showInstall = isInstallable && !isInstalled;
     const showHint = Boolean(installHint) && !isInstallable && !isInstalled;
 
@@ -83,24 +115,51 @@ export default function PwaStatusBar({
                     )}
 
                     {showInstall && (
-                        <BaseCard>
-                            <div className="flex items-center gap-3 p-4">
-                                <div className="rounded-xl bg-white/10 p-2 text-white">
+                        <BaseCard className="relative border-emerald-300/15 bg-[linear-gradient(145deg,rgba(5,150,105,0.18),rgba(3,7,18,0.88)_45%,rgba(2,6,23,0.95))]">
+                            <div className="pointer-events-none absolute -top-16 -right-12 h-40 w-40 rounded-full bg-emerald-300/20 blur-3xl" />
+                            <div className="pointer-events-none absolute -bottom-16 -left-16 h-44 w-44 rounded-full bg-cyan-300/10 blur-3xl" />
+                            <motion.div
+                                aria-hidden="true"
+                                className="pointer-events-none absolute -left-24 top-0 h-full w-24 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                                animate={enableAmbientMotion ? { x: ['0%', '540%'] } : { opacity: 0 }}
+                                transition={enableAmbientMotion
+                                    ? { duration: 2.8, ease: 'linear', repeat: Infinity, repeatDelay: 1.8 }
+                                    : { duration: 0.1 }}
+                            />
+
+                            <div className="relative flex items-center gap-3 p-4 sm:gap-4 sm:p-5">
+                                <motion.div
+                                    className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] sm:h-13 sm:w-13"
+                                    animate={enableAmbientMotion ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+                                    transition={enableAmbientMotion
+                                        ? { duration: 2.2, ease: 'easeInOut', repeat: Infinity }
+                                        : { duration: 0.1 }}
+                                >
                                     <Download className="h-5 w-5" />
-                                </div>
+                                </motion.div>
+
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-semibold tracking-wide">Install Gruvora Living</p>
-                                    <p className="mt-1 text-sm text-white/70">Add the app to your home screen for a faster, full-screen experience.</p>
+                                    <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">
+                                        App Install
+                                    </p>
+                                    <p className="mt-2 text-base font-bold tracking-tight text-white sm:text-lg">Install Gruvora Living</p>
+                                    <p className="mt-1 text-sm leading-relaxed text-white/75">
+                                        Add the app to your home screen for a faster, immersive experience.
+                                    </p>
                                 </div>
-                                <button
+
+                                <motion.button
                                     type="button"
                                     onClick={onInstall}
                                     disabled={installPending || !onInstall}
-                                    className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-black transition hover:bg-white/95 disabled:cursor-not-allowed disabled:opacity-70"
+                                    className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-black shadow-[0_10px_26px_rgba(255,255,255,0.28)] transition hover:-translate-y-0.5 hover:bg-white/95 disabled:cursor-not-allowed disabled:opacity-70 sm:px-5 sm:py-2.5 sm:text-sm"
+                                    whileTap={{ scale: 0.96 }}
+                                    animate={installPending && enableAmbientMotion ? { opacity: [0.7, 1, 0.7] } : undefined}
+                                    transition={installPending && enableAmbientMotion ? { duration: 1.1, repeat: Infinity } : undefined}
                                 >
-                                    <Download className="h-3.5 w-3.5" />
+                                    <Download className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
                                     {installPending ? 'Opening' : 'Install'}
-                                </button>
+                                </motion.button>
                             </div>
                         </BaseCard>
                     )}
