@@ -34,6 +34,9 @@ export function registerServiceWorker(config = {}) {
                 scope: '/',
             });
 
+            // Force an update check on load to minimize stale bundle windows.
+            registration.update().catch(() => { });
+
             navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
 
             const triggerUpdate = () => {
