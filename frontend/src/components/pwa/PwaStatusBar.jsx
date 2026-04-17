@@ -127,39 +127,50 @@ export default function PwaStatusBar({
                                     : { duration: 0.1 }}
                             />
 
-                            <div className="relative flex items-center gap-3 p-4 sm:gap-4 sm:p-5">
-                                <motion.div
-                                    className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] sm:h-13 sm:w-13"
-                                    animate={enableAmbientMotion ? { scale: [1, 1.06, 1] } : { scale: 1 }}
-                                    transition={enableAmbientMotion
-                                        ? { duration: 2.2, ease: 'easeInOut', repeat: Infinity }
-                                        : { duration: 0.1 }}
-                                >
-                                    <Download className="h-5 w-5" />
-                                </motion.div>
-
-                                <div className="min-w-0 flex-1">
+                            <div className="relative p-4 sm:p-5">
+                                <div className="mb-3 flex items-center justify-between gap-3">
                                     <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">
-                                        App Install
+                                        PWA Install
                                     </p>
-                                    <p className="mt-2 text-base font-bold tracking-tight text-white sm:text-lg">Install Gruvora Living</p>
-                                    <p className="mt-1 text-sm leading-relaxed text-white/75">
-                                        Add the app to your home screen for a faster, immersive experience.
-                                    </p>
+                                    <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-emerald-100/80">Fast Launch</p>
                                 </div>
 
-                                <motion.button
-                                    type="button"
-                                    onClick={onInstall}
-                                    disabled={installPending || !onInstall}
-                                    className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-black shadow-[0_10px_26px_rgba(255,255,255,0.28)] transition hover:-translate-y-0.5 hover:bg-white/95 disabled:cursor-not-allowed disabled:opacity-70 sm:px-5 sm:py-2.5 sm:text-sm"
-                                    whileTap={{ scale: 0.96 }}
-                                    animate={installPending && enableAmbientMotion ? { opacity: [0.7, 1, 0.7] } : undefined}
-                                    transition={installPending && enableAmbientMotion ? { duration: 1.1, repeat: Infinity } : undefined}
-                                >
-                                    <Download className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
-                                    {installPending ? 'Opening' : 'Install'}
-                                </motion.button>
+                                <div className="flex items-center gap-3 sm:gap-4">
+                                    <motion.div
+                                        className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white shadow-[0_12px_30px_rgba(0,0,0,0.25)] sm:h-13 sm:w-13"
+                                        animate={enableAmbientMotion ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+                                        transition={enableAmbientMotion
+                                            ? { duration: 2.2, ease: 'easeInOut', repeat: Infinity }
+                                            : { duration: 0.1 }}
+                                    >
+                                        <Download className="h-5 w-5" />
+                                    </motion.div>
+
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-base font-bold tracking-tight text-white sm:text-lg">Install Gruvora Living</p>
+                                        <p className="mt-1 text-sm leading-relaxed text-white/75">
+                                            Add to home screen for instant launch, smoother reels, and app-like navigation.
+                                        </p>
+                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                            <span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-white/65">Offline Ready</span>
+                                            <span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-white/65">Faster Open</span>
+                                            <span className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-white/65">Secure Session</span>
+                                        </div>
+                                    </div>
+
+                                    <motion.button
+                                        type="button"
+                                        onClick={onInstall}
+                                        disabled={installPending || !onInstall}
+                                        className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-bold text-black shadow-[0_10px_26px_rgba(255,255,255,0.28)] transition hover:-translate-y-0.5 hover:bg-white/95 disabled:cursor-not-allowed disabled:opacity-70 sm:px-5 sm:py-2.5 sm:text-sm"
+                                        whileTap={{ scale: 0.96 }}
+                                        animate={installPending && enableAmbientMotion ? { opacity: [0.7, 1, 0.7] } : undefined}
+                                        transition={installPending && enableAmbientMotion ? { duration: 1.1, repeat: Infinity } : undefined}
+                                    >
+                                        <Download className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
+                                        {installPending ? 'Opening' : 'Install'}
+                                    </motion.button>
+                                </div>
                             </div>
                         </BaseCard>
                     )}

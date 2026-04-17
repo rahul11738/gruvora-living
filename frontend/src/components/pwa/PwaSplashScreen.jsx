@@ -20,13 +20,14 @@ export default function PwaSplashScreen({ visible = false }) {
                     aria-label="Gruvora Living is starting"
                     role="status"
                 >
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.22),_transparent_35%),linear-gradient(180deg,_#000000_0%,_#0f172a_100%)]" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_12%,_rgba(16,185,129,0.22),_transparent_34%),radial-gradient(circle_at_80%_80%,_rgba(6,182,212,0.16),_transparent_38%),linear-gradient(180deg,_#020617_0%,_#0b1120_58%,_#020617_100%)]" />
+                    <div className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:linear-gradient(rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.16)_1px,transparent_1px)] [background-size:34px_34px]" />
                     <motion.div
                         initial={{ scale: 0.92, opacity: 0, y: 16 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.98, opacity: 0, y: 8 }}
                         transition={{ duration: 0.4, ease: 'easeOut' }}
-                        className="relative z-10 flex flex-col items-center gap-5 px-6 text-center"
+                        className="relative z-10 flex w-full max-w-md flex-col items-center gap-5 px-6 text-center"
                     >
                         <div className="relative">
                             <div className="absolute inset-0 rounded-[2rem] bg-emerald-400/25 blur-3xl" />
@@ -39,25 +40,35 @@ export default function PwaSplashScreen({ visible = false }) {
                                 </svg>
                             </div>
                         </div>
-                        <div className="space-y-3">
-                            <p className="text-lg font-semibold tracking-[0.28em] text-white/70 uppercase">Gruvora Living</p>
-                            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Everything You Need — In One Smart Platform</h1>
-                            <div className="mx-auto max-w-md space-y-1 text-sm leading-6 text-white/75 sm:text-base">
-                                <p className="font-semibold text-white/90">GRUVORA LIVING</p>
-                                <p className="font-medium text-emerald-200">India's Smart Living Platform</p>
-                                <p>🏠 Buy / Rent Homes</p>
-                                <p>🏢 Grow Your Business</p>
-                                <p>🏨 Book Stays</p>
-                                <p>🎉 Plan Events</p>
-                                <p>🛠 Hire Trusted Services</p>
-                                <p>🎥 Discover via Reels</p>
-                                <p>⚡ Lightning Fast Experience</p>
-                                <p>🔐 Verified & Secure</p>
+                        <div className="space-y-4">
+                            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/25 bg-emerald-300/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-100">
+                                Gruvora Living Platform
+                            </div>
+                            <h1 className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-[2.25rem]">
+                                Everything You Need
+                                <span className="block text-emerald-200">In One Smart Platform</span>
+                            </h1>
+                            <p className="mx-auto max-w-sm text-sm leading-6 text-slate-300 sm:text-base">
+                                Real estate discovery, business growth, stays, services, and reel-first engagement in one secure ecosystem.
+                            </p>
+                            <div className="grid w-full grid-cols-3 gap-2 text-left">
+                                <div className="rounded-xl border border-white/12 bg-white/5 px-3 py-2">
+                                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/45">Network</p>
+                                    <p className="mt-1 text-xs font-semibold text-white">Homes + Services</p>
+                                </div>
+                                <div className="rounded-xl border border-white/12 bg-white/5 px-3 py-2">
+                                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/45">Experience</p>
+                                    <p className="mt-1 text-xs font-semibold text-white">Reel-first UX</p>
+                                </div>
+                                <div className="rounded-xl border border-white/12 bg-white/5 px-3 py-2">
+                                    <p className="text-[10px] uppercase tracking-[0.16em] text-white/45">Trust</p>
+                                    <p className="mt-1 text-xs font-semibold text-white">Verified + Secure</p>
+                                </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.28em] text-white/45">
+                        <div className="flex items-center gap-2 text-xs uppercase tracking-[0.24em] text-white/45">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Launching Your Experience...
+                            Launching your workspace
                         </div>
                     </motion.div>
                 </motion.div>
