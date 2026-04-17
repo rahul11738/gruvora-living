@@ -39,16 +39,25 @@ export default function PwaSplashScreen({ visible = false }) {
                                 </svg>
                             </div>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                             <p className="text-lg font-semibold tracking-[0.28em] text-white/70 uppercase">Gruvora Living</p>
-                            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Homes, reels, and profiles in one fast shell.</h1>
-                            <p className="mx-auto max-w-md text-sm leading-6 text-white/70 sm:text-base">
-                                Loading your installable experience with offline-ready assets and reel-first navigation.
-                            </p>
+                            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Everything You Need — In One Smart Platform</h1>
+                            <div className="mx-auto max-w-md space-y-1 text-sm leading-6 text-white/75 sm:text-base">
+                                <p className="font-semibold text-white/90">GRUVORA LIVING</p>
+                                <p className="font-medium text-emerald-200">India's Smart Living Platform</p>
+                                <p>🏠 Buy / Rent Homes</p>
+                                <p>🏢 Grow Your Business</p>
+                                <p>🏨 Book Stays</p>
+                                <p>🎉 Plan Events</p>
+                                <p>🛠 Hire Trusted Services</p>
+                                <p>🎥 Discover via Reels</p>
+                                <p>⚡ Lightning Fast Experience</p>
+                                <p>🔐 Verified & Secure</p>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2 text-xs uppercase tracking-[0.28em] text-white/45">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Starting app
+                            Launching Your Experience...
                         </div>
                     </motion.div>
                 </motion.div>
