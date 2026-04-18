@@ -9,7 +9,7 @@
     - Sensitive authenticated API responses are never cached.
 */
 
-const CACHE_VERSION = 'gruvora-living-v3';
+const CACHE_VERSION = 'gruvora-living-v4';
 const PRECACHE_NAME = `${CACHE_VERSION}-precache`;
 const STATIC_NAME = `${CACHE_VERSION}-static`;
 const API_NAME = `${CACHE_VERSION}-api`;
@@ -20,8 +20,7 @@ const PRECACHE_URLS = [
     '/index.html',
     '/offline.html',
     '/manifest.json',
-    '/icons/icon-192.svg',
-    '/icons/icon-512.svg',
+    '/icons/APP_ICON.png',
 ];
 
 const OFFLINE_JSON = JSON.stringify({

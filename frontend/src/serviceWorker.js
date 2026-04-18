@@ -1,4 +1,4 @@
-const SERVICE_WORKER_VERSION = '2026-04-17-v3';
+const SERVICE_WORKER_VERSION = '2026-04-18-v4';
 const SERVICE_WORKER_URL = `/service-worker.js?v=${SERVICE_WORKER_VERSION}`;
 
 /**
