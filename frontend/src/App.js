@@ -195,9 +195,7 @@ function AppRoutes() {
 
 function App() {
   const launchedInStandalone = typeof window !== 'undefined' && (
-    window.matchMedia?.('(display-mode: standalone)')?.matches ||
-    window.matchMedia?.('(display-mode: fullscreen)')?.matches ||
-    window.navigator?.standalone === true
+  // launchedInStandalone removed
   );
   const { canPrompt, isInstalled, promptInstall } = usePwaInstallPrompt();
   const [installPending, setInstallPending] = useState(false);
