@@ -61,7 +61,12 @@ export default function BrandedLogo({ variant = 'compact', className = '', hideI
                 </span>
                 <span
                     className={`viga-regular font-black tracking-tight text-emerald-900 ${subtitleSizes[variant]}`}
-                    style={{ fontWeight: 900, letterSpacing: '-0.01em' }}
+                    style={{
+                        fontWeight: 900,
+                        letterSpacing: '-0.01em',
+                        display: 'inline-block',
+                        marginLeft: variant === 'compact' ? '3.1ch' : variant === 'normal' ? '3.3ch' : '3.5ch',
+                    }}
                 >
                     LIVING
                 </span>
