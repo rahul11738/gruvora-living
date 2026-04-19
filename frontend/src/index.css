@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+.viga-regular {
+  font-family: "Viga", sans-serif;
+  font-weight: 400;
+  font-style: normal;
+}
+
 @layer base {
   :root {
     --background: 30 6% 98%;
