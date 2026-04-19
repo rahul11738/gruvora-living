@@ -9,9 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { toast } from 'sonner';
-import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import BrandedLogo from './BrandedLogo';
-import OptimizedImage from './OptimizedImage';
 import {
   Home,
   Mail,
