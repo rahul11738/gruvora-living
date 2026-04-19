@@ -329,7 +329,7 @@ export const Footer = () => {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 md:gap-7">
           <div className="col-span-2 lg:col-span-1">
             <Link to="/" className="mb-4 inline-flex items-center">
-              <BrandedLogo variant="normal" className="invert" />
+              <BrandedLogo variant="normal" hideIcon={true} className="text-white" />
             </Link>
             <p className="text-stone-300 text-sm leading-relaxed">
               Smart digital platform to connect users with homes, businesses, stay options, event spaces, and local services.

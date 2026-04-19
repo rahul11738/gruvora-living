@@ -4,13 +4,13 @@ import React from 'react';
  * Branded logo component combining icon + text.
  * Used throughout site for consistent branding.
  */
-export default function BrandedLogo({ variant = 'compact', className = '' }) {
+export default function BrandedLogo({ variant = 'compact', className = '', hideIcon = false }) {
     // Variants: 'compact' (mobile), 'normal' (tablet), 'full' (desktop)
 
     const iconSizes = {
-        compact: 'h-8 w-8 md:h-9 md:w-9',
-        normal: 'h-9 w-9 md:h-10 md:w-10',
-        full: 'h-10 w-10 md:h-11 md:w-11',
+        compact: 'h-7 w-7 md:h-8 md:w-8',
+        normal: 'h-8 w-8 md:h-9 md:w-9',
+        full: 'h-9 w-9 md:h-10 md:w-10',
     };
 
     const textSizes = {
@@ -19,31 +19,28 @@ export default function BrandedLogo({ variant = 'compact', className = '' }) {
         full: 'text-base md:text-lg',
     };
 
-    const containerSizes = {
-        compact: 'gap-2',
-        normal: 'gap-2.5',
-        full: 'gap-3',
-    };
-
     return (
         <div
-            className={`inline-flex items-center ${containerSizes[variant]} ${className}`}
+            className={`inline-flex items-end gap-1.5 md:gap-2 ${className}`}
             aria-label="Gruvora Living"
         >
-            {/* Icon */}
-            <div className={`flex shrink-0 items-center justify-center rounded-lg border border-emerald-200/70 bg-gradient-to-b from-white to-stone-50 p-1.5 shadow-[0_6px_14px_rgba(5,150,105,0.12)] ${iconSizes[variant]}`}>
-                <img
-                    src="/icons/APP_ICON.png"
-                    alt="Gruvora Living Logo"
-                />
-            </div>
+            {/* Icon - Only show when not hideIcon */}
+            {!hideIcon && (
+                <div className={`flex shrink-0 items-center justify-center rounded-lg border border-emerald-200/70 bg-gradient-to-b from-white to-stone-50 p-1 shadow-[0_4px_12px_rgba(5,150,105,0.15)] ${iconSizes[variant]}`}>
+                    <img
+                        src="/icons/APP_ICON.png"
+                        alt="Gruvora Living Logo"
+                        className="w-full h-full object-contain"
+                    />
+                </div>
+            )}
 
-            {/* Text */}
-            <div className={`flex flex-col justify-center ${textSizes[variant]}`}>
-                <span className="font-bold tracking-tight text-emerald-600">
+            {/* Text - Vertical Stack with LIVING under R */}
+            <div className={`flex flex-col leading-none justify-end ${textSizes[variant]}`}>
+                <span className="font-bold tracking-tight text-emerald-700 leading-tight">
                     GRUVORA
                 </span>
-                <span className="font-semibold tracking-tight text-emerald-500">
+                <span className="font-bold tracking-tight text-emerald-700 leading-tight">
                     LIVING
                 </span>
             </div>
