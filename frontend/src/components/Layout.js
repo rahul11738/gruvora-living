@@ -7,6 +7,7 @@ import { observeRoutePrefetch, prefetchDiscoverRoute, prefetchReelsRoute } from 
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { messagesAPI } from '../lib/api';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
+import BrandedLogo from './BrandedLogo';
 import OptimizedImage from './OptimizedImage';
 import {
   DropdownMenu,
@@ -137,9 +138,9 @@ export const Header = () => {
       <header className="glass-header fixed top-0 left-0 right-0 z-50 standalone-safe-top" data-testid="header">
         <div className="container-main py-2 md:py-2.5">
           <div className="flex h-16 items-center justify-between gap-3 rounded-2xl border border-stone-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.9))] px-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] backdrop-blur-xl md:h-20 md:gap-4 md:px-4">
-            {/* Logo */}
-            <Link to="/" className="flex shrink-0 items-center rounded-xl border border-stone-200/80 bg-white px-1.5 py-1 shadow-[0_6px_16px_rgba(15,23,42,0.06)] md:px-2 md:py-1.5" data-testid="logo">
-              <OptimizedImage publicId={gruvoraLogo} alt="Gruvora" className="h-8 w-auto max-w-[146px] object-contain md:h-9 md:max-w-[168px]" width={180} sizes="180px" />
+            {/* Branded Logo */}
+            <Link to="/" className="flex shrink-0 items-center" data-testid="logo">
+              <BrandedLogo variant="compact" />
             </Link>
 
             {/* Desktop Navigation */}
@@ -329,9 +330,9 @@ export const Footer = () => {
       <div className="container-main relative py-8 md:py-10">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 md:gap-7">
           <div className="col-span-2 lg:col-span-1">
-            <div className="mb-4 inline-flex items-center rounded-xl bg-white/95 px-3 py-2 shadow-[0_10px_26px_rgba(15,23,42,0.18)]">
-              <OptimizedImage publicId={gruvoraLogo} alt="Gruvora" className="h-9 w-auto max-w-[180px] object-contain" width={180} sizes="180px" />
-            </div>
+            <Link to="/" className="mb-4 inline-flex items-center">
+              <BrandedLogo variant="normal" className="invert" />
+            </Link>
             <p className="text-stone-300 text-sm leading-relaxed">
               Smart digital platform to connect users with homes, businesses, stay options, event spaces, and local services.
             </p>
