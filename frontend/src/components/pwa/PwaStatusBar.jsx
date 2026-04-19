@@ -118,18 +118,7 @@ export default function PwaStatusBar({
         return () => window.clearInterval(intervalId);
     }, [installCardVisible, nextInstallShowAt, showInstall]);
 
-    useEffect(() => {
-        if (!showInstall || !installCardVisible) {
-            return undefined;
-        }
-
-        const timerId = window.setTimeout(() => {
-            setInstallCardVisible(false);
-            scheduleInstallReshow();
-        }, INSTALL_SHOW_DURATION_MS);
-
-        return () => window.clearTimeout(timerId);
-    }, [installCardVisible, showInstall]);
+    // Remove auto-dismiss timer for install prompt. Only dismiss on user action.
 
     const dismissInstallCard = () => {
         setInstallCardVisible(false);

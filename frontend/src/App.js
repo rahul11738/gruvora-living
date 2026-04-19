@@ -204,7 +204,8 @@ function App() {
   const [installPending, setInstallPending] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [updateRegistration, setUpdateRegistration] = useState(null);
-  const [showSplash, setShowSplash] = useState(!launchedInStandalone);
+  // Splash screen disabled
+  const [showSplash, setShowSplash] = useState(false);
 
   useEffect(() => {
     const warmRoutes = () => {
@@ -225,17 +226,7 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, []);
 
-  useEffect(() => {
-    if (!showSplash) {
-      return undefined;
-    }
-
-    const splashTimer = window.setTimeout(() => {
-      setShowSplash(false);
-    }, 1100);
-
-    return () => window.clearTimeout(splashTimer);
-  }, [showSplash]);
+  // Splash screen auto-hide logic removed
 
   useEffect(() => {
     const cleanup = registerServiceWorker({
