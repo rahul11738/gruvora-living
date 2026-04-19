@@ -10,7 +10,6 @@ import { NotificationProvider } from "./components/Notifications.jsx";
 import { RouteSkeleton } from "./components/SkeletonLoaders";
 import { prefetchDiscoverRoute, prefetchReelsRoute } from "./lib/routePrefetch";
 import PwaStatusBar from "./components/pwa/PwaStatusBar";
-import PwaSplashScreen from "./components/pwa/PwaSplashScreen";
 import { registerServiceWorker } from "./serviceWorker";
 import { usePwaInstallPrompt } from "./pwaInstall";
 
