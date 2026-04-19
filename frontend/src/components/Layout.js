@@ -135,7 +135,7 @@ export const Header = () => {
     <>
       <header className="glass-header fixed top-0 left-0 right-0 z-50 standalone-safe-top" data-testid="header">
         <div className="container-main py-2 md:py-2.5">
-          <div className="flex h-16 items-center justify-between gap-3 rounded-2xl border border-stone-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.9))] px-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.08)] backdrop-blur-xl md:h-20 md:gap-4 md:px-4">
+          <div className="flex h-16 items-center justify-between gap-3 rounded-2xl border border-stone-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(248,250,252,0.9))] px-2.5 pr-3.5 md:pr-7 shadow-[0_14px_34px_rgba(15,23,42,0.08)] backdrop-blur-xl md:h-20 md:gap-4 md:px-4 md:pr-10">
             {/* Branded Logo */}
             <Link to="/" className="flex shrink-0 items-center" data-testid="logo">
               <BrandedLogo variant="compact" />
