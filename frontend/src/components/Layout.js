@@ -269,10 +269,10 @@ export const Header = () => {
               ) : (
                 <div className="flex items-center gap-1.5 md:gap-2">
                   <Link to="/login">
-                    <Button variant="ghost" className="rounded-xl px-3 text-sm font-semibold text-stone-700 hover:bg-stone-100 md:px-4" data-testid="login-btn">Login</Button>
+                    <Button variant="ghost" className="rounded-xl px-3 text-xs md:text-sm font-semibold text-stone-700 hover:bg-stone-100 md:px-4" data-testid="login-btn">Login</Button>
                   </Link>
                   <Link to="/register" className="hidden md:block">
-                    <Button className="btn-primary rounded-xl px-5 shadow-[0_10px_22px_rgba(5,150,105,0.2)]" data-testid="register-btn">Register</Button>
+                    <Button className="btn-primary rounded-xl px-5 text-xs md:text-sm shadow-[0_10px_22px_rgba(5,150,105,0.2)]" data-testid="register-btn">Register</Button>
                   </Link>
                 </div>
               )}
