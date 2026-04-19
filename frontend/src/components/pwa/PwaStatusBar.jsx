@@ -182,7 +182,7 @@ export default function PwaStatusBar({
                     )}
 
                     {showInstall && installCardVisible && (
-                        <BaseCard className="relative border-emerald-300/15 bg-[linear-gradient(145deg,rgba(5,150,105,0.18),rgba(3,7,18,0.9)_45%,rgba(2,6,23,0.96))]">
+                        <BaseCard className="relative border-emerald-300/20 bg-gradient-to-br from-[#101828] via-[#0b1120] to-[#101828] shadow-2xl">
                             <div className="pointer-events-none absolute -top-16 -right-12 h-36 w-36 rounded-full bg-emerald-300/18 blur-3xl" />
                             <div className="pointer-events-none absolute -bottom-14 -left-14 h-36 w-36 rounded-full bg-cyan-300/10 blur-3xl" />
                             <motion.div
@@ -194,46 +194,41 @@ export default function PwaStatusBar({
                                     : { duration: 0.1 }}
                             />
 
-                            <div className="relative p-3.5 sm:p-4">
-                                <div className="mb-2.5 flex items-center justify-end gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={dismissInstallCard}
-                                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
-                                        aria-label="Dismiss install card"
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-
-                                <div className="flex items-center gap-3 sm:gap-3.5">
+                            <div className="relative p-5 sm:p-6">
+                                <button
+                                    type="button"
+                                    onClick={dismissInstallCard}
+                                    className="absolute top-4 right-4 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+                                    aria-label="Dismiss install card"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
                                     <motion.div
-                                        className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 text-white shadow-[0_10px_24px_rgba(0,0,0,0.24)] sm:h-11 sm:w-11"
+                                        className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/20 bg-white/10 text-white shadow-[0_10px_24px_rgba(0,0,0,0.24)]"
                                         animate={enableAmbientMotion ? { scale: [1, 1.06, 1] } : { scale: 1 }}
                                         transition={enableAmbientMotion
                                             ? { duration: 2.2, ease: 'easeInOut', repeat: Infinity }
                                             : { duration: 0.1 }}
                                     >
-                                        <Download className="h-4.5 w-4.5" />
+                                        <Download className="h-5 w-5" />
                                     </motion.div>
-
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-bold tracking-tight text-white sm:text-base">Install Gruvora Living</p>
-                                        <p className="mt-1 text-xs leading-relaxed text-white/75 sm:text-sm">
+                                    <div className="min-w-0 flex-1 text-center sm:text-left">
+                                        <p className="text-base font-extrabold tracking-tight text-white">Install Gruvora Living</p>
+                                        <p className="mt-1 text-sm leading-relaxed text-white/80">
                                             Add to home screen for instant launch and smoother app-style navigation.
                                         </p>
                                     </div>
-
                                     <motion.button
                                         type="button"
                                         onClick={handleInstallClick}
                                         disabled={installPending || !onInstall}
-                                        className="group inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-xs font-bold text-black shadow-[0_10px_26px_rgba(255,255,255,0.28)] transition hover:-translate-y-0.5 hover:bg-white/95 disabled:cursor-not-allowed disabled:opacity-70 sm:px-4 sm:py-2"
+                                        className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 px-6 py-2 text-base font-bold text-white shadow-lg transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-70"
                                         whileTap={{ scale: 0.96 }}
                                         animate={installPending && enableAmbientMotion ? { opacity: [0.7, 1, 0.7] } : undefined}
                                         transition={installPending && enableAmbientMotion ? { duration: 1.1, repeat: Infinity } : undefined}
                                     >
-                                        <Download className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
+                                        <Download className="h-5 w-5" />
                                         {installPending ? 'Opening' : 'Install'}
                                     </motion.button>
                                 </div>
