@@ -174,7 +174,7 @@ export const Header = () => {
                 onMouseEnter={prefetchDiscoverRoute}
                 onFocus={prefetchDiscoverRoute}
                 onClick={() => markRouteNavigation('/discover', 'header-discover-btn')}
-                className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.10)] hover:bg-blue-100 transition-colors"
+                className="hidden md:flex items-center gap-2 px-2.5 py-2 rounded-full bg-blue-50 text-blue-700 border border-blue-100 shadow-[0_6px_18px_rgba(37,99,235,0.10)] hover:bg-blue-100 transition-colors text-xs md:text-sm"
                 data-testid="discover-btn"
               >
                 <DiscoverIcon className="w-4 h-4" />
@@ -188,7 +188,7 @@ export const Header = () => {
                 onMouseEnter={prefetchReelsRoute}
                 onFocus={prefetchReelsRoute}
                 onClick={() => markRouteNavigation('/reels', 'header-reels-btn')}
-                className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-full bg-secondary/10 text-secondary border border-orange-100 shadow-[0_6px_18px_rgba(249,115,22,0.14)] hover:bg-secondary/15 transition-colors"
+                className="hidden md:flex items-center gap-2 px-2.5 py-2 rounded-full bg-secondary/10 text-secondary border border-orange-100 shadow-[0_6px_18px_rgba(249,115,22,0.14)] hover:bg-secondary/15 transition-colors text-xs md:text-sm"
                 data-testid="reels-btn"
               >
                 <Play className="w-4 h-4" />
@@ -269,10 +269,10 @@ export const Header = () => {
               ) : (
                 <div className="flex items-center gap-1.5 md:gap-2">
                   <Link to="/login">
-                    <Button variant="ghost" className="rounded-xl px-3 text-xs md:text-sm font-semibold text-stone-700 hover:bg-stone-100 md:px-4" data-testid="login-btn">Login</Button>
+                    <Button variant="ghost" className="rounded-xl px-2 text-xs md:text-sm font-semibold text-stone-700 hover:bg-stone-100 md:px-3" data-testid="login-btn">Login</Button>
                   </Link>
                   <Link to="/register" className="hidden md:block">
-                    <Button className="btn-primary rounded-xl px-5 text-xs md:text-sm shadow-[0_10px_22px_rgba(5,150,105,0.2)]" data-testid="register-btn">Register</Button>
+                    <Button className="btn-primary rounded-xl px-3 text-xs md:text-sm shadow-[0_10px_22px_rgba(5,150,105,0.2)]" data-testid="register-btn">Register</Button>
                   </Link>
                 </div>
               )}
