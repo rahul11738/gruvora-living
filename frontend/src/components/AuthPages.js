@@ -103,8 +103,8 @@ export const LoginPage = () => {
         <div className="w-full max-w-md">
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
-              <Link to="/" className="inline-flex items-center mb-6">
-                <BrandedLogo variant="normal" />
+              <Link to="/" className="inline-flex items-center mb-6" aria-label="Go to home">
+                <BrandedLogo variant="full" className="select-none" />
               </Link>
 
               <div className="mb-6">
@@ -281,8 +281,8 @@ export const RegisterPage = () => {
         <div className="w-full max-w-xl">
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
-              <Link to="/" className="inline-flex items-center mb-6">
-                <BrandedLogo variant="normal" />
+              <Link to="/" className="inline-flex items-center mb-6" aria-label="Go to home">
+                <BrandedLogo variant="full" className="select-none" />
               </Link>
 
               <div className="mb-5">
