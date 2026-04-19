@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { toast } from 'sonner';
 import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
+import BrandedLogo from './BrandedLogo';
 import OptimizedImage from './OptimizedImage';
 import {
   Home,
@@ -104,14 +105,8 @@ export const LoginPage = () => {
         <div className="w-full max-w-md">
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
-              <Link to="/" className="inline-flex items-center mb-6 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-                <OptimizedImage
-                  publicId={gruvoraLogo}
-                  alt="Gruvora"
-                  className="h-10 sm:h-11 w-auto max-w-[180px] object-contain"
-                  width={180}
-                  sizes="180px"
-                />
+              <Link to="/" className="inline-flex items-center mb-6">
+                <BrandedLogo variant="normal" />
               </Link>
 
               <div className="mb-6">
@@ -288,14 +283,8 @@ export const RegisterPage = () => {
         <div className="w-full max-w-xl">
           <div className="rounded-[1.75rem] border border-stone-200 bg-white shadow-[0_12px_36px_rgba(15,23,42,0.06)] overflow-hidden">
             <div className="p-5 sm:p-7 md:p-8">
-              <Link to="/" className="inline-flex items-center mb-6 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-                <OptimizedImage
-                  publicId={gruvoraLogo}
-                  alt="Gruvora"
-                  className="h-10 sm:h-11 w-auto max-w-[180px] object-contain"
-                  width={180}
-                  sizes="180px"
-                />
+              <Link to="/" className="inline-flex items-center mb-6">
+                <BrandedLogo variant="normal" />
               </Link>
 
               <div className="mb-5">

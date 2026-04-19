@@ -34,6 +34,7 @@ export default function BrandedLogo({ variant = 'compact', className = '' }) {
             <div className={`flex shrink-0 items-center justify-center rounded-lg border border-emerald-200/70 bg-gradient-to-b from-white to-stone-50 p-1.5 shadow-[0_6px_14px_rgba(5,150,105,0.12)] ${iconSizes[variant]}`}>
                 <img
                     src="/icons/APP_ICON.png"
+                    alt="Gruvora Living Logo"
                 />
             </div>
 

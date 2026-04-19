@@ -6,9 +6,7 @@ import { Button } from './ui/button';
 import { observeRoutePrefetch, prefetchDiscoverRoute, prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { messagesAPI } from '../lib/api';
-import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
 import BrandedLogo from './BrandedLogo';
-import OptimizedImage from './OptimizedImage';
 import {
   DropdownMenu,
   DropdownMenuContent,
