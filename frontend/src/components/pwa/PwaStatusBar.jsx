@@ -195,21 +195,15 @@ export default function PwaStatusBar({
                             />
 
                             <div className="relative p-3.5 sm:p-4">
-                                <div className="mb-2.5 flex items-center justify-between gap-2">
-                                    <p className="inline-flex items-center rounded-full border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85">
-                                        PWA Install
-                                    </p>
-                                    <div className="flex items-center gap-2">
-                                        <p className="text-[10px] font-medium uppercase tracking-[0.16em] text-emerald-100/80">Fast Launch</p>
-                                        <button
-                                            type="button"
-                                            onClick={dismissInstallCard}
-                                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
-                                            aria-label="Dismiss install card"
-                                        >
-                                            <X className="h-3.5 w-3.5" />
-                                        </button>
-                                    </div>
+                                <div className="mb-2.5 flex items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={dismissInstallCard}
+                                        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white/80 transition hover:bg-white/20 hover:text-white"
+                                        aria-label="Dismiss install card"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
                                 </div>
 
                                 <div className="flex items-center gap-3 sm:gap-3.5">
