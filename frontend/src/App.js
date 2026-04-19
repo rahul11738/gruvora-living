@@ -291,7 +291,7 @@ function App() {
                   isOffline={isOffline}
                   installHint={!canPrompt && !isInstalled ? 'Use your browser menu to add Gruvora Living to the home screen.' : ''}
                 />
-                <PwaSplashScreen visible={showSplash} />
+                {/* Splash screen removed */}
               </NotificationProvider>
             </AppErrorBoundary>
           </InteractionProvider>
