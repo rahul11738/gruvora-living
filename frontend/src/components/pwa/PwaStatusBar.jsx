@@ -47,16 +47,10 @@ export default function PwaStatusBar({
     const dismissInstallCard = () => setInstallCardVisible(false);
     const handleInstallClick = () => {
         if (onInstall) onInstall();
-        // SaaS-level: showInstall and showHint logic
-        const showInstall = isInstallable && !isInstalled;
-        const showHint = Boolean(installHint) && !isInstallable && !isInstalled;
-        return (
-    // SaaS-level: dismiss and install handlers
-    const dismissInstallCard = () => setInstallCardVisible(false);
-        const handleInstallClick = () => {
-            if (onInstall) onInstall();
-            setInstallCardVisible(false);
-        };
+        setInstallCardVisible(false);
+    };
+
+    return (
         <AnimatePresence>
             {(showInstall || showHint || updateAvailable || isOffline) && (
                 <div className="fixed bottom-4 left-4 right-4 z-[70] mx-auto flex max-w-xl flex-col gap-3 sm:left-auto sm:right-4 sm:w-[420px]">
