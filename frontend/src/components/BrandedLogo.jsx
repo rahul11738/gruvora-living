@@ -52,7 +52,7 @@ export default function BrandedLogo({ variant = 'compact', className = '', hideI
                 className={`${iconSizes[variant]} shrink-0 rounded-lg object-cover shadow-sm`}
             />
 
-            <div className="inline-flex flex-col leading-none">
+            <div className="inline-flex flex-col items-center leading-none">
                 <span
                     className={`viga-regular font-black tracking-tight text-emerald-900 ${titleSizes[variant]}`}
                     style={{ fontWeight: 900, letterSpacing: '-0.02em' }}
@@ -61,12 +61,7 @@ export default function BrandedLogo({ variant = 'compact', className = '', hideI
                 </span>
                 <span
                     className={`viga-regular font-black tracking-tight text-emerald-900 ${subtitleSizes[variant]}`}
-                    style={{
-                        fontWeight: 900,
-                        letterSpacing: '-0.01em',
-                        display: 'inline-block',
-                        marginLeft: variant === 'compact' ? '3.1ch' : variant === 'normal' ? '3.3ch' : '3.5ch',
-                    }}
+                    style={{ fontWeight: 900, letterSpacing: '-0.01em', display: 'inline-block' }}
                 >
                     LIVING
                 </span>
