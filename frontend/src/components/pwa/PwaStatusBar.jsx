@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Download, RefreshCw, WifiOff, X } from 'lucide-react';
 
-const INSTALL_SHOW_DURATION_MS = 12000;
+// Removed unused INSTALL_SHOW_DURATION_MS
 const INSTALL_RESHOW_INTERVAL_MS = 10 * 60 * 1000;
 const INSTALL_NEXT_SHOW_SESSION_KEY = 'gruvora_pwa_install_next_show_at';
 

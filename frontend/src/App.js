@@ -205,7 +205,7 @@ function App() {
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [updateRegistration, setUpdateRegistration] = useState(null);
   // Splash screen disabled
-  const [showSplash, setShowSplash] = useState(false);
+  // Splash screen disabled
 
   useEffect(() => {
     const warmRoutes = () => {
