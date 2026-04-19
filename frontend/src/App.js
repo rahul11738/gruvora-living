@@ -194,9 +194,6 @@ function AppRoutes() {
 }
 
 function App() {
-  const launchedInStandalone = typeof window !== 'undefined' && (
-  // launchedInStandalone removed
-  );
   const { canPrompt, isInstalled, promptInstall } = usePwaInstallPrompt();
   const [installPending, setInstallPending] = useState(false);
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
