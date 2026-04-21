@@ -58,7 +58,8 @@ export const DiscoverSearchPage = () => {
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 5;
+  // Show 6 cards per page on all screens (mobile, laptop, etc.)
+  const PAGE_SIZE = 6;
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -170,7 +171,7 @@ export const DiscoverSearchPage = () => {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {paginatedListings.map((listing) => (
                 <ListViewCard
                   key={listing.id}
@@ -180,9 +181,12 @@ export const DiscoverSearchPage = () => {
                 />
               ))}
             </div>
-            {/* Pagination Controls */}
+            {/* Pagination Controls - always visible, sticky on mobile */}
             {totalPages > 1 && (
-              <div className="flex justify-center items-center gap-2 mt-8">
+              <div
+                className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 border-t border-stone-200 py-3 flex justify-center items-center gap-2 shadow-lg md:static md:bg-transparent md:border-0 md:py-0 md:shadow-none mt-8"
+                style={{ pointerEvents: 'auto' }}
+              >
                 <button
                   className="px-3 py-2 rounded border bg-white text-stone-700 disabled:opacity-50"
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
