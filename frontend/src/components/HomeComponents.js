@@ -934,12 +934,12 @@ export const PropertyCard = memo(({ listing, showActions = true, contextCategory
 
   const formatPrice = (price, type) => {
     if (price >= 10000000) {
-      return `G�${(price / 10000000).toFixed(2)} Cr`;
+      return `₹${(price / 10000000).toFixed(2)} Cr`;
     } else if (price >= 100000) {
-      return `G�${(price / 100000).toFixed(2)} L`;
+      return `₹${(price / 100000).toFixed(2)} L`;
     }
     const monthlySuffix = showTransactionType && type === 'rent' ? '/mo' : '';
-    return `G�${price?.toLocaleString('en-IN')}${monthlySuffix}`;
+    return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
   return (
