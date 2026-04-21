@@ -56,6 +56,9 @@ export const DiscoverSearchPage = () => {
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || null);
   const [selectedCity, setSelectedCity] = useState(searchParams.get('city') || 'Surat');
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 5;
 
   const fetchListings = useCallback(async () => {
     setLoading(true);
@@ -66,6 +69,7 @@ export const DiscoverSearchPage = () => {
 
       const response = await listingsAPI.getAll(params);
       setListings(response?.data?.listings || []);
+      setCurrentPage(1); // Reset to page 1 on new search/filter
     } catch (error) {
       console.error('Failed to fetch listings:', error);
     } finally {
@@ -81,6 +85,10 @@ export const DiscoverSearchPage = () => {
     e.preventDefault();
     fetchListings();
   };
+
+  // Pagination logic
+  const totalPages = Math.ceil(listings.length / PAGE_SIZE);
+  const paginatedListings = listings.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const formatPrice = (price, type, category) => {
     if (price >= 10000000) return `₹${(price / 10000000).toFixed(2)} Cr`;
@@ -161,16 +169,49 @@ export const DiscoverSearchPage = () => {
             <p className="text-muted-foreground">Try adjusting your search filters.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {listings.map((listing) => (
-              <ListViewCard
-                key={listing.id}
-                listing={listing}
-                formatPrice={formatPrice}
-                contextCategory={selectedCategory}
-              />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedListings.map((listing) => (
+                <ListViewCard
+                  key={listing.id}
+                  listing={listing}
+                  formatPrice={formatPrice}
+                  contextCategory={selectedCategory}
+                />
+              ))}
+            </div>
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 mt-8">
+                <button
+                  className="px-3 py-2 rounded border bg-white text-stone-700 disabled:opacity-50"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  aria-label="Previous page"
+                >
+                  Prev
+                </button>
+                {Array.from({ length: totalPages }, (_, i) => (
+                  <button
+                    key={i + 1}
+                    className={`px-3 py-2 rounded border ${currentPage === i + 1 ? 'bg-primary text-white border-primary' : 'bg-white text-stone-700'}`}
+                    onClick={() => setCurrentPage(i + 1)}
+                    aria-current={currentPage === i + 1 ? 'page' : undefined}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button
+                  className="px-3 py-2 rounded border bg-white text-stone-700 disabled:opacity-50"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  aria-label="Next page"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
