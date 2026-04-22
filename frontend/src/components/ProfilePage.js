@@ -10,6 +10,7 @@ import { Save, Image, Loader2 } from 'lucide-react';
 import OptimizedImage from './OptimizedImage';
 
 export default function ProfilePage() {
+  const { user, updateProfile } = useAuth();
   const [saving, setSaving] = useState(false);
   const [selectedProfileImageFile, setSelectedProfileImageFile] = useState(null);
   const [selectedProfileImagePreview, setSelectedProfileImagePreview] = useState('');
