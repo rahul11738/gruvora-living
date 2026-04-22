@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Header } from './Layout';
@@ -7,12 +6,10 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { toast } from 'sonner';
-import { User, Save, Image, Loader2 } from 'lucide-react';
+import { Save, Image, Loader2 } from 'lucide-react';
 import OptimizedImage from './OptimizedImage';
 
 export default function ProfilePage() {
-  const { user, updateProfile } = useAuth();
-  const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [selectedProfileImageFile, setSelectedProfileImageFile] = useState(null);
   const [selectedProfileImagePreview, setSelectedProfileImagePreview] = useState('');

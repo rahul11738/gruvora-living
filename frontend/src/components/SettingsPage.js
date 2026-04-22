@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import api, { authAPI, listingsAPI } from '../lib/api';
+import { authAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Header } from './Layout';
 import { Button } from './ui/button';
@@ -29,8 +29,8 @@ export const SettingsPage = () => {
   const { user, updateProfile, isOwner } = useAuth();
   const [activeTab, setActiveTab] = useState('account');
   const [saving, setSaving] = useState(false);
-  const [loadingListings, setLoadingListings] = useState(false);
-  const [ownedListings, setOwnedListings] = useState([]);
+  const [loadingListings] = useState(false);
+  const [ownedListings] = useState([]);
 
   const [accountForm, setAccountForm] = useState({
     email: '',
