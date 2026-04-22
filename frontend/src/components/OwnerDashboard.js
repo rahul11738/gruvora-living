@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FixedSizeList as List } from 'react-window';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { ownerAPI, listingsAPI, bookingsAPI, boostAPI, messagesAPI } from '../lib/api';
+import { ownerAPI, listingsAPI, bookingsAPI, boostAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import {
@@ -907,7 +907,6 @@ const AnalyticsSection = ({ stats, listings }) => {
 const LeadsSection = ({ leads, subscription }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [activeChatLead, setActiveChatLead] = useState(null);
 
   const handleCall = (phone) => {
     if (!phone || phone === '98XXXXXXXX' || phone === 'hidden') return;
