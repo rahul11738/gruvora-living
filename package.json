@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "lucide-react": "^1.8.0"
+    "lucide-react": "^1.8.0",
+    "react-helmet-async": "^3.0.0"
   }
 }

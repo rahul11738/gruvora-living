@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { listingsAPI } from '../lib/api';
 import { Header } from './Layout';
+import SeoHead from './SeoHead';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import {
@@ -100,6 +101,35 @@ export const DiscoverSearchPage = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="discover-search-page">
+      <SeoHead
+        title="Discover Properties – Gruvora Living"
+        description="Browse and search premium rental properties and stays in Gujarat and across India on Gruvora Living. Filter by city, category, and more."
+        canonical="https://gruvora.com/discover"
+        keywords={["Gruvora", "discover", "property search", "rental listings", "Gujarat", "India"]}
+        og={[{
+          property: "og:title",
+          content: "Discover Properties – Gruvora Living"
+        }, {
+          property: "og:description",
+          content: "Browse and search premium rental properties and stays in Gujarat and across India on Gruvora Living. Filter by city, category, and more."
+        }, {
+          property: "og:url",
+          content: "https://gruvora.com/discover"
+        }, {
+          property: "og:type",
+          content: "website"
+        }]}
+        twitter={[{
+          name: "twitter:card",
+          content: "summary_large_image"
+        }, {
+          name: "twitter:title",
+          content: "Discover Properties – Gruvora Living"
+        }, {
+          name: "twitter:description",
+          content: "Browse and search premium rental properties and stays in Gujarat and across India on Gruvora Living. Filter by city, category, and more."
+        }]}
+      />
       <Header />
 
       <div className="bg-white border-b sticky top-16 z-20">
