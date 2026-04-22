@@ -46,6 +46,7 @@ const OwnerDashboard = lazyWithRetry(() => import("./components/OwnerDashboard")
 const OwnerProfilePage = lazyWithRetry(() => import("./components/OwnerProfilePage").then((m) => ({ default: m.OwnerProfilePage })));
 const DiscoverSearchPage = lazyWithRetry(() => import("./components/DiscoverSearchPage").then((m) => ({ default: m.DiscoverSearchPage })));
 const SettingsPage = lazyWithRetry(() => import("./components/SettingsPage"));
+const ProfilePage = lazyWithRetry(() => import("./components/ProfilePage"));
 const ChatPage = lazyWithRetry(() => import("./components/ChatPage.jsx"));
 const NotificationsPage = lazyWithRetry(() => import("./components/NotificationsPage.jsx"));
 const AdminDashboard = lazyWithRetry(() => import("./components/AdminDashboard").then((m) => ({ default: m.AdminDashboard })));
@@ -145,6 +146,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           }
         />

@@ -27,7 +27,7 @@ import {
   AlertTriangle, Activity, BarChart3, Mail, Phone, MapPin,
   IndianRupee, TrendingUp, CreditCard, Settings, Save, Video, Menu, X,
 } from 'lucide-react';
-import gruvoraLogo from '../assets/gruvoraLogo.jpeg';
+import BrandedLogo from './BrandedLogo';
 import OptimizedImage from './OptimizedImage';
 
 const CATEGORY_ICONS = {
@@ -402,13 +402,7 @@ export const AdminDashboard = () => {
     <div className="min-h-screen bg-stone-100 overflow-x-hidden" data-testid="admin-dashboard-v2">
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between gap-3 px-4 py-3 border-b border-stone-200 bg-stone-100/95 backdrop-blur">
         <Link to="/" className="flex items-center gap-2 min-w-0">
-          <OptimizedImage
-            publicId={gruvoraLogo}
-            alt="Gruvora"
-            className="h-8 w-auto max-w-[120px] object-contain rounded-md"
-            width={120}
-            sizes="120px"
-          />
+          <BrandedLogo variant="compact" />
           <span className="text-xs font-medium text-stone-500 truncate">Admin Panel</span>
         </Link>
         <button
@@ -425,13 +419,7 @@ export const AdminDashboard = () => {
         <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-stone-900 text-white shadow-2xl transition-transform duration-200 overflow-y-auto pb-24 lg:pb-0 lg:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="p-6 border-b border-stone-700 relative">
             <Link to="/" className="flex items-center gap-2">
-              <OptimizedImage
-                publicId={gruvoraLogo}
-                alt="Gruvora"
-                className="h-8 w-auto max-w-[140px] object-contain rounded-md"
-                width={140}
-                sizes="140px"
-              />
+              <BrandedLogo variant="compact" />
               <div>
                 <p className="text-xs text-stone-400">Admin Panel</p>
               </div>

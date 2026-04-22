@@ -240,18 +240,24 @@ export const Header = () => {
                         <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
                       </div>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <Link to={getDashboardLink()} className="flex items-center gap-2 rounded-lg px-2 py-2">
-                          <LayoutDashboard className="w-4 h-4" />
-                          Dashboard
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link to="/wishlist" className="flex items-center gap-2 rounded-lg px-2 py-2">
-                          <Heart className="w-4 h-4" />
-                          Wishlist
-                        </Link>
-                      </DropdownMenuItem>
+                       <DropdownMenuItem asChild>
+                         <Link to={getDashboardLink()} className="flex items-center gap-2 rounded-lg px-2 py-2">
+                           <LayoutDashboard className="w-4 h-4" />
+                           Dashboard
+                         </Link>
+                       </DropdownMenuItem>
+                       <DropdownMenuItem asChild>
+                         <Link to="/profile" className="flex items-center gap-2 rounded-lg px-2 py-2">
+                           <User className="w-4 h-4" />
+                           Profile
+                         </Link>
+                       </DropdownMenuItem>
+                       <DropdownMenuItem asChild>
+                         <Link to="/wishlist" className="flex items-center gap-2 rounded-lg px-2 py-2">
+                           <Heart className="w-4 h-4" />
+                           Wishlist
+                         </Link>
+                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
                         <Link to="/settings" className="flex items-center gap-2 rounded-lg px-2 py-2">
                           <Settings className="w-4 h-4" />
