@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset
+  xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9
+  http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- ===================================================== -->
+  <!-- GRUVORA LIVING - PRODUCTION READY SAAS SITEMAP -->
+  <!-- Public Indexable URLs Only -->
+  <!-- Protected URLs (dashboard/admin/settings/chat etc.) excluded -->
+  <!-- Dynamic listing/owner URLs should be generated from backend -->
+  <!-- ===================================================== -->
+
+  <!-- ========================= -->
+  <!-- CORE BRAND PAGES -->
+  <!-- ========================= -->
+
+  <url>
+    <loc>https://gruvora.com/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/discover</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/search</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.95</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/reels</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <!-- ========================= -->
+  <!-- AUTH PAGES -->
+  <!-- ========================= -->
+
+  <url>
+    <loc>https://gruvora.com/login</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.70</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/register</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.75</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/verify-email</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.50</priority>
+  </url>
+
+  <!-- ========================= -->
+  <!-- CATEGORY LANDING PAGES -->
+  <!-- ========================= -->
+
+  <url>
+    <loc>https://gruvora.com/category/home</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/category/business</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/category/stay</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/category/event</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/category/services</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.90</priority>
+  </url>
+
+  <!-- ========================= -->
+  <!-- TRUST + COMPANY PAGES -->
+  <!-- ========================= -->
+
+  <url>
+    <loc>https://gruvora.com/about-us</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.80</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/privacy-policy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.65</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/terms-conditions</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.65</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/refund-cancellation-policy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.60</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/disclaimer</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/user-verification-policy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+  </url>
+
+  <url>
+    <loc>https://gruvora.com/community-guidelines</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+  </url>
+
+  <!-- ========================= -->
+  <!-- DYNAMIC SEO PAGES -->
+  <!-- ========================= -->
+
+  <!-- IMPORTANT:
+  These URLs should NOT remain manual in real SaaS production.
+
+  Must be auto-generated dynamically from database using backend cron/build process.
+
+  Dynamic URLs include:
+
+  1. Individual Property Listings
+     /listing/:id
+
+  Example:
+  https://gruvora.com/listing/65fd71ab29f9
+
+  2. Owner Public Profiles
+     /owner/:id
+
+  Example:
+  https://gruvora.com/owner/65ad921bb8e2
+
+  3. Future Blog Pages
+     /blog/:slug
+
+  4. Future City Landing Pages
+     /city/:name
+
+  5. Future Verified Business Profiles
+     /business/:id
+
+  Production Rule:
+  Backend should generate dynamic sitemap automatically
+  using MongoDB data and refresh periodically.
+
+  Recommended:
+  Split into:
+  - sitemap.xml
+  - sitemap-listings.xml
+  - sitemap-owners.xml
+  - sitemap-blog.xml
+
+  for better scalability and Google crawl efficiency.
+  -->
+
+</urlset>

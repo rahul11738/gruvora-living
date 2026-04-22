@@ -128,7 +128,6 @@ app.add_middleware(GZipMiddleware, minimum_size=1024)
 async def root_probe():
     return {"status": "ok", "service": "gharsetu-api"}
 
-
 @app.get("/health")
 async def root_health_probe():
     return {
