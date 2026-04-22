@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FixedSizeList as List } from 'react-window';
 import { useAuth } from '../context/AuthContext';
 import { useSubscription } from '../context/SubscriptionContext';
-import { ownerAPI, listingsAPI, bookingsAPI, boostAPI } from '../lib/api';
+import { ownerAPI, listingsAPI, bookingsAPI, boostAPI, messagesAPI } from '../lib/api';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import {
@@ -218,9 +218,9 @@ export const OwnerDashboard = () => {
          </button>
        </div>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <aside className={`fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white/95 backdrop-blur border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 shadow-2xl overflow-y-auto pb-24 lg:pb-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+<div className="flex w-full min-h-screen">
+         {/* Sidebar - static on desktop, slides on mobile */}
+         <aside className={`fixed lg:static inset-y-0 left-0 w-72 max-w-[85vw] bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 lg:min-h-screen lg:overflow-y-auto pb-24 lg:pb-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="p-6 min-h-full relative flex flex-col">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
               <BrandedLogo variant="compact" />
@@ -325,8 +325,8 @@ export const OwnerDashboard = () => {
           </div>
         </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 min-w-0 p-4 lg:p-8 pb-24 lg:pb-8">
+        {/* Main Content - with left margin to account for sidebar on desktop */}
+        <main className="flex-1 min-w-0 lg:ml-64 p-4 lg:p-8 pb-24 lg:pb-8 w-full">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -905,31 +905,28 @@ const AnalyticsSection = ({ stats, listings }) => {
 
 // Leads Section Component
 const LeadsSection = ({ leads, subscription }) => {
-  const hasSubscription = subscription?.model === 'commission' || subscription?.has_subscription;
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [activeChatLead, setActiveChatLead] = useState(null);
+
+  const handleCall = (phone) => {
+    if (!phone || phone === '98XXXXXXXX' || phone === 'hidden') return;
+    const cleanPhone = phone.replace(/[^\d+]/g, '').replace(/\s/g, '');
+    window.location.href = `tel:+91${cleanPhone}`;
+  };
+
+  const handleEmail = (email) => {
+    if (!email || email === 'xxx@email.com' || email === 'hidden@email.com') return;
+    window.location.href = `mailto:${email}?subject=Inquiry about your listing`;
+  };
+
+  const handleChat = (lead) => {
+    if (!lead?.id || !user?.id) return;
+    navigate(`/chat?leadId=${lead.id}&userId=${lead.customer_id || lead.id}&name=${encodeURIComponent(lead.customer_name)}`);
+  };
 
   return (
     <div className="space-y-6" data-testid="leads-section">
-      {!hasSubscription && (
-        <Card className="border-yellow-200 bg-yellow-50">
-          <CardContent className="pt-6">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <Crown className="w-5 h-5 text-yellow-600" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-yellow-800">Upgrade to Premium</h3>
-                <p className="text-sm text-yellow-700 mt-1">
-                  Subscribe to see full contact details of leads. Phone numbers are partially hidden.
-                </p>
-                <Link to="/owner/dashboard" onClick={() => { }} className="text-sm text-yellow-700 underline mt-2 inline-block">
-                  View subscription plans →
-                </Link>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
        <Card>
          <CardHeader>
            <CardTitle className="flex items-center gap-2">
@@ -937,7 +934,7 @@ const LeadsSection = ({ leads, subscription }) => {
              Customer Inquiries
            </CardTitle>
            <CardDescription>
-             {leads.length} leads received
+             {leads.length} leads received - Full contact details visible
            </CardDescription>
          </CardHeader>
          <CardContent>
@@ -975,21 +972,33 @@ const LeadsSection = ({ leads, subscription }) => {
                    </div>
 
                    <div className="mt-3 md:mt-4 flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
-                     <div className="flex items-center gap-2 text-xs md:text-sm">
-                       <Phone className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
-                       <span className={hasSubscription ? '' : 'blur-sm select-none'}>
-                         {hasSubscription ? lead.customer_phone : '98XXXXXXXX'}
-                       </span>
-                     </div>
-                     <div className="flex items-center gap-2 text-xs md:text-sm">
-                       <Mail className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
-                       <span className={hasSubscription ? '' : 'blur-sm select-none'}>
-                         {hasSubscription ? lead.customer_email : 'xxx@email.com'}
-                       </span>
-                     </div>
+                     <a 
+                       href={`tel:+91${(lead.customer_phone || '').replace(/[^\d]/g, '')}`}
+                       className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                       onClick={(e) => {
+                         if (!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden') {
+                           e.preventDefault();
+                         }
+                       }}
+                     >
+                       <Phone className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                       <span>{lead.customer_phone || 'No phone'}</span>
+                     </a>
+                     <a 
+                       href={`mailto:${lead.customer_email}?subject=Inquiry about ${encodeURIComponent(lead.listing_title || 'your listing')}`}
+                       className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                       onClick={(e) => {
+                         if (!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com') {
+                           e.preventDefault();
+                         }
+                       }}
+                     >
+                       <Mail className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                       <span>{lead.customer_email || 'No email'}</span>
+                     </a>
                      <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground ml-auto">
                        <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                       {new Date(lead.created_at).toLocaleDateString()}
+                       {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : 'N/A'}
                      </div>
                    </div>
 
@@ -997,7 +1006,8 @@ const LeadsSection = ({ leads, subscription }) => {
                      <Button
                        size="sm"
                        className="btn-primary w-full md:w-auto"
-                       disabled={!hasSubscription}
+                       onClick={() => handleCall(lead.customer_phone)}
+                       disabled={!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden'}
                      >
                        <Phone className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
                        Call
@@ -1005,8 +1015,9 @@ const LeadsSection = ({ leads, subscription }) => {
                      <Button
                        size="sm"
                        variant="outline"
-                       disabled={!hasSubscription}
                        className="w-full md:w-auto"
+                       onClick={() => handleEmail(lead.customer_email)}
+                       disabled={!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com'}
                      >
                        <Mail className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
                        Email
@@ -1015,6 +1026,7 @@ const LeadsSection = ({ leads, subscription }) => {
                        size="sm"
                        variant="outline"
                        className="w-full md:w-auto"
+                       onClick={() => handleChat(lead)}
                      >
                        <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
                        Chat
@@ -1026,7 +1038,7 @@ const LeadsSection = ({ leads, subscription }) => {
            )}
          </CardContent>
        </Card>
-    </div>
+     </div>
   );
 };
 

@@ -107,8 +107,18 @@ export const AdminDashboard = () => {
     try {
       const res = await adminAPI.getStats();
       setStats(res.data);
-    } catch {
-      toast.error('Failed to load stats');
+    } catch (err) {
+      console.error('Failed to load admin stats:', err);
+      // Set fallback empty stats to prevent infinite loading
+      setStats({
+        total_users: 0,
+        total_owners: 0,
+        total_listings: 0,
+        pending_listings: 0,
+        pending_aadhar: 0,
+        owner_type_breakdown: {},
+      });
+      toast.error(err?.response?.data?.detail || 'Failed to load stats');
     } finally {
       setLoading(false);
     }
@@ -416,18 +426,18 @@ export const AdminDashboard = () => {
       </div>
 
       <div className="flex min-w-0">
-        <aside className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-stone-900 text-white shadow-2xl transition-transform duration-200 overflow-y-auto pb-24 lg:pb-0 lg:w-64 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-          <div className="p-6 border-b border-stone-700 relative">
+        <aside className={`fixed lg:static inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col bg-white border-r border-stone-200 shadow-lg transition-transform duration-200 overflow-y-auto pb-24 lg:pb-0 lg:w-64 lg:min-h-screen ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+          <div className="p-6 border-b border-stone-200 relative">
             <Link to="/" className="flex items-center gap-2">
               <BrandedLogo variant="compact" />
               <div>
-                <p className="text-xs text-stone-400">Admin Panel</p>
+                <p className="text-xs text-stone-500">Admin Panel</p>
               </div>
             </Link>
             <button
               type="button"
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden absolute top-4 right-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-700 text-stone-300 hover:text-white hover:bg-stone-800"
+              className="lg:hidden absolute top-4 right-4 inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 text-stone-500 hover:text-stone-700 hover:bg-stone-100"
               aria-label="Close admin navigation"
             >
               <X className="h-4 w-4" />
@@ -443,7 +453,7 @@ export const AdminDashboard = () => {
                   onClick={() => handleTabSelect(tab.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${activeTab === tab.id
                     ? 'bg-primary text-white'
-                    : 'text-stone-400 hover:bg-stone-800 hover:text-white'
+                    : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900'
                     }`}
                 >
                   <Icon className="w-4 h-4 flex-shrink-0" />
@@ -458,9 +468,9 @@ export const AdminDashboard = () => {
             })}
           </nav>
 
-          <div className="p-4 border-t border-stone-700">
-            <p className="text-xs text-stone-400 truncate mb-2">{user?.email}</p>
-            <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-stone-400 hover:text-red-400 text-sm rounded-lg hover:bg-stone-800 transition-colors">
+          <div className="p-4 border-t border-stone-200">
+            <p className="text-xs text-stone-500 truncate mb-2">{user?.email}</p>
+            <button onClick={handleLogout} className="w-full flex items-center gap-2 px-3 py-2 text-stone-500 hover:text-red-600 text-sm rounded-lg hover:bg-stone-100 transition-colors">
               <LogOut className="w-4 h-4" />
               Logout
             </button>

@@ -49,7 +49,10 @@ const isBackendOutageActive = () => Date.now() < backendOutageState.cooldownUnti
 const shouldBypassOutageGuard = (config = {}) => {
   const url = String(config?.url || '').toLowerCase();
   if (!url) return false;
-  return url.includes('/health');
+  // Always bypass for health checks and critical auth endpoints
+  if (url.includes('/health')) return true;
+  if (url.includes('/auth/login') || url.includes('/auth/change-password') || url.includes('/auth/refresh') || url.includes('/auth/me')) return true;
+  return false;
 };
 
 const markBackendOutage = (reason = 'upstream-502') => {
@@ -253,7 +256,8 @@ api.interceptors.response.use(
     const originalRequest = error.config || {};
 
     const status = error.response?.status;
-    const isTransientGatewayError = !status || status === 502 || status === 503 || status === 504;
+    // Only mark as outage for actual gateway errors (502/503/504), not for auth failures (400/401/403/404/422)
+    const isTransientGatewayError = status === 502 || status === 503 || status === 504;
     if (isTransientGatewayError) {
       markBackendOutage(status ? `http-${status}` : 'network-unreachable');
     }
