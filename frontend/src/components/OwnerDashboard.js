@@ -578,7 +578,7 @@ export const OwnerDashboard = () => {
 
           {/* Subscription Tab */}
           {activeTab === 'subscription' && showSubscriptionTab && (
-            <div className="max-w-lg">
+            <div className="max-w-6xl mx-auto w-full">
               <SubscriptionCard onPaymentSuccess={fetchStatus} />
             </div>
           )}

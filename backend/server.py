@@ -18,8 +18,8 @@ from fastapi import (
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import RedirectResponse
+from starlette.responses import RedirectResponse, JSONResponse
+from starlette.datastructures import MutableHeaders
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -116,8 +116,16 @@ async def lifespan(_: FastAPI):
 
 
 # Create the main app
-class CanonicalRedirectMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+class CanonicalRedirectMiddleware:
+    """Pure ASGI middleware for canonical URL redirects (www to non-www, trailing slashes)."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        request = Request(scope, receive)
         url = request.url
         host = url.hostname or ""
         path = url.path or "/"
@@ -126,13 +134,15 @@ class CanonicalRedirectMiddleware(BaseHTTPMiddleware):
         # 1. Redirect www to non-www
         if host.startswith("www."):
             new_url = str(url).replace("//www.", "//", 1)
-            return RedirectResponse(new_url, status_code=301)
+            response = RedirectResponse(new_url, status_code=301)
+            return await response(scope, receive, send)
 
         # 2. Remove trailing slash (except root)
         if path != "/" and path.endswith("/"):
             new_path = path.rstrip("/")
             new_url = str(url.replace(path=new_path))
-            return RedirectResponse(new_url, status_code=301)
+            response = RedirectResponse(new_url, status_code=301)
+            return await response(scope, receive, send)
 
         # 3. Remove ?utm_* and other tracking params
         if query:
@@ -141,9 +151,10 @@ class CanonicalRedirectMiddleware(BaseHTTPMiddleware):
             if len(params) != len(list(parse_qsl(query))):
                 new_query = urlencode(params)
                 new_url = str(url.replace(query=new_query))
-                return RedirectResponse(new_url, status_code=301)
+                response = RedirectResponse(new_url, status_code=301)
+                return await response(scope, receive, send)
 
-        return await call_next(request)
+        await self.app(scope, receive, send)
 
 app = FastAPI(
     title="GharSetu API",
@@ -194,11 +205,12 @@ class UserRole(str, Enum):
 class SubscriptionPlan(str, Enum):
     BASIC = "basic"
     PRO = "pro"
-    UNLIMITED = "unlimited"  # For Property owners (₹999)
+    ADVANCED = "advanced"
+    UNLIMITED = "unlimited"  # For backward compatibility
     # Service Provider Specific Plans
-    SERVICE_BASIC = "service_basic"  # ₹50
-    SERVICE_VERIFIED = "service_verified"  # ₹99
-    SERVICE_TOP = "service_top"  # ₹149
+    SERVICE_BASIC = "service_basic"
+    SERVICE_VERIFIED = "service_verified"
+    SERVICE_TOP = "service_top"
 
 
 class ListingCategory(str, Enum):
@@ -1339,15 +1351,22 @@ VALID_COUPONS = {
     "GRUVORA5M": {"free_months": 5, "description": "First 5 months free"},
     "GRUVORA5": {"free_months": 5, "description": "Welcome Offer: 5 Months Free"},
 }
-SUBSCRIPTION_AMOUNT_PAISE = 99900  # Default ₹999/month (Property)
-STAY_EVENT_BASIC_SUB_PAISE = 19900  # ₹199/month
-STAY_EVENT_PRO_SUB_PAISE = 49900  # ₹499/month
-SERVICE_BASIC_SUB_PAISE = 5000  # ₹50/month
-SERVICE_VERIFIED_SUB_PAISE = 9900  # ₹99/month
-SERVICE_TOP_SUB_PAISE = 14900  # ₹149/month
-PROPERTY_LISTING_FEE_PAISE = 19900  # Default ₹199 per property
-COMMISSION_RATE = 0.02  # 2% per successful booking
-BASIC_PLAN_LISTING_LIMIT = 5
+# ============ SUBSCRIPTION CONSTANTS ============
+PLAN_PRICES = {
+    SubscriptionPlan.BASIC: 19900,
+    SubscriptionPlan.PRO: 99900,
+    SubscriptionPlan.ADVANCED: 199900,
+}
+
+PLAN_LIMITS = {
+    SubscriptionPlan.BASIC: {"listings": 1, "reels": 1},
+    SubscriptionPlan.PRO: {"listings": 5, "reels": 5},
+    SubscriptionPlan.ADVANCED: {"listings": 10, "reels": 10},
+}
+
+SUBSCRIPTION_AMOUNT_PAISE = 99900  # Fallback
+PROPERTY_LISTING_FEE_PAISE = 19900  # Default for non-subscribers
+COMMISSION_RATE = 0.02  # 2% Platform Fee
 BILLING_GRACE_DAYS = 5
 BLOCK_DURATION_DAYS = 7
 
@@ -1358,6 +1377,50 @@ def _add_months(source_date: datetime, months: int) -> datetime:
     month = month_index % 12 + 1
     day = min(source_date.day, calendar.monthrange(year, month)[1])
     return source_date.replace(year=year, month=month, day=day)
+
+
+def get_start_of_week() -> datetime:
+    now = datetime.now(timezone.utc)
+    monday = now - timedelta(days=now.weekday())
+    return monday.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def check_weekly_quota(user: dict, action_type: str) -> bool:
+    """
+    Checks if a user has reached their weekly quota for listings or reels.
+    action_type: 'listings' or 'reels'
+    """
+    user_id = user.get("id")
+    plan_val = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
+    
+    # Try to map plan_val to SubscriptionPlan enum
+    try:
+        plan = SubscriptionPlan(plan_val)
+    except ValueError:
+        plan = SubscriptionPlan.BASIC
+
+    limit = PLAN_LIMITS.get(plan, PLAN_LIMITS[SubscriptionPlan.BASIC]).get(action_type, 1)
+    
+    start_of_week = get_start_of_week().isoformat()
+    
+    if action_type == "listings":
+        # Only count Home and Business listings for the quota as per user request
+        count = await db.listings.count_documents({
+            "owner_id": user_id,
+            "category": {"$in": [ListingCategory.HOME.value, ListingCategory.BUSINESS.value]},
+            "created_at": {"$gte": start_of_week},
+            "is_deleted": {"$ne": True}
+        })
+    else: # reels
+        count = await db.videos.count_documents({
+            "owner_id": user_id,
+            "created_at": {"$gte": start_of_week},
+            "is_deleted": {"$ne": True}
+        })
+        
+    if count >= limit:
+        return False, limit
+    return True, limit
 
 
 def compute_next_billing_date(from_date: datetime) -> datetime:
@@ -1390,18 +1453,20 @@ def build_subscription_init_doc(
         )
 
         doc = {
+            "subscription": "trial",
             "subscription_model": "subscription",
             "subscription_status": "trial",
+            "subscription_plan": SubscriptionPlan.BASIC.value,
             "trial_months_remaining": free_months,
             "trial_end_date": trial_end.isoformat(),
-            "subscription_start_date": None,
-            "next_billing_date": next_billing.isoformat(),
+            "subscription_start_date": now.isoformat(),
+            "next_billing_date": trial_end.isoformat(),
             "last_payment_date": None,
             "auto_renew": True,
             "coupon_used": validated_coupon,
             "block_status": None,
             "block_until": None,
-            "subscription_amount_paise": SUBSCRIPTION_AMOUNT_PAISE,
+            "subscription_amount_paise": PLAN_PRICES[SubscriptionPlan.BASIC],
         }
 
         # Add commission fields for hybrid roles
@@ -1431,6 +1496,7 @@ def build_subscription_init_doc(
     return {
         "subscription_model": "subscription",
         "subscription_status": "pending",
+        "subscription_plan": SubscriptionPlan.BASIC.value,
         "trial_months_remaining": 0,
         "trial_end_date": None,
         "subscription_start_date": None,
@@ -1442,7 +1508,7 @@ def build_subscription_init_doc(
         "coupon_used": None,
         "block_status": None,
         "block_until": None,
-        "subscription_amount_paise": SUBSCRIPTION_AMOUNT_PAISE,
+        "subscription_amount_paise": PLAN_PRICES[SubscriptionPlan.BASIC],
     }
 
 
@@ -1848,7 +1914,7 @@ async def register_owner(owner: OwnerRegister):
     token = create_token(user_id, owner.role)
 
     success_msg = "Owner registration successful. Pending Aadhaar verification."
-    if owner.role == UserRole.PROPERTY_OWNER.value:
+    if owner.role in SUBSCRIPTION_ROLES:
         success_msg = "Welcome! You have received 5 months of free subscription. Payment will start after the trial period."
 
     return {
@@ -2067,6 +2133,15 @@ async def create_listing(
     category = str(payload.get("category") or "").strip()
     if not category:
         raise HTTPException(status_code=422, detail="category is required")
+
+    # Quota Enforcement for Home & Business
+    if category in [ListingCategory.HOME.value, ListingCategory.BUSINESS.value]:
+        is_allowed, limit = await check_weekly_quota(user, "listings")
+        if not is_allowed:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Weekly listing quota reached ({limit}). Upgrade your plan to list more property."
+            )
 
     # Backward compatibility: old clients send flat fields instead of nested pricing/media blocks.
     if "price" in payload and "pricing" not in payload:
@@ -4448,6 +4523,14 @@ async def upload_video(
     ensure_category_allowed_for_role(
         user.get("role"), parsed_category, detail_prefix="Reel category"
     )
+
+    # Quota Enforcement for Reels
+    is_allowed, limit = await check_weekly_quota(user, "reels")
+    if not is_allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Weekly reel quota reached ({limit}). Upgrade your plan to post more reels."
+        )
 
     if listing_id:
         listing = await db.listings.find_one(
@@ -9993,27 +10076,74 @@ async def create_subscription_order(
         )
         raise HTTPException(status_code=500, detail="Payment gateway not configured")
 
-    # Fetch dynamic subscription amount from settings
-    settings = await db.settings.find_one({"id": "platform_config"})
-    subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
-
     plan = request.plan.lower()
-    if plan == SubscriptionPlan.BASIC.value:
-        subscription_amount = STAY_EVENT_BASIC_SUB_PAISE
-    elif plan == SubscriptionPlan.PRO.value:
-        subscription_amount = STAY_EVENT_PRO_SUB_PAISE
-    elif plan == SubscriptionPlan.UNLIMITED.value:
-        subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
-    elif plan == SubscriptionPlan.SERVICE_BASIC.value:
-        subscription_amount = SERVICE_BASIC_SUB_PAISE
-    elif plan == SubscriptionPlan.SERVICE_VERIFIED.value:
-        subscription_amount = SERVICE_VERIFIED_SUB_PAISE
-    elif plan == SubscriptionPlan.SERVICE_TOP.value:
-        subscription_amount = SERVICE_TOP_SUB_PAISE
+    # Determine amount based on new PLAN_PRICES
+    try:
+        requested_plan = SubscriptionPlan(plan)
+    except ValueError:
+        requested_plan = SubscriptionPlan.BASIC
 
-    if settings and "global_config" in settings:
-        # Fallback to global if specific plan amounts aren't in settings
-        pass
+    subscription_amount = PLAN_PRICES.get(requested_plan, PLAN_PRICES[SubscriptionPlan.BASIC])
+
+    # Idempotency: reuse existing pending order from last 5 mins
+    five_mins_ago = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+    existing_pending = await db.subscriptions.find_one({
+        "user_id": user["id"],
+        "plan": plan,
+        "status": "pending",
+        "created_at": {"$gte": five_mins_ago}
+    })
+
+    if existing_pending:
+        logger.info(f"Reusing existing pending subscription order: {existing_pending['razorpay_order_id']}")
+        return {
+            "order_id": existing_pending["razorpay_order_id"],
+            "amount": existing_pending["amount"],
+            "currency": "INR",
+            "key_id": RAZORPAY_KEY_ID,
+            "subscription_id": existing_pending["id"],
+            "reused": True,
+            "plan_details": {
+                "name": f"{plan.capitalize()} Subscription",
+                "price": f"₹{existing_pending['amount'] // 100}/month",
+                "features": [
+                    f"{PLAN_LIMITS[requested_plan]['listings']} listings per week",
+                    f"{PLAN_LIMITS[requested_plan]['reels']} reels per week",
+                    f"{int(COMMISSION_RATE*100)}% platform fee",
+                    "Verified badge",
+                    "Direct customer inquiries",
+                ],
+            },
+        }
+
+    # Idempotency Check: Reuse existing pending order if created recently (< 10 mins)
+    existing_pending = await db.subscriptions.find_one({
+        "user_id": user["id"],
+        "plan": plan,
+        "status": "pending",
+        "created_at": {"$gte": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}
+    })
+
+    if existing_pending:
+        logger.info(f"Subscription order idempotency: Reusing pending order {existing_pending['razorpay_order_id']} for user {user['id']}")
+        return {
+            "order_id": existing_pending["razorpay_order_id"],
+            "amount": existing_pending["amount"],
+            "currency": "INR",
+            "key_id": RAZORPAY_KEY_ID,
+            "subscription_id": existing_pending["id"],
+            "plan_details": {
+                "name": f"{plan.capitalize()} Subscription",
+                "price": f"₹{existing_pending['amount'] // 100}/month",
+                "features": [
+                    f"{PLAN_LIMITS.get(SubscriptionPlan(plan), {}).get('listings', 1)} listings per week",
+                    f"{PLAN_LIMITS.get(SubscriptionPlan(plan), {}).get('reels', 1)} reels per week",
+                    "Verified badge",
+                    "Analytics dashboard",
+                    "Direct customer inquiries",
+                ],
+            },
+        }
 
     try:
         order_data = {
@@ -10115,6 +10245,14 @@ async def verify_subscription_payment(
             logger.error(f"PAYMENT VERIFY ERROR: Subscription record not found for order {request.razorpay_order_id}")
             raise HTTPException(status_code=404, detail="Subscription not found")
 
+        if subscription.get("status") == "active":
+            logger.info(f"PAYMENT VERIFY: Subscription already active for order {request.razorpay_order_id}")
+            return {
+                "success": True,
+                "message": "Subscription already verified",
+                "subscription": {**subscription, "_id": str(subscription["_id"]) if "_id" in subscription else None},
+            }
+
         now = datetime.now(timezone.utc)
         expiry_date = compute_next_billing_date(now)
 
@@ -10134,6 +10272,12 @@ async def verify_subscription_payment(
             },
         )
         logger.info(f"PAYMENT VERIFY: Subscription update result: modified={sub_update.modified_count}")
+
+        # DEDUPLICATION: Deactivate any other active subscriptions for this user to prevent multiple invoices
+        await db.subscriptions.update_many(
+            {"user_id": user_id, "status": "active", "id": {"$ne": subscription["id"]}},
+            {"$set": {"status": "expired", "updated_at": now.isoformat()}}
+        )
 
         # Update user subscription status
         plan = subscription.get("plan", SubscriptionPlan.BASIC.value)
@@ -10370,9 +10514,7 @@ async def migrate_owner_subscriptions(
             join_date_str = owner.get("created_at")
             join_date = _parse_iso_datetime(join_date_str) or now
             trial_end = _add_months(join_date, 5)
-            next_billing = trial_end.replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0
-            )
+            next_billing = trial_end
 
             # If trial already expired from their join date, set status to expired so they can pay
             if trial_end <= now:
@@ -10564,12 +10706,12 @@ async def get_subscription_status(
                 user["next_billing_date"] = expiry_date
                 logger.info(f"SELF-HEALING COMPLETE: {email} is now active")
 
-        # 2. Auto-initialize trial if missing
-        if role in SUBSCRIPTION_ROLES and not user.get("subscription_status"):
+        # 2. Auto-initialize trial if missing or pending (Ensure all owners get 5-month trial)
+        if role in SUBSCRIPTION_ROLES and user.get("subscription_status") not in {"active", "trial", "expired", "blocked"}:
             init_doc = build_subscription_init_doc(role=role)
             await db.users.update_one({"id": user_id}, {"$set": init_doc})
             user.update(init_doc)
-            logger.info(f"AUTO-INIT: 5-month trial for {email}")
+            logger.info(f"AUTO-INIT: 5-month trial granted to {email}")
 
         # 3. Role-based Model Determination
         is_hybrid = role in COMMISSION_ROLES and role in SUBSCRIPTION_ROLES
@@ -10603,42 +10745,68 @@ async def get_subscription_status(
 
         # 6. Subscription Details
         if role in SUBSCRIPTION_ROLES:
+            # Fix NameError: ensure 'plan' is defined even if self-healing didn't run
+            plan = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
+            
             settings = await db.settings.find_one({"id": "platform_config"})
             subscription_amount = SUBSCRIPTION_AMOUNT_PAISE
-            basic_fee = STAY_EVENT_BASIC_SUB_PAISE
-            pro_fee = STAY_EVENT_PRO_SUB_PAISE
             
             if settings:
-                global_config = settings.get("global_config", {})
+                global_config = settings.get("global_config") or {}
                 try:
                     subscription_amount = int(float(global_config.get("subscription_fee", 999.0)) * 100)
                 except (ValueError, TypeError):
                     pass
             
-            plan = user.get("subscription_plan", SubscriptionPlan.BASIC.value)
-            plan_amount = basic_fee if plan == SubscriptionPlan.BASIC.value else pro_fee
-            if role == UserRole.PROPERTY_OWNER.value:
-                plan_amount = subscription_amount
+            try:
+                current_plan = SubscriptionPlan(plan)
+                # Map legacy plans to frontend-supported IDs
+                if current_plan == SubscriptionPlan.UNLIMITED:
+                    plan = SubscriptionPlan.ADVANCED.value
+                else:
+                    plan = current_plan.value
+            except ValueError:
+                plan = SubscriptionPlan.BASIC.value
+            
+            # Use the normalized plan for limits and price lookup
+            try:
+                current_plan = SubscriptionPlan(plan)
+            except ValueError:
+                current_plan = SubscriptionPlan.BASIC
+            
+            plan_amount = PLAN_PRICES.get(current_plan, PLAN_PRICES[SubscriptionPlan.BASIC])
 
             trial_days_remaining = None
             trial_end = user.get("trial_end_date")
             if status == "trial" and trial_end:
                 trial_end_dt = _parse_iso_datetime(trial_end)
                 if trial_end_dt:
-                    trial_days_remaining = max(0, (trial_end_dt - datetime.now(timezone.utc)).days)
+                    now = datetime.now(timezone.utc)
+                    diff = (trial_end_dt - now).days
+                    trial_days_remaining = max(0, diff)
+                    
+                    # AUTO-EXPIRE TRIAL: If trial has ended, update DB and local state
+                    if trial_end_dt < now:
+                        logger.info(f"TRIAL EXPIRED: User {email} trial ended on {trial_end_dt}")
+                        status = "expired"
+                        await db.users.update_one(
+                            {"id": user_id},
+                            {"$set": {"subscription": "expired", "subscription_status": "expired"}}
+                        )
+                        response_data["status"] = "expired"
+                        response_data["has_subscription"] = False
 
             response_data.update({
-                "amount_monthly": f"₹{plan_amount // 100}",
-                "trial_end_date": trial_end,
-                "trial_days_remaining": trial_days_remaining,
+                "subscription_plan": plan,
+                "plan_name": "Basic Plan" if plan == "basic" else plan.title().replace("_", " "),
+                "price": f"₹{plan_amount // 100}/month",
                 "next_billing_date": user.get("next_billing_date"),
                 "last_payment_date": user.get("last_payment_date"),
-                "subscription_plan": plan,
-                "price": f"₹{plan_amount // 100}/month",
-                "message": "Active subscription" if has_active_sub else "No active subscription",
+                "auto_renew": user.get("auto_renew", True),
+                "trial_days_remaining": trial_days_remaining,
                 "features": [
-                    "Featured placement" if plan == SubscriptionPlan.PRO.value else "Normal visibility",
-                    "Unlimited listings" if plan == SubscriptionPlan.PRO.value or role == UserRole.PROPERTY_OWNER.value else "Limited listings",
+                    f"{PLAN_LIMITS[current_plan]['listings']} listings for 15 days",
+                    f"{PLAN_LIMITS[current_plan]['reels']} reels per week",
                     "Verified badge",
                     "Analytics dashboard",
                     "Direct customer inquiries",
@@ -10657,9 +10825,7 @@ async def get_subscription_status(
         }
 
 
-# ============ RATE LIMITING MIDDLEWARE ============
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+# ============ WAF CONFIGURATION ============
 
 WAF_SKIP_PATH_PREFIXES = (
     "/api/health",
@@ -10724,82 +10890,79 @@ def _extract_user_id_for_rate_limit(request: Request) -> Optional[str]:
     return str(user_id) if user_id else None
 
 
-class WAFMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
+class WAFMiddleware:
+    """Pure ASGI WAF middleware to prevent body exhaustion and BaseHTTPMiddleware bugs."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        request = Request(scope, receive)
         path = request.url.path or ""
         path_lower = path.lower()
         client_ip = _get_client_ip(request)
 
+        # 1. Skip paths
         if path_lower.startswith(WAF_SKIP_PATH_PREFIXES):
-            return await call_next(request)
+            return await self.app(scope, receive, send)
 
+        # 2. IP Denylist
         if client_ip in IP_DENYLIST:
             logger.warning("WAF blocked denylisted ip=%s path=%s", client_ip, path)
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Access denied."},
-            )
+            response = JSONResponse(status_code=403, content={"detail": "Access denied."})
+            return await response(scope, receive, send)
 
+        # 3. IP Allowlist
         if WAF_ENFORCE_ALLOWLIST and IP_ALLOWLIST and client_ip not in IP_ALLOWLIST:
             logger.warning("WAF blocked non-allowlisted ip=%s path=%s", client_ip, path)
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Access denied."},
-            )
+            response = JSONResponse(status_code=403, content={"detail": "Access denied."})
+            return await response(scope, receive, send)
 
+        # 4. Query Length & Pattern
         query = request.url.query or ""
         if len(query) > WAF_MAX_QUERY_LENGTH:
-            return JSONResponse(
-                status_code=413,
-                content={"detail": "Query string too large."},
-            )
+            response = JSONResponse(status_code=413, content={"detail": "Query string too large."})
+            return await response(scope, receive, send)
 
-        combined_path_query = f"{path}?{query}"
-        if _matches_attack_pattern(combined_path_query):
-            logger.warning(
-                "WAF blocked request path/query from ip=%s path=%s", client_ip, path
-            )
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Request blocked by security policy."},
-            )
+        if _matches_attack_pattern(f"{path}?{query}"):
+            logger.warning("WAF blocked attack pattern in path/query from ip=%s", client_ip)
+            response = JSONResponse(status_code=403, content={"detail": "Request blocked by security policy."})
+            return await response(scope, receive, send)
 
+        # 5. Body Inspection (Handle JSON safely)
         content_type = (request.headers.get("content-type") or "").lower()
-
-        if "application/json" in content_type and request.method in {
-            "POST",
-            "PUT",
-            "PATCH",
-        }:
+        if "application/json" in content_type and request.method in {"POST", "PUT", "PATCH"}:
             body = await request.body()
             if len(body) > WAF_MAX_JSON_BODY_BYTES:
-                return JSONResponse(
-                    status_code=413,
-                    content={"detail": "Request body too large."},
-                )
+                response = JSONResponse(status_code=413, content={"detail": "Request body too large."})
+                return await response(scope, receive, send)
 
             body_text = body.decode("utf-8", errors="ignore")
             if _matches_attack_pattern(body_text):
-                logger.warning(
-                    "WAF blocked request body from ip=%s path=%s", client_ip, path
-                )
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "Request blocked by security policy."},
-                )
+                logger.warning("WAF blocked attack pattern in body from ip=%s", client_ip)
+                response = JSONResponse(status_code=403, content={"detail": "Request blocked by security policy."})
+                return await response(scope, receive, send)
 
-        return await call_next(request)
+            # CRITICAL: Re-inject the body so downstream handlers can read it
+            async def receive_with_body():
+                return {"type": "http.request", "body": body, "more_body": False}
+            
+            return await self.app(scope, receive_with_body, send)
+
+        return await self.app(scope, receive, send)
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
+class RateLimitMiddleware:
+    """Pure ASGI rate limit middleware. Prevents BaseHTTPMiddleware bugs."""
     def __init__(self, app, max_requests: int = 120, window_seconds: int = 60):
-        super().__init__(app)
+        self.app = app
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self._requests: Dict[str, List[datetime]] = defaultdict(list)
 
     def _resolve_policy(self, path: str) -> Tuple[str, int, int]:
-        # route_key, max_requests, window_seconds
         if path.startswith("/api/auth/"):
             return "auth", 20, 60
         if path.startswith("/api/videos/upload"):
@@ -10816,10 +10979,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return f"user:{user_id}", "user"
         return f"ip:{_get_client_ip(request)}", "ip"
 
-    async def dispatch(self, request, call_next):
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        request = Request(scope, receive)
         path = request.url.path
         if path == "/api/health" or path.startswith("/socket.io"):
-            return await call_next(request)
+            return await self.app(scope, receive, send)
 
         route_key, route_limit, route_window = self._resolve_policy(path)
         subject_key, subject_type = self._resolve_subject(request)
@@ -10827,14 +10994,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         now = datetime.now(timezone.utc)
         cutoff = now - timedelta(seconds=route_window)
-
         self._requests[bucket] = [t for t in self._requests[bucket] if t > cutoff]
-
         used = len(self._requests[bucket])
         remaining = max(0, route_limit - used)
 
         if used >= route_limit:
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please slow down."},
                 headers={
@@ -10845,14 +11010,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "X-RateLimit-Scope": subject_type,
                 },
             )
+            return await response(scope, receive, send)
 
         self._requests[bucket].append(now)
-        response = await call_next(request)
-        response.headers["X-RateLimit-Limit"] = str(route_limit)
-        response.headers["X-RateLimit-Remaining"] = str(max(0, remaining - 1))
-        response.headers["X-RateLimit-Window"] = str(route_window)
-        response.headers["X-RateLimit-Scope"] = subject_type
-        return response
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                headers["X-RateLimit-Limit"] = str(route_limit)
+                headers["X-RateLimit-Remaining"] = str(max(0, remaining - 1))
+                headers["X-RateLimit-Window"] = str(route_window)
+                headers["X-RateLimit-Scope"] = subject_type
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
 app.add_middleware(RateLimitMiddleware, max_requests=120, window_seconds=60)
@@ -10862,39 +11033,50 @@ app.add_middleware(WAFMiddleware)
 
 
 # ============ SECURITY HEADERS MIDDLEWARE ============
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
+class SecurityHeadersMiddleware:
+    """Pure ASGI middleware for security headers. Bypasses BaseHTTPMiddleware bugs."""
+    def __init__(self, app):
+        self.app = app
 
-        csp = (
-            "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
-            "media-src 'self' https://res.cloudinary.com; "
-            "connect-src 'self' https://gruvora.com https://www.gruvora.com "
-            "https://api.gruvora.com "
-            "https://gruvora-living-production.up.railway.app wss:; "
-            "frame-ancestors 'none'; "
-            "base-uri 'self'; "
-            "form-action 'self'"
-        )
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
 
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
-        response.headers["Content-Security-Policy"] = csp
-        # Cross-Origin-Opener-Policy: same-origin can break popups and cross-site navigations.
-        # Relaxing it to 'same-origin-allow-popups' if needed, or keeping 'same-origin' if safe.
-        response.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
-        response.headers["Cross-Origin-Resource-Policy"] = "cross-origin"
-        if request.url.scheme == "https":
-            response.headers["Strict-Transport-Security"] = (
-                "max-age=63072000; includeSubDomains; preload"
-            )
-        return response
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = MutableHeaders(scope=message)
+                
+                # CSP Configuration
+                csp = (
+                    "default-src 'self'; "
+                    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com; "
+                    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                    "img-src 'self' data: https:; "
+                    "media-src 'self' https://res.cloudinary.com; "
+                    "connect-src 'self' https://gruvora.com https://www.gruvora.com "
+                    "https://api.gruvora.com https://lumberjack.razorpay.com "
+                    "https://gruvora-living-production.up.railway.app wss:; "
+                    "frame-src https://api.razorpay.com https://checkout.razorpay.com; "
+                    "frame-ancestors 'none'; "
+                    "base-uri 'self'; "
+                    "form-action 'self'"
+                )
+
+                headers["X-Content-Type-Options"] = "nosniff"
+                headers["X-Frame-Options"] = "DENY"
+                headers["X-XSS-Protection"] = "1; mode=block"
+                headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+                headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+                headers["Content-Security-Policy"] = csp
+                headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+                headers["Cross-Origin-Resource-Policy"] = "cross-origin"
+                
+                if scope.get("scheme") == "https":
+                    headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
 app.add_middleware(SecurityHeadersMiddleware)

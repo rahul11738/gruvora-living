@@ -29,156 +29,170 @@ const STATUS_CONFIG = {
 
 const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) => {
   const role = rawRole?.toLowerCase()?.replace(/\s+/g, '_') || '';
-  const plan = subData?.subscription_plan || 'basic';
-  const isActive = subData?.status === 'active';
+  
+  // Robust plan identification with legacy mapping
+  const planMapping = {
+    'unlimited': 'advanced',
+    'free_trial': 'basic',
+    // add other legacy mappings here if discovered
+  };
+  
+  const rawPlan = (subData?.subscription_plan || 'basic').toLowerCase().trim();
+  const currentPlan = planMapping[rawPlan] || rawPlan;
+  const isActive = subData?.status === 'active' || subData?.status === 'trial';
 
-  // Professional Owner Plans (Property, Stay, Event, etc.)
-  if (['property_owner', 'stay_owner', 'event_owner', 'hotel_owner'].includes(role)) {
-    const isPropertyOwner = role === 'property_owner';
-    const planName = isPropertyOwner ? "Professional Owner Plan" : "Professional Partner Plan";
-    const planPrice = isPropertyOwner ? "₹999" : "₹199";
-    const payPlan = isPropertyOwner ? "unlimited" : "basic";
+  const ownerPlans = [
+    {
+      id: 'basic',
+      name: 'Basic',
+      price: '₹199',
+      subtext: 'Ideal for individuals',
+      features: [
+        '1 Property Listing for 15 days',
+        '1 Reel Upload / week',
+        '2% Platform Fees',
+        'Standard Visibility'
+      ],
+      color: 'primary'
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      price: '₹999',
+      subtext: 'Most Popular Choice',
+      features: [
+        '5 Property Listings for 15 days',
+        '5 Reel Uploads / week',
+        '2% Platform Fees',
+        'Featured Placement',
+        'Verified Badge'
+      ],
+      color: 'primary',
+      recommended: true
+    },
+    {
+      id: 'advanced',
+      name: 'Advanced',
+      price: '₹1999',
+      subtext: 'For Power Users',
+      features: [
+        '10 Property Listings for 15 days',
+        '10 Reel Uploads / week',
+        '2% Platform Fees',
+        'Maximum Visibility',
+        'Priority Support',
+        'Analytics Dashboard'
+      ],
+      color: 'primary'
+    }
+  ];
 
-    return (
-      <div className="space-y-4">
-        <div className="p-4 rounded-xl border-2 border-primary bg-primary/5">
-          <div className="flex justify-between items-start mb-2">
-            <div>
-              <h4 className="font-bold text-stone-900">{planName}</h4>
-              <p className="text-xs text-muted-foreground">Unlimited listings + Featured visibility</p>
-            </div>
-            <span className="font-bold text-lg">{planPrice}/mo</span>
-          </div>
-          <ul className="text-sm space-y-2 text-stone-600 mb-6 mt-4">
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Post unlimited listings</li>
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Featured placement in search</li>
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Verified owner badge</li>
-            <li className="flex items-center gap-2"><Check className="w-4 h-4 text-emerald-500" /> Priority customer leads</li>
-          </ul>
+  const servicePlans = [
+    {
+      id: 'service_basic',
+      name: 'Service Basic',
+      price: '₹50',
+      features: ['Visible Listing', '1 Reel / week', 'Basic Badge'],
+    },
+    {
+      id: 'service_verified',
+      name: 'Service Verified',
+      price: '₹99',
+      features: ['Verified Badge', '2 Reels / week', 'Higher Visibility'],
+      recommended: true
+    },
+    {
+      id: 'service_top',
+      name: 'Service Top',
+      price: '₹149',
+      features: ['Top 5 Position', 'Priority Ranking', 'Priority Support'],
+    }
+  ];
 
-          <Button
-            onClick={() => onPay(payPlan)}
-            disabled={paying || isActive || paymentSuccess}
-            className="w-full btn-primary h-11 shadow-md hover:shadow-lg transition-all"
-          >
-            {paying ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : (isActive || paymentSuccess ? <Check className="w-4 h-4 mr-2" /> : <Zap className="w-4 h-4 mr-2" />)}
-            {isActive || paymentSuccess ? 'Plan Active' : (subData?.status === 'trial' ? `Activate ${planName} (${planPrice})` : `Pay Now (${planPrice})`)}
-          </Button>
+  const plansToDisplay = (role === 'service_provider') ? servicePlans : ownerPlans;
+  const isOwnerRole = ['property_owner', 'stay_owner', 'event_owner', 'hotel_owner'].includes(role);
 
-          <p className="text-[10px] text-center text-muted-foreground mt-3">
-            Secure payment powered by Razorpay. 100% money-back guarantee within 24 hours.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Service Provider Plans
-  if (role === 'service_provider') {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 gap-4">
-          {/* Basic Plan */}
-          <div className={`p-4 rounded-xl border-2 transition-all ${plan === 'service_basic' ? 'border-primary bg-primary/5' : 'border-stone-100 bg-stone-50'}`}>
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h4 className="font-bold text-stone-900">Basic Plan</h4>
-                <p className="text-xs text-muted-foreground">Stay active on the platform</p>
-              </div>
-              <span className="font-bold text-lg">₹50/mo</span>
-            </div>
-            <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Listing visible</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> 1 reel upload per week</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Basic profile badge</li>
-            </ul>
-            {plan !== 'service_basic' && (
-              <Button onClick={() => onPay('service_basic')} disabled={paying} variant="outline" className="w-full text-xs h-8">
-                Choose Basic
-              </Button>
-            )}
-          </div>
-
-          {/* Verified Plan */}
-          <div className={`p-4 rounded-xl border-2 transition-all ${plan === 'service_verified' ? 'border-primary bg-primary/5' : 'border-stone-100 bg-stone-50'}`}>
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h4 className="font-bold text-stone-900">Verified Plan</h4>
-                <p className="text-xs text-muted-foreground">Build trust with customers</p>
-              </div>
-              <span className="font-bold text-lg">₹99/mo</span>
-            </div>
-            <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Verified by Gruvora badge</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> 2 reel uploads per week</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Higher search visibility</li>
-            </ul>
-            {plan !== 'service_verified' && (
-              <Button onClick={() => onPay('service_verified')} disabled={paying} className="w-full text-xs h-8 btn-primary">
-                Upgrade to Verified
-              </Button>
-            )}
-          </div>
-
-          {/* Top Listing Plan */}
-          <div className={`p-4 rounded-xl border-2 transition-all ${plan === 'service_top' ? 'border-amber-500 bg-amber-50' : 'border-stone-100 bg-stone-50'}`}>
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h4 className="font-bold text-stone-900">Top Listing Plan</h4>
-                <p className="text-xs text-muted-foreground">Maximum visibility & ranking</p>
-              </div>
-              <span className="font-bold text-lg">₹149/mo</span>
-            </div>
-            <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Top 5 search position</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Area priority ranking</li>
-              <li className="flex items-center gap-2"><Check className="w-3 h-3 text-amber-500" /> Priority support</li>
-            </ul>
-            {plan !== 'service_top' && (
-              <Button onClick={() => onPay('service_top')} disabled={paying} className="w-full text-xs h-8 bg-amber-500 hover:bg-amber-600 text-white">
-                Choose Top Listing
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-
-
-  // Default fallback for any other owner roles not explicitly handled
   return (
-    <div className="space-y-4">
-      <div className="p-4 rounded-xl border-2 border-stone-100 bg-stone-50">
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <h4 className="font-bold text-stone-900">Standard Plan</h4>
-            <p className="text-xs text-muted-foreground">Standard listing visibility</p>
-          </div>
-          <span className="font-bold text-lg">₹199/mo</span>
-        </div>
-        <ul className="text-xs space-y-1.5 text-stone-600 mb-4">
-          <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Normal visibility</li>
-          <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Standard listing limit</li>
-          <li className="flex items-center gap-2"><Check className="w-3 h-3 text-emerald-500" /> Verified badge</li>
-        </ul>
-        <Button
-          onClick={() => onPay('basic')}
-          disabled={paying || isActive || paymentSuccess}
-          variant="outline"
-          className="w-full text-xs h-8"
-        >
-          {isActive || paymentSuccess ? 'Plan Active' : 'Pay ₹199'}
-        </Button>
+    <div className="space-y-6">
+      <div className={`grid grid-cols-1 ${isOwnerRole ? 'lg:grid-cols-3' : 'md:grid-cols-3'} gap-4`}>
+        {plansToDisplay.map((plan) => {
+          const isCurrent = currentPlan === plan.id;
+          const isRecommended = plan.recommended;
+          
+          return (
+            <div 
+              key={plan.id}
+              className={`relative flex flex-col p-5 rounded-2xl border-2 transition-all duration-300 ${
+                isCurrent && isActive
+                ? 'border-emerald-500 bg-emerald-50/30' 
+                : isRecommended 
+                  ? 'border-primary shadow-lg scale-[1.02] bg-white z-10' 
+                  : 'border-stone-100 bg-stone-50/50 hover:border-stone-200'
+              }`}
+            >
+              {isRecommended && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary text-white text-[10px] font-bold rounded-full uppercase tracking-wider">
+                  Recommended
+                </div>
+              )}
+              
+              <div className="mb-4">
+                <h4 className={`font-bold ${isRecommended ? 'text-primary' : 'text-stone-900'}`}>{plan.name}</h4>
+                <p className="text-[10px] text-muted-foreground">{plan.subtext || 'Monthly billing'}</p>
+              </div>
+
+              <div className="mb-6">
+                <span className="text-2xl font-black text-stone-900">{plan.price}</span>
+                <span className="text-xs text-muted-foreground ml-1">/mo</span>
+              </div>
+
+              <ul className="flex-grow space-y-2.5 mb-6">
+                {plan.features.map((feature, idx) => (
+                  <li key={idx} className="flex items-start gap-2 text-xs text-stone-600">
+                    <div className="mt-0.5 w-3.5 h-3.5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <Check className="w-2.5 h-2.5 text-emerald-600" />
+                    </div>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+
+              <Button
+                onClick={() => onPay(plan.id)}
+                disabled={paying || (isCurrent && isActive) || paymentSuccess}
+                variant={(isCurrent && isActive) || paymentSuccess ? "outline" : isRecommended ? "default" : "outline"}
+                className={`w-full h-10 text-xs font-semibold rounded-xl transition-all ${
+                  (isCurrent && isActive) || paymentSuccess 
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50' 
+                    : isRecommended && !isCurrent ? 'btn-primary shadow-md hover:shadow-lg' : ''
+                }`}
+              >
+                {paying ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin mr-2" />
+                ) : (isCurrent && isActive) || paymentSuccess ? (
+                  <Check className="w-3.5 h-3.5 mr-2" />
+                ) : null}
+                
+                {(isCurrent && isActive) || paymentSuccess 
+                  ? 'Already Subscribed' 
+                  : (isActive ? 'Upgrade' : `Select ${plan.name}`)}
+              </Button>
+            </div>
+          );
+        })}
       </div>
+      
+      <p className="text-[10px] text-center text-muted-foreground bg-stone-50 p-2 rounded-lg border border-stone-100">
+        <Shield className="w-3 h-3 inline-block mr-1 text-emerald-500" />
+        Secure payments via Razorpay. Upgrade or downgrade anytime. 100% secure.
+      </p>
     </div>
   );
 };
 
 export default function SubscriptionCard({ onPaymentSuccess }) {
   const { user, refreshUser } = useAuth();
-  const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, needsPayment, isBlocked, trialDaysLeft } = useSubscription();
+  const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, isBlocked, trialDaysLeft } = useSubscription();
   const [paying, setPaying] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [invoices, setInvoices] = useState(null);
@@ -385,7 +399,36 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
   const Icon = cfg.icon;
 
   return (
-    <Card className={isBlocked ? 'border-red-300 ring-2 ring-red-200' : ''}>
+    <div className="space-y-6">
+      {subData.status === 'trial' && (
+        <div className="bg-gradient-to-r from-emerald-500 to-teal-600 rounded-2xl p-6 text-white shadow-lg shadow-emerald-200/50 flex flex-col md:flex-row items-center justify-between gap-6 overflow-hidden relative">
+          <div className="absolute -right-10 -top-10 opacity-10">
+            <Crown className="w-40 h-40" />
+          </div>
+          
+          <div className="flex items-center gap-5 relative z-10">
+            <div className="w-14 h-14 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center border border-white/30">
+              <Zap className="w-8 h-8 fill-current" />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold">5-Month Complimentary Trial</h3>
+              <p className="text-emerald-50/90 text-sm mt-1 max-w-md">
+                You are currently on a <span className="font-bold underline">Basic Plan</span> at no cost for 5 months. 
+                Enjoy full owner benefits until {new Date(subData.next_billing_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-2 relative z-10">
+            <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl border border-white/30 text-center min-w-[120px]">
+              <span className="block text-[10px] uppercase font-bold tracking-widest opacity-80">Remaining</span>
+              <span className="block text-2xl font-black">{trialDaysLeft} Days</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card className={isBlocked ? 'border-red-300 ring-2 ring-red-200' : ''}>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -400,16 +443,16 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {subData.status === 'trial' && trialDaysLeft !== null && (
-          <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
-            <p className="text-sm font-medium text-blue-900">
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm font-medium text-emerald-900">
               {trialDaysLeft > 0
-                ? `You are on a 5-month free trial. Enjoy full access!`
-                : 'Your free trial has ended today.'}
+                ? `You are subscribed to the Basic Plan (Complimentary for 5 months).`
+                : 'Your complimentary trial has ended.'}
             </p>
-            <p className="text-xs text-blue-700 mt-1">
+            <p className="text-xs text-emerald-700 mt-1">
               {trialDaysLeft > 0
-                ? `Subscription payments will begin in ${trialDaysLeft} days.`
-                : 'Please upgrade to continue using the platform.'}
+                ? `Full access expires in ${trialDaysLeft} days. You can upgrade to Pro or Advanced anytime.`
+                : 'Please upgrade to a paid plan to continue using all features.'}
             </p>
           </div>
         )}
@@ -437,19 +480,23 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">Monthly Price</p>
-            <p className="font-semibold">{subData.price || '₹999/month'}</p>
+            <p className="font-semibold">
+              {subData.status === 'trial' ? '₹0 (Complimentary)' : (subData.price || '₹199/month')}
+            </p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Next Billing</p>
+            <p className="text-xs text-muted-foreground">
+              {subData.status === 'trial' ? 'Trial Ends' : 'Next Billing'}
+            </p>
             <p className="font-semibold">
-              {subData.next_billing_date ? new Date(subData.next_billing_date).toLocaleDateString('en-IN') : 'N/A'}
+              {subData.next_billing_date ? new Date(subData.next_billing_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
             </p>
           </div>
         </div>
 
-        {((needsPayment || subData.status === 'trial') && subData.status !== 'active') && (
+        <div className="pt-2">
           <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} paymentSuccess={paymentSuccess} />
-        )}
+        </div>
 
         {subData.status === 'active' && (
           <div className="space-y-3">
@@ -512,6 +559,7 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
           </div>
         )}
       </CardContent>
-    </Card>
+      </Card>
+    </div>
   );
 }
