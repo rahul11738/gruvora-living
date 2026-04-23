@@ -10,7 +10,7 @@
  * />
  */
 
-import React from 'react';
+
 import './PaginationControls.css';
 
 const PaginationControls = ({

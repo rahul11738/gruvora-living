@@ -1,4 +1,4 @@
-import React from "react";
+
 
 /**
  * JsonLd - Outputs JSON-LD schema in a script tag for SEO
