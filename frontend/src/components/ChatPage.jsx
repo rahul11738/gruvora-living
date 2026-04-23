@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { Header } from './Layout';
+import SeoHead from './SeoHead';
 import api, { messagesAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
@@ -40,14 +41,15 @@ const getSocketConnectionConfig = (apiUrl) => {
   if (safeUrl.startsWith('/')) {
     const normalizedPath = safeUrl.replace(/\/+$/, '');
     return {
-      uri: typeof window !== 'undefined' ? window.location.origin : '',
-      path: `${normalizedPath}/socket.io`,
-    };
-  }
-  return {
-    uri: safeUrl,
-    path: '/socket.io',
+      < div className = "min-h-screen bg-stone-50 overflow-x-hidden" data - testid="chat-page" >
+        <SeoHead robots="noindex, nofollow" title="Chat – Gruvora (Private)" description="Private chat between users and owners. This page is not indexed." />
+        <Header />
   };
+}
+return {
+  uri: safeUrl,
+  path: '/socket.io',
+};
 };
 const MESSAGE_PAGE_LIMIT = 50;
 const RECONNECT_DELAY_MS = [1000, 2000, 4000, 8000, 16000];

@@ -52,6 +52,7 @@ import SubscriptionCard from './subscription/SubscriptionCard';
 import PaymentModal from './PaymentModal';
 import BrandedLogo from './BrandedLogo';
 import OptimizedImage from './OptimizedImage';
+import SeoHead from './SeoHead';
 
 const categoryIcons = {
   home: Home,
@@ -208,19 +209,20 @@ export const OwnerDashboard = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="owner-dashboard">
-       {/* Mobile Header */}
-       <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between bg-white/95 backdrop-blur">
-         <div className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
-           <BrandedLogo variant="compact" />
-         </div>
-         <button onClick={() => setSidebarOpen(true)} className="p-2">
-           <Menu className="w-6 h-6" />
-         </button>
-       </div>
+      <SeoHead robots="noindex, nofollow" title="Owner Dashboard – Gruvora (Private)" description="Owner dashboard for managing listings and bookings. Not indexed." />
+      {/* Mobile Header */}
+      <div className="lg:hidden glass-header sticky top-0 z-40 px-4 py-3 flex items-center justify-between bg-white/95 backdrop-blur">
+        <div className="inline-flex items-center rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
+          <BrandedLogo variant="compact" />
+        </div>
+        <button onClick={() => setSidebarOpen(true)} className="p-2">
+          <Menu className="w-6 h-6" />
+        </button>
+      </div>
 
-<div className="flex w-full min-h-screen">
-         {/* Sidebar - static on desktop, slides on mobile */}
-         <aside className={`fixed lg:static inset-y-0 left-0 w-72 max-w-[85vw] bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 lg:min-h-screen lg:overflow-y-auto pb-24 lg:pb-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+      <div className="flex w-full min-h-screen">
+        {/* Sidebar - static on desktop, slides on mobile */}
+        <aside className={`fixed lg:static inset-y-0 left-0 w-72 max-w-[85vw] bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 lg:min-h-screen lg:overflow-y-auto pb-24 lg:pb-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
           <div className="p-6 min-h-full relative flex flex-col">
             <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
               <BrandedLogo variant="compact" />
@@ -611,71 +613,71 @@ const ListingRow = memo(({ listing, onDelete, onBoost, showActions }) => {
     }
   };
 
-   return (
-     <div className="flex flex-col gap-3 md:gap-4 p-3 md:p-4 bg-stone-50 rounded-xl sm:flex-row sm:items-center" data-testid={`listing-row-${listing.id}`}>
-       <div className="w-full h-32 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 sm:w-20">
-         <OptimizedImage
-           publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
-           alt={listing.title}
-           className="w-full h-full object-cover"
-           width={200}
-           sizes="80px"
-         />
-       </div>
-       <div className="flex-1 min-w-0 text-left">
-         <div className="flex flex-wrap items-center gap-1 md:gap-2 mb-1">
-           <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-           <span className="text-xs md:text-sm text-muted-foreground capitalize">{listing.category}</span>
-           {getStatusBadge(listing.status)}
-           {listing.category === 'services' && (
-             <Badge variant="outline" className="ml-0 md:ml-2 bg-amber-50 text-amber-600 border-amber-100 text-xs">
-               Reel Available
-             </Badge>
-           )}
-         </div>
-         <h4 className="font-medium text-sm md:text-base truncate">{listing.title}</h4>
-         <div className="flex items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground mt-1 flex-wrap">
-           <span className="flex items-center gap-1">
-             <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" />
-             {listing.views}
-           </span>
-           <span className="flex items-center gap-1">
-             <Heart className="w-3.5 h-3.5 md:w-4 md:h-4" />
-             {listing.likes}
-           </span>
-           <span className="flex items-center gap-1">
-             <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
-             {listing.inquiries}
-           </span>
-         </div>
-       </div>
-       <div className="text-left sm:text-right">
-         <p className="font-bold text-primary text-sm md:text-base">₹{listing.price?.toLocaleString('en-IN')}</p>
-         <p className="text-xs md:text-sm text-muted-foreground capitalize">{listing.listing_type}</p>
-         {listing.category === 'services' && (
-           <Button
-             variant="outline"
-             size="sm"
-             className="mt-2 text-xs border-amber-200 text-amber-600 hover:bg-amber-50"
-             onClick={() => onBoost(listing.id)}
-           >
-             <Zap className="w-3 h-3 mr-1" />
-             Boost Reel
-           </Button>
-         )}
-       </div>
-       {showActions && (
-         <div className="flex gap-2 sm:ml-auto">
-           <Button variant="ghost" size="icon" onClick={() => navigate(`/listing/${listing.id}`)}>
-             <Eye className="w-4 h-4" />
-           </Button>
-           <Button variant="ghost" size="icon" onClick={() => onDelete(listing.id)}>
-             <Trash2 className="w-4 h-4 text-red-500" />
-           </Button>
-         </div>
-       )}
-     </div>
-   );
+  return (
+    <div className="flex flex-col gap-3 md:gap-4 p-3 md:p-4 bg-stone-50 rounded-xl sm:flex-row sm:items-center" data-testid={`listing-row-${listing.id}`}>
+      <div className="w-full h-32 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 sm:w-20">
+        <OptimizedImage
+          publicId={listing.images?.[0] || 'gharshetu/placeholders/listing-default'}
+          alt={listing.title}
+          className="w-full h-full object-cover"
+          width={200}
+          sizes="80px"
+        />
+      </div>
+      <div className="flex-1 min-w-0 text-left">
+        <div className="flex flex-wrap items-center gap-1 md:gap-2 mb-1">
+          <Icon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+          <span className="text-xs md:text-sm text-muted-foreground capitalize">{listing.category}</span>
+          {getStatusBadge(listing.status)}
+          {listing.category === 'services' && (
+            <Badge variant="outline" className="ml-0 md:ml-2 bg-amber-50 text-amber-600 border-amber-100 text-xs">
+              Reel Available
+            </Badge>
+          )}
+        </div>
+        <h4 className="font-medium text-sm md:text-base truncate">{listing.title}</h4>
+        <div className="flex items-center gap-2 md:gap-4 text-xs md:text-sm text-muted-foreground mt-1 flex-wrap">
+          <span className="flex items-center gap-1">
+            <Eye className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            {listing.views}
+          </span>
+          <span className="flex items-center gap-1">
+            <Heart className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            {listing.likes}
+          </span>
+          <span className="flex items-center gap-1">
+            <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            {listing.inquiries}
+          </span>
+        </div>
+      </div>
+      <div className="text-left sm:text-right">
+        <p className="font-bold text-primary text-sm md:text-base">₹{listing.price?.toLocaleString('en-IN')}</p>
+        <p className="text-xs md:text-sm text-muted-foreground capitalize">{listing.listing_type}</p>
+        {listing.category === 'services' && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-2 text-xs border-amber-200 text-amber-600 hover:bg-amber-50"
+            onClick={() => onBoost(listing.id)}
+          >
+            <Zap className="w-3 h-3 mr-1" />
+            Boost Reel
+          </Button>
+        )}
+      </div>
+      {showActions && (
+        <div className="flex gap-2 sm:ml-auto">
+          <Button variant="ghost" size="icon" onClick={() => navigate(`/listing/${listing.id}`)}>
+            <Eye className="w-4 h-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => onDelete(listing.id)}>
+            <Trash2 className="w-4 h-4 text-red-500" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 });
 
 const BookingRow = memo(({ booking, onStatusChange, showDetails }) => {
@@ -926,118 +928,118 @@ const LeadsSection = ({ leads, subscription }) => {
 
   return (
     <div className="space-y-6" data-testid="leads-section">
-       <Card>
-         <CardHeader>
-           <CardTitle className="flex items-center gap-2">
-             <Users className="w-5 h-5" />
-             Customer Inquiries
-           </CardTitle>
-           <CardDescription>
-             {leads.length} leads received - Full contact details visible
-           </CardDescription>
-         </CardHeader>
-         <CardContent>
-           {leads.length === 0 ? (
-             <div className="text-center py-12">
-               <Users className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-               <h3 className="font-heading text-xl font-semibold mb-2">No Leads Yet</h3>
-               <p className="text-muted-foreground">
-                 Customer inquiries will appear here when they contact you
-               </p>
-             </div>
-           ) : (
-             <div className="space-y-4">
-               {leads.map((lead) => (
-                 <div key={lead.id} className="p-3 md:p-4 rounded-xl border border-stone-200 hover:border-primary/50 transition-colors">
-                   <div className="flex flex-wrap items-start justify-between gap-3">
-                     <div className="flex items-center gap-2 md:gap-3">
-                       <div className="w-9 h-9 md:w-10 md:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                         <Users className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                       </div>
-                       <div className="min-w-0">
-                         <h4 className="font-medium text-sm md:text-base truncate">{lead.customer_name}</h4>
-                         <p className="text-xs md:text-sm text-muted-foreground truncate">
-                           Interested in: {lead.listing_title}
-                         </p>
-                       </div>
-                     </div>
-                     <Badge className={lead.status === 'pending' ? 'bg-yellow-100 text-yellow-700 text-xs' : 'bg-green-100 text-green-700 text-xs'}>
-                       {lead.status}
-                     </Badge>
-                   </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5" />
+            Customer Inquiries
+          </CardTitle>
+          <CardDescription>
+            {leads.length} leads received - Full contact details visible
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {leads.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+              <h3 className="font-heading text-xl font-semibold mb-2">No Leads Yet</h3>
+              <p className="text-muted-foreground">
+                Customer inquiries will appear here when they contact you
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {leads.map((lead) => (
+                <div key={lead.id} className="p-3 md:p-4 rounded-xl border border-stone-200 hover:border-primary/50 transition-colors">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 md:gap-3">
+                      <div className="w-9 h-9 md:w-10 md:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Users className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-medium text-sm md:text-base truncate">{lead.customer_name}</h4>
+                        <p className="text-xs md:text-sm text-muted-foreground truncate">
+                          Interested in: {lead.listing_title}
+                        </p>
+                      </div>
+                    </div>
+                    <Badge className={lead.status === 'pending' ? 'bg-yellow-100 text-yellow-700 text-xs' : 'bg-green-100 text-green-700 text-xs'}>
+                      {lead.status}
+                    </Badge>
+                  </div>
 
-                   <div className="mt-3 md:mt-4 p-2 md:p-3 bg-stone-50 rounded-lg">
-                     <p className="text-xs md:text-sm text-stone-600">"{lead.message}"</p>
-                   </div>
+                  <div className="mt-3 md:mt-4 p-2 md:p-3 bg-stone-50 rounded-lg">
+                    <p className="text-xs md:text-sm text-stone-600">"{lead.message}"</p>
+                  </div>
 
-                   <div className="mt-3 md:mt-4 flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
-                     <a 
-                       href={`tel:+91${(lead.customer_phone || '').replace(/[^\d]/g, '')}`}
-                       className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                       onClick={(e) => {
-                         if (!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden') {
-                           e.preventDefault();
-                         }
-                       }}
-                     >
-                       <Phone className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                       <span>{lead.customer_phone || 'No phone'}</span>
-                     </a>
-                     <a 
-                       href={`mailto:${lead.customer_email}?subject=Inquiry about ${encodeURIComponent(lead.listing_title || 'your listing')}`}
-                       className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                       onClick={(e) => {
-                         if (!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com') {
-                           e.preventDefault();
-                         }
-                       }}
-                     >
-                       <Mail className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                       <span>{lead.customer_email || 'No email'}</span>
-                     </a>
-                     <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground ml-auto">
-                       <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                       {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : 'N/A'}
-                     </div>
-                   </div>
+                  <div className="mt-3 md:mt-4 flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                    <a
+                      href={`tel:+91${(lead.customer_phone || '').replace(/[^\d]/g, '')}`}
+                      className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                      onClick={(e) => {
+                        if (!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden') {
+                          e.preventDefault();
+                        }
+                      }}
+                    >
+                      <Phone className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      <span>{lead.customer_phone || 'No phone'}</span>
+                    </a>
+                    <a
+                      href={`mailto:${lead.customer_email}?subject=Inquiry about ${encodeURIComponent(lead.listing_title || 'your listing')}`}
+                      className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                      onClick={(e) => {
+                        if (!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com') {
+                          e.preventDefault();
+                        }
+                      }}
+                    >
+                      <Mail className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      <span>{lead.customer_email || 'No email'}</span>
+                    </a>
+                    <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground ml-auto">
+                      <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : 'N/A'}
+                    </div>
+                  </div>
 
-                   <div className="mt-3 md:mt-4 flex flex-col gap-2 md:flex-row">
-                     <Button
-                       size="sm"
-                       className="btn-primary w-full md:w-auto"
-                       onClick={() => handleCall(lead.customer_phone)}
-                       disabled={!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden'}
-                     >
-                       <Phone className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
-                       Call
-                     </Button>
-                     <Button
-                       size="sm"
-                       variant="outline"
-                       className="w-full md:w-auto"
-                       onClick={() => handleEmail(lead.customer_email)}
-                       disabled={!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com'}
-                     >
-                       <Mail className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
-                       Email
-                     </Button>
-                     <Button
-                       size="sm"
-                       variant="outline"
-                       className="w-full md:w-auto"
-                       onClick={() => handleChat(lead)}
-                     >
-                       <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
-                       Chat
-                     </Button>
-                   </div>
-                 </div>
-               ))}
-             </div>
-           )}
-         </CardContent>
-       </Card>
-     </div>
+                  <div className="mt-3 md:mt-4 flex flex-col gap-2 md:flex-row">
+                    <Button
+                      size="sm"
+                      className="btn-primary w-full md:w-auto"
+                      onClick={() => handleCall(lead.customer_phone)}
+                      disabled={!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden'}
+                    >
+                      <Phone className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
+                      Call
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full md:w-auto"
+                      onClick={() => handleEmail(lead.customer_email)}
+                      disabled={!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com'}
+                    >
+                      <Mail className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
+                      Email
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full md:w-auto"
+                      onClick={() => handleChat(lead)}
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
+                      Chat
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

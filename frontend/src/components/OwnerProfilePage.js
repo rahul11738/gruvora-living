@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
 import { usersAPI, listingsAPI, reelsAPI, adminAPI } from '../lib/api';
 import { Header, Footer } from './Layout';
+import SeoHead from './SeoHead';
 import { normalizeMediaUrl } from '../lib/media';
 import OptimizedImage from './OptimizedImage';
 import { Button } from './ui/button';
@@ -119,6 +120,7 @@ export const OwnerProfilePage = () => {
     }
   };
 
+
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-50">
@@ -146,6 +148,12 @@ export const OwnerProfilePage = () => {
     );
   }
 
+  // SEO meta tags
+  const canonicalUrl = `https://gruvora.com/owner/${ownerId}`;
+  const title = `${owner.name} – Owner Profile | Gruvora Living`;
+  const description = owner.bio || `View the public profile and listings of ${owner.name} on Gruvora Living.`;
+  const image = owner.profile_image ? `https://res.cloudinary.com/gharshetu/image/upload/${owner.profile_image}` : undefined;
+
   const isOwnProfile = user?.id === ownerId;
   const isOwnerRole = OWNER_ROLES.has(String(user?.role || '').toLowerCase());
   const canModerateReels = Boolean(
@@ -157,6 +165,41 @@ export const OwnerProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="owner-profile-page">
+      <SeoHead
+        title={title}
+        description={description}
+        canonical={canonicalUrl}
+        keywords={[owner.name, "owner", "profile", "Gruvora", "property", "rental"]}
+        og={[{
+          property: "og:title",
+          content: title
+        }, {
+          property: "og:description",
+          content: description
+        }, image ? {
+          property: "og:image",
+          content: image
+        } : null, {
+          property: "og:url",
+          content: canonicalUrl
+        }, {
+          property: "og:type",
+          content: "profile"
+        }].filter(Boolean)}
+        twitter={[{
+          name: "twitter:card",
+          content: "summary_large_image"
+        }, {
+          name: "twitter:title",
+          content: title
+        }, {
+          name: "twitter:description",
+          content: description
+        }, image ? {
+          name: "twitter:image",
+          content: image
+        } : null].filter(Boolean)}
+      />
       <Header />
 
       {/* Profile Header */}

@@ -28,6 +28,7 @@ import {
   MessageCircle,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
+import SeoHead from './SeoHead';
 import { normalizeMediaUrl } from '../lib/media';
 import OptimizedImage from './OptimizedImage';
 
@@ -106,6 +107,7 @@ export const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-stone-50" data-testid="user-dashboard">
+      <SeoHead robots="noindex, nofollow" title="User Dashboard – Gruvora" description="Private user dashboard. This page is not indexed." />
       <Header />
 
       <div className="container-main py-8 pb-24 lg:pb-8">
@@ -597,6 +599,7 @@ export const WishlistPage = () => {
 
   return (
     <div className="min-h-screen bg-stone-50" data-testid="wishlist-page">
+      <SeoHead robots="noindex, nofollow" title="My Wishlist – Gruvora (Private)" description="Your saved listings on Gruvora. Private page, not indexed." />
       <Header />
 
       <div className="container-main py-8">

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { authAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Header } from './Layout';
+import SeoHead from './SeoHead';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
@@ -122,6 +123,7 @@ export const SettingsPage = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="settings-page">
+      <SeoHead robots="noindex, nofollow" title="Settings – Gruvora (Private)" description="Account and settings page for Gruvora users. Not indexed." />
       <Header />
       <div className="container-main py-6 md:py-8">
         <div className="mb-6">

@@ -39,6 +39,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
+import SeoHead from './SeoHead';
 import { ChatWithOwnerButton } from './DirectChat';
 import { PaymentButton } from './PaymentModal';
 import OptimizedImage from './OptimizedImage';
@@ -215,6 +216,7 @@ export const ListingDetailPage = () => {
     return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
   };
 
+
   if (loading) {
     return (
       <div className="min-h-screen bg-stone-50">
@@ -226,6 +228,12 @@ export const ListingDetailPage = () => {
 
   if (!listing) return null;
 
+  // SEO meta tags
+  const canonicalUrl = `https://gruvora.com/listing/${id}`;
+  const title = `${listing.title} – ${listing.city || ''} | Gruvora Living`;
+  const description = listing.description || `View details for ${listing.title} in ${listing.city || ''} on Gruvora Living.`;
+  const image = listing.images?.[0] ? `https://res.cloudinary.com/gharshetu/image/upload/${listing.images[0]}` : undefined;
+
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryColors[listing.category] || 'bg-primary';
   const wishlisted = isWishlisted(id);
@@ -236,6 +244,41 @@ export const ListingDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="listing-detail-page">
+      <SeoHead
+        title={title}
+        description={description}
+        canonical={canonicalUrl}
+        keywords={[listing.title, listing.city, listing.category, "Gruvora", "property", "rental", "listing"]}
+        og={[{
+          property: "og:title",
+          content: title
+        }, {
+          property: "og:description",
+          content: description
+        }, image ? {
+          property: "og:image",
+          content: image
+        } : null, {
+          property: "og:url",
+          content: canonicalUrl
+        }, {
+          property: "og:type",
+          content: "article"
+        }].filter(Boolean)}
+        twitter={[{
+          name: "twitter:card",
+          content: "summary_large_image"
+        }, {
+          name: "twitter:title",
+          content: title
+        }, {
+          name: "twitter:description",
+          content: description
+        }, image ? {
+          name: "twitter:image",
+          content: image
+        } : null].filter(Boolean)}
+      />
       <Header />
 
       {/* Back Button */}

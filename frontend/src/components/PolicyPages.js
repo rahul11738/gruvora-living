@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Header, Footer } from "./Layout";
+import SeoHead from "./SeoHead";
 
 const SOCIAL_LINKS = [
   { label: "YouTube", href: "https://youtube.com/@gruvora-channel?si=6s_wuVXVRfYp9K-M" },
@@ -10,8 +11,40 @@ const SOCIAL_LINKS = [
 ];
 
 const StaticDocPage = ({ title, effectiveDate, sections }) => {
+  // SEO meta tags
+  const canonicalUrl = `https://gruvora.com/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+  const description = `${title} for Gruvora Living. Read the latest policies, terms, and legal information.`;
   return (
     <div className="min-h-screen bg-stone-50" data-testid="policy-page">
+      <SeoHead
+        title={`${title} | Gruvora Living`}
+        description={description}
+        canonical={canonicalUrl}
+        keywords={[title, "Gruvora", "policy", "legal", "terms", "privacy"]}
+        og={[{
+          property: "og:title",
+          content: `${title} | Gruvora Living`
+        }, {
+          property: "og:description",
+          content: description
+        }, {
+          property: "og:url",
+          content: canonicalUrl
+        }, {
+          property: "og:type",
+          content: "article"
+        }]}
+        twitter={[{
+          name: "twitter:card",
+          content: "summary_large_image"
+        }, {
+          name: "twitter:title",
+          content: `${title} | Gruvora Living`
+        }, {
+          name: "twitter:description",
+          content: description
+        }]}
+      />
       <Header />
       <main className="container-main py-8 md:py-12">
         <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-stone-200 shadow-sm p-6 md:p-10">

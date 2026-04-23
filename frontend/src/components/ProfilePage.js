@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Header } from './Layout';
+import SeoHead from './SeoHead';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
@@ -150,6 +151,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="profile-page">
+      <SeoHead robots="noindex, nofollow" title="My Profile – Gruvora (Private)" description="Manage your Gruvora profile. This page is private and not indexed." />
       <Header />
       <div className="container-main py-6 md:py-8">
         <div className="mb-6">

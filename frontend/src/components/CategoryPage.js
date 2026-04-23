@@ -33,6 +33,7 @@ import {
   Compass,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
+import SeoHead from './SeoHead';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from './ui/sheet';
 import OptimizedImage from './OptimizedImage';
 import { CardGridSkeleton } from './SkeletonLoaders';
@@ -327,6 +328,35 @@ export const CategoryPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-stone-50 via-white to-stone-100/60" data-testid={`category-page-${category}`}>
+      <SeoHead
+        title={`${title.en} Listings – Gruvora Living`}
+        description={description}
+        canonical={`https://gruvora.com/category/${category || ''}`}
+        keywords={["Gruvora", title.en, "category", "property", "rental", "India"]}
+        og={[{
+          property: "og:title",
+          content: `${title.en} Listings – Gruvora Living`
+        }, {
+          property: "og:description",
+          content: description
+        }, {
+          property: "og:url",
+          content: `https://gruvora.com/category/${category || ''}`
+        }, {
+          property: "og:type",
+          content: "website"
+        }]}
+        twitter={[{
+          name: "twitter:card",
+          content: "summary_large_image"
+        }, {
+          name: "twitter:title",
+          content: `${title.en} Listings – Gruvora Living`
+        }, {
+          name: "twitter:description",
+          content: description
+        }]}
+      />
       <Header />
 
       {/* Hero Banner */}

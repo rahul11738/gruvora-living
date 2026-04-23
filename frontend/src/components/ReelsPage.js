@@ -19,6 +19,7 @@ import {
   ChevronLeft,
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
+import SeoHead from './SeoHead';
 import api from '../lib/api';
 
 const normalizeSocketBaseUrl = (rawUrl) => {
@@ -276,6 +277,35 @@ export const ReelsPage = () => {
 
   return (
     <div className="fixed inset-0 bg-black z-50" data-testid="reels-page">
+      <SeoHead
+        title="Reels – Gruvora Living"
+        description="Short property reels and highlights from Gruvora owners and hosts. Watch and share short property videos."
+        canonical="https://gruvora.com/reels"
+        keywords={["Gruvora", "reels", "property videos", "short videos"]}
+        og={[{
+          property: "og:title",
+          content: "Reels – Gruvora Living"
+        }, {
+          property: "og:description",
+          content: "Short property reels and highlights from Gruvora owners and hosts. Watch and share short property videos."
+        }, {
+          property: "og:url",
+          content: "https://gruvora.com/reels"
+        }, {
+          property: "og:type",
+          content: "website"
+        }]}
+        twitter={[{
+          name: "twitter:card",
+          content: "summary_large_image"
+        }, {
+          name: "twitter:title",
+          content: "Reels – Gruvora Living"
+        }, {
+          name: "twitter:description",
+          content: "Short property reels and highlights from Gruvora owners and hosts. Watch and share short property videos."
+        }]}
+      />
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-40 p-3 flex items-center justify-between">
         <Link to="/" className="text-white font-bold text-lg flex items-center gap-2">

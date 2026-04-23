@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import BrandedLogo from './BrandedLogo';
 import OptimizedImage from './OptimizedImage';
+import SeoHead from './SeoHead';
 
 const CATEGORY_ICONS = {
   home: Home, business: Building2, stay: Hotel,
@@ -410,6 +411,7 @@ export const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-stone-100 overflow-x-hidden" data-testid="admin-dashboard-v2">
+      <SeoHead robots="noindex, nofollow" title="Admin Dashboard – Gruvora (Private)" description="Admin dashboard for Gruvora. Not indexed." />
       <div className="lg:hidden sticky top-0 z-50 flex items-center justify-between gap-3 px-4 py-3 border-b border-stone-200 bg-stone-100/95 backdrop-blur">
         <Link to="/" className="flex items-center gap-2 min-w-0">
           <BrandedLogo variant="compact" />

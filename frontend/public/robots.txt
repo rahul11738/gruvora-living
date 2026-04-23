@@ -1,4 +1,24 @@
 User-agent: *
+# Allow main public pages
 Allow: /
 
+# Disallow sensitive and user-specific routes
+Disallow: /admin
+Disallow: /owner/dashboard
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /profile
+Disallow: /chat
+Disallow: /notifications
+Disallow: /wishlist
+Disallow: /api/private
+Disallow: /api/admin
+
+# Crawl-delay: optional for some bots (uncomment if required)
+# Crawl-delay: 5
+
+# Sitemap references
 Sitemap: https://gruvora.com/sitemap.xml
+Sitemap: https://gruvora.com/sitemap-listings.xml
+Sitemap: https://gruvora.com/sitemap-owners.xml
+Sitemap: https://gruvora.com/sitemap-categories.xml

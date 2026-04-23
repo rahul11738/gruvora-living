@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from './Layout';
+import SeoHead from './SeoHead';
 import { useNotifications } from './Notifications.jsx';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -196,6 +197,7 @@ export const NotificationsPage = () => {
 
   return (
     <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="notifications-page">
+      <SeoHead robots="noindex, nofollow" title="Notifications – Gruvora (Private)" description="Your notifications and alerts. Private page, not indexed." />
       <Header />
       <div className="container-main py-6 max-w-2xl">
         <Card>
