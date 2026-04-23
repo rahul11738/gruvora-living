@@ -77,29 +77,35 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     const response = await authAPI.login({ email, password });
-    const { token: newToken, user: userData } = response.data;
-    localStorage.setItem('gharsetu_token', newToken);
-    setToken(newToken);
-    setUser(userData);
-    return response.data;
+    const { token: newToken, user: newUser } = response?.data || {};
+    if (newToken && newUser) {
+      localStorage.setItem('gharsetu_token', newToken);
+      setToken(newToken);
+      setUser(newUser);
+    }
+    return response?.data;
   };
 
   const register = async (userData) => {
     const response = await authAPI.register(userData);
-    const { token: newToken, user: newUser } = response.data;
-    localStorage.setItem('gharsetu_token', newToken);
-    setToken(newToken);
-    setUser(newUser);
-    return response.data;
+    const { token: newToken, user: newUser } = response?.data || {};
+    if (newToken && newUser) {
+      localStorage.setItem('gharsetu_token', newToken);
+      setToken(newToken);
+      setUser(newUser);
+    }
+    return response?.data;
   };
 
   const registerOwner = async (ownerData) => {
     const response = await authAPI.registerOwner(ownerData);
-    const { token: newToken, user: newUser } = response.data;
-    localStorage.setItem('gharsetu_token', newToken);
-    setToken(newToken);
-    setUser(newUser);
-    return response.data;
+    const { token: newToken, user: newUser } = response?.data || {};
+    if (newToken && newUser) {
+      localStorage.setItem('gharsetu_token', newToken);
+      setToken(newToken);
+      setUser(newUser);
+    }
+    return response?.data;
   };
 
   const updateProfile = async (updates) => {
