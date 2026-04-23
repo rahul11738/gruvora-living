@@ -39,7 +39,6 @@ const API_URL = normalizeSocketBaseUrl(resolveBackendUrl());
 const getSocketConnectionConfig = (apiUrl) => {
   const safeUrl = String(apiUrl || '').trim();
   if (safeUrl.startsWith('/')) {
-    const normalizedPath = safeUrl.replace(/\/+$/, '');
     return {
       uri: safeUrl,
       path: '/socket.io',
@@ -815,6 +814,7 @@ export const ChatPage = () => {
 
   return (
     <div className="h-screen flex flex-col bg-stone-50 overflow-hidden" data-testid="chat-page">
+      <SeoHead robots="noindex, nofollow" title="Chat – Gruvora (Private)" description="Private chat between users and owners. This page is not indexed." />
       <Header />
       <div className="flex-1 flex overflow-hidden">
 
