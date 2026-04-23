@@ -2,6 +2,7 @@ import React, { Suspense, lazy, memo } from 'react';
 import { Header, Footer } from './Layout';
 import { RouteSkeleton } from './SkeletonLoaders';
 import SeoHead from './SeoHead';
+import JsonLd from './JsonLd';
 
 const HeroSection = lazy(() =>
     import('./HomeComponents').then((m) => ({ default: m.HeroSection }))
@@ -29,6 +30,26 @@ const CTASection = lazy(() =>
 );
 
 const HomePage = memo(function HomePage() {
+    const orgSchema = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "Gruvora Living",
+        "url": "https://gruvora.com/",
+        "logo": "https://gruvora.com/logo.png",
+        "sameAs": [
+            "https://www.facebook.com/gruvoraliving",
+            "https://www.instagram.com/gruvoraliving",
+            "https://twitter.com/gruvoraliving"
+        ],
+        "description": "Premium property rentals and stays marketplace in India. Trusted, verified listings for homes, stays, and services.",
+        "contactPoint": [{
+            "@type": "ContactPoint",
+            "telephone": "+91-XXXXXXXXXX",
+            "contactType": "customer service",
+            "areaServed": "IN",
+            "availableLanguage": ["English", "Hindi"]
+        }]
+    };
     return (
         <div className="min-h-screen bg-stone-50" data-testid="home-page">
             <SeoHead
@@ -59,7 +80,9 @@ const HomePage = memo(function HomePage() {
                     name: "twitter:description",
                     content: "Discover, search, and book premium rental properties and stays across India with Gruvora Living. Trusted, verified listings."
                 }]}
-            />
+            >
+                <JsonLd schema={orgSchema} />
+            </SeoHead>
             <Header />
             <main className="home-main">
                 <Suspense fallback={<RouteSkeleton />}>

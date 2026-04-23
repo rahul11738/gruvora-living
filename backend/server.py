@@ -18,6 +18,8 @@ from fastapi import (
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import RedirectResponse
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
@@ -114,6 +116,35 @@ async def lifespan(_: FastAPI):
 
 
 # Create the main app
+class CanonicalRedirectMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        url = request.url
+        host = url.hostname or ""
+        path = url.path or "/"
+        query = url.query or ""
+
+        # 1. Redirect www to non-www
+        if host.startswith("www."):
+            new_url = str(url).replace("//www.", "//", 1)
+            return RedirectResponse(new_url, status_code=301)
+
+        # 2. Remove trailing slash (except root)
+        if path != "/" and path.endswith("/"):
+            new_path = path.rstrip("/")
+            new_url = str(url.replace(path=new_path))
+            return RedirectResponse(new_url, status_code=301)
+
+        # 3. Remove ?utm_* and other tracking params
+        if query:
+            from urllib.parse import parse_qsl, urlencode
+            params = [(k, v) for k, v in parse_qsl(query) if not k.startswith("utm_")]
+            if len(params) != len(list(parse_qsl(query))):
+                new_query = urlencode(params)
+                new_url = str(url.replace(query=new_query))
+                return RedirectResponse(new_url, status_code=301)
+
+        return await call_next(request)
+
 app = FastAPI(
     title="GharSetu API",
     version="2.0.0",
@@ -122,6 +153,7 @@ app = FastAPI(
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+app.add_middleware(CanonicalRedirectMiddleware)
 
 
 @app.get("/")

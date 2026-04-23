@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import SeoHead from './SeoHead';
+import JsonLd from './JsonLd';
 import { ChatWithOwnerButton } from './DirectChat';
 import { PaymentButton } from './PaymentModal';
 import OptimizedImage from './OptimizedImage';
@@ -234,6 +235,35 @@ export const ListingDetailPage = () => {
   const description = listing.description || `View details for ${listing.title} in ${listing.city || ''} on Gruvora Living.`;
   const image = listing.images?.[0] ? `https://res.cloudinary.com/gharshetu/image/upload/${listing.images[0]}` : undefined;
 
+  // JSON-LD Listing schema
+  const listingSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": listing.title,
+    "description": description,
+    "image": listing.images?.map(img => `https://res.cloudinary.com/gharshetu/image/upload/${img}`),
+    "url": canonicalUrl,
+    "offers": {
+      "@type": "Offer",
+      "priceCurrency": "INR",
+      "price": listing.price,
+      "availability": "https://schema.org/InStock",
+      "url": canonicalUrl
+    },
+    "brand": {
+      "@type": "Organization",
+      "name": "Gruvora Living"
+    },
+    "category": listing.category,
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": listing.location,
+      "addressLocality": listing.city,
+      "addressRegion": listing.state,
+      "addressCountry": "IN"
+    }
+  };
+
   const Icon = categoryIcons[listing.category] || Home;
   const bgColor = categoryColors[listing.category] || 'bg-primary';
   const wishlisted = isWishlisted(id);
@@ -278,7 +308,9 @@ export const ListingDetailPage = () => {
           name: "twitter:image",
           content: image
         } : null].filter(Boolean)}
-      />
+      >
+        <JsonLd schema={listingSchema} />
+      </SeoHead>
       <Header />
 
       {/* Back Button */}
