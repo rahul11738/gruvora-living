@@ -41,15 +41,14 @@ const getSocketConnectionConfig = (apiUrl) => {
   if (safeUrl.startsWith('/')) {
     const normalizedPath = safeUrl.replace(/\/+$/, '');
     return {
-      < div className = "min-h-screen bg-stone-50 overflow-x-hidden" data - testid="chat-page" >
-        <SeoHead robots="noindex, nofollow" title="Chat – Gruvora (Private)" description="Private chat between users and owners. This page is not indexed." />
-        <Header />
+      uri: safeUrl,
+      path: '/socket.io',
+    };
+  }
+  return {
+    uri: safeUrl,
+    path: '/socket.io',
   };
-}
-return {
-  uri: safeUrl,
-  path: '/socket.io',
-};
 };
 const MESSAGE_PAGE_LIMIT = 50;
 const RECONNECT_DELAY_MS = [1000, 2000, 4000, 8000, 16000];
