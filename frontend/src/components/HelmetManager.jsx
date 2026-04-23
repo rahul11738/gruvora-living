@@ -1,8 +1,7 @@
-import React from 'react';
-
 /**
- * FIXED: Transparent passthrough - removes nested Helmet causing crash
- * Structure now: HelmetProvider (index.js) → HelmetManager (empty) → SeoHead (single Helmet)
+ * HelmetManager - Clean ESLint-compliant passthrough
+ * No React import (not used) - fixes Vercel no-unused-vars error
+ * Transparent wrapper for SEO structure
  */
 const HelmetManager = ({ children }) => children;
 
