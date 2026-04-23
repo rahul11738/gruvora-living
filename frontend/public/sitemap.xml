@@ -17,25 +17,25 @@
   <!-- ========================= -->
 
   <url>
-    <loc>https://gruvora.com/</loc>
+    <loc>https://www.gruvora.com/</loc>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/discover</loc>
+    <loc>https://www.gruvora.com/discover</loc>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/search</loc>
+    <loc>https://www.gruvora.com/search</loc>
     <changefreq>daily</changefreq>
     <priority>0.95</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/reels</loc>
+    <loc>https://www.gruvora.com/reels</loc>
     <changefreq>daily</changefreq>
     <priority>0.90</priority>
   </url>
@@ -45,19 +45,19 @@
   <!-- ========================= -->
 
   <url>
-    <loc>https://gruvora.com/login</loc>
+    <loc>https://www.gruvora.com/login</loc>
     <changefreq>weekly</changefreq>
     <priority>0.70</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/register</loc>
+    <loc>https://www.gruvora.com/register</loc>
     <changefreq>weekly</changefreq>
     <priority>0.75</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/verify-email</loc>
+    <loc>https://www.gruvora.com/verify-email</loc>
     <changefreq>weekly</changefreq>
     <priority>0.50</priority>
   </url>
@@ -67,31 +67,31 @@
   <!-- ========================= -->
 
   <url>
-    <loc>https://gruvora.com/category/home</loc>
+    <loc>https://www.gruvora.com/category/home</loc>
     <changefreq>daily</changefreq>
     <priority>0.90</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/category/business</loc>
+    <loc>https://www.gruvora.com/category/business</loc>
     <changefreq>daily</changefreq>
     <priority>0.90</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/category/stay</loc>
+    <loc>https://www.gruvora.com/category/stay</loc>
     <changefreq>daily</changefreq>
     <priority>0.90</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/category/event</loc>
+    <loc>https://www.gruvora.com/category/event</loc>
     <changefreq>daily</changefreq>
     <priority>0.90</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/category/services</loc>
+    <loc>https://www.gruvora.com/category/services</loc>
     <changefreq>daily</changefreq>
     <priority>0.90</priority>
   </url>
@@ -101,43 +101,43 @@
   <!-- ========================= -->
 
   <url>
-    <loc>https://gruvora.com/about-us</loc>
+    <loc>https://www.gruvora.com/about-us</loc>
     <changefreq>monthly</changefreq>
     <priority>0.80</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/privacy-policy</loc>
+    <loc>https://www.gruvora.com/privacy-policy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.65</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/terms-conditions</loc>
+    <loc>https://www.gruvora.com/terms-conditions</loc>
     <changefreq>monthly</changefreq>
     <priority>0.65</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/refund-cancellation-policy</loc>
+    <loc>https://www.gruvora.com/refund-cancellation-policy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.60</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/disclaimer</loc>
+    <loc>https://www.gruvora.com/disclaimer</loc>
     <changefreq>monthly</changefreq>
     <priority>0.55</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/user-verification-policy</loc>
+    <loc>https://www.gruvora.com/user-verification-policy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.55</priority>
   </url>
 
   <url>
-    <loc>https://gruvora.com/community-guidelines</loc>
+    <loc>https://www.gruvora.com/community-guidelines</loc>
     <changefreq>monthly</changefreq>
     <priority>0.55</priority>
   </url>
@@ -157,13 +157,13 @@
      /listing/:id
 
   Example:
-  https://gruvora.com/listing/65fd71ab29f9
+  https://www.gruvora.com/listing/65fd71ab29f9
 
   2. Owner Public Profiles
      /owner/:id
 
   Example:
-  https://gruvora.com/owner/65ad921bb8e2
+  https://www.gruvora.com/owner/65ad921bb8e2
 
   3. Future Blog Pages
      /blog/:slug

@@ -331,7 +331,7 @@ export const CategoryPage = () => {
       <SeoHead
         title={`${title.en} Listings – Gruvora Living`}
         description={description}
-        canonical={`https://gruvora.com/category/${category || ''}`}
+        canonical={`https://www.gruvora.com/category/${category || ''}`}
         keywords={["Gruvora", title.en, "category", "property", "rental", "India"]}
         og={[{
           property: "og:title",

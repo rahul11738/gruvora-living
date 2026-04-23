@@ -280,7 +280,7 @@ export const ReelsPage = () => {
       <SeoHead
         title="Reels – Gruvora Living"
         description="Short property reels and highlights from Gruvora owners and hosts. Watch and share short property videos."
-        canonical="https://gruvora.com/reels"
+        canonical="https://www.gruvora.com/reels"
         keywords={["Gruvora", "reels", "property videos", "short videos"]}
         og={[{
           property: "og:title",

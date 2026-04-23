@@ -149,7 +149,7 @@ export const OwnerProfilePage = () => {
   }
 
   // SEO meta tags
-  const canonicalUrl = `https://gruvora.com/owner/${ownerId}`;
+  const canonicalUrl = `https://www.gruvora.com/owner/${ownerId}`;
   const title = `${owner.name} – Owner Profile | Gruvora Living`;
   const description = owner.bio || `View the public profile and listings of ${owner.name} on Gruvora Living.`;
   const image = owner.profile_image ? `https://res.cloudinary.com/gharshetu/image/upload/${owner.profile_image}` : undefined;

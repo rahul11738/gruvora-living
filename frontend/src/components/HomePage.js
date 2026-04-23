@@ -34,7 +34,7 @@ const HomePage = memo(function HomePage() {
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": "Gruvora Living",
-        "url": "https://gruvora.com/",
+        "url": "https://www.gruvora.com/",
         "logo": "https://gruvora.com/logo.png",
         "sameAs": [
             "https://www.facebook.com/gruvoraliving",
@@ -55,7 +55,7 @@ const HomePage = memo(function HomePage() {
             <SeoHead
                 title="Gruvora Living – Premium Property Rentals & Stays"
                 description="Discover, search, and book premium rental properties and stays across India with Gruvora Living. Trusted, verified listings."
-                canonical="https://gruvora.com/"
+                canonical="https://www.gruvora.com/"
                 keywords={["Gruvora", "Gruvora Living", "property rental", "premium stays", "India", "real estate"]}
                 og={[{
                     property: "og:title",
@@ -65,7 +65,7 @@ const HomePage = memo(function HomePage() {
                     content: "Discover, search, and book premium rental properties and stays across India with Gruvora Living. Trusted, verified listings."
                 }, {
                     property: "og:url",
-                    content: "https://gruvora.com/"
+                    content: "https://www.gruvora.com/"
                 }, {
                     property: "og:type",
                     content: "website"

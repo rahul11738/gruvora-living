@@ -12,7 +12,7 @@ const SOCIAL_LINKS = [
 
 const StaticDocPage = ({ title, effectiveDate, sections }) => {
   // SEO meta tags
-  const canonicalUrl = `https://gruvora.com/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
+  const canonicalUrl = `https://www.gruvora.com/${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`;
   const description = `${title} for Gruvora Living. Read the latest policies, terms, and legal information.`;
   return (
     <div className="min-h-screen bg-stone-50" data-testid="policy-page">

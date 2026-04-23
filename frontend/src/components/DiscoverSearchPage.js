@@ -104,7 +104,7 @@ export const DiscoverSearchPage = () => {
       <SeoHead
         title="Discover Properties – Gruvora Living"
         description="Browse and search premium rental properties and stays in Gujarat and across India on Gruvora Living. Filter by city, category, and more."
-        canonical="https://gruvora.com/discover"
+        canonical="https://www.gruvora.com/discover"
         keywords={["Gruvora", "discover", "property search", "rental listings", "Gujarat", "India"]}
         og={[{
           property: "og:title",

@@ -18,7 +18,7 @@ Disallow: /api/admin
 # Crawl-delay: 5
 
 # Sitemap references
-Sitemap: https://gruvora.com/sitemap.xml
-Sitemap: https://gruvora.com/sitemap-listings.xml
-Sitemap: https://gruvora.com/sitemap-owners.xml
-Sitemap: https://gruvora.com/sitemap-categories.xml
+Sitemap: https://www.gruvora.com/sitemap.xml
+Sitemap: https://www.gruvora.com/sitemap-listings.xml
+Sitemap: https://www.gruvora.com/sitemap-owners.xml
+Sitemap: https://www.gruvora.com/sitemap-categories.xml

@@ -230,7 +230,7 @@ export const ListingDetailPage = () => {
   if (!listing) return null;
 
   // SEO meta tags
-  const canonicalUrl = `https://gruvora.com/listing/${id}`;
+  const canonicalUrl = `https://www.gruvora.com/listing/${id}`;
   const title = `${listing.title} – ${listing.city || ''} | Gruvora Living`;
   const description = listing.description || `View details for ${listing.title} in ${listing.city || ''} on Gruvora Living.`;
   const image = listing.images?.[0] ? `https://res.cloudinary.com/gharshetu/image/upload/${listing.images[0]}` : undefined;
