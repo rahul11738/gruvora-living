@@ -7,7 +7,7 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { InteractionProvider } from "./context/InteractionContext";
 import { NotificationProvider } from "./components/Notifications.jsx";
-import HelmetManager from "./components/HelmetManager.jsx";
+
 import { RouteSkeleton } from "./components/SkeletonLoaders";
 import { prefetchDiscoverRoute, prefetchReelsRoute } from "./lib/routePrefetch";
 import PwaStatusBar from "./components/pwa/PwaStatusBar";
@@ -281,10 +281,8 @@ function App() {
           <InteractionProvider>
             <AppErrorBoundary>
               <NotificationProvider>
-                <HelmetManager>
-                  <AppRoutes />
-                  <MobileBottomNav />
-                </HelmetManager>
+                <AppRoutes />
+                <MobileBottomNav />
                 <Toaster position="top-right" richColors />
                 <PwaStatusBar
                   isInstallable={canPrompt}
