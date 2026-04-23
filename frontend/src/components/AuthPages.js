@@ -84,7 +84,7 @@ export const LoginPage = () => {
         // Redirect based on role
         if (result.user.role === 'admin') {
           navigate('/admin');
-        } else if (['property_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(result.user.role)) {
+        } else if (['property_owner', 'stay_owner', 'service_provider', 'hotel_owner', 'event_owner'].includes(result.user.role)) {
           navigate('/owner/dashboard');
         } else {
           navigate('/dashboard');
