@@ -522,9 +522,9 @@ const CategoryCard = memo(({ cat, index, isActive, reduceMotion }) => {
             {cat.name_gu}
           </p>
 
-          <p className="text-[13px] text-stone-500 group-hover:text-white/75 transition-colors duration-300 leading-relaxed line-clamp-2 flex-1 w-full">
-            {cat.description || cat.sub_categories?.slice(0, 4).map((s) => s.name).join(' · ')}
-          </p>
+<p className="text-[13px] text-stone-500 group-hover:text-white/75 transition-colors duration-300 leading-relaxed line-clamp-2 flex-1 w-full">
+             {cat.description || (cat.sub_categories && cat.sub_categories.slice(0, 4).map((s) => s.name).join(' · '))}
+           </p>
 
           <div className="mt-5 inline-flex items-center gap-1.5 text-stone-500 group-hover:text-white transition-colors duration-300">
             <span className="text-[13px] font-semibold">Explore</span>
@@ -589,7 +589,7 @@ const SectionHeader = memo(({ reduceMotion }) => {
 
 const DotIndicators = ({ categories, activeIndex, railRef, onDotSelect }) => (
   <div className="flex justify-center gap-2 mt-6 md:hidden" aria-hidden="true">
-    {categories.map((cat, i) => {
+    {(categories || []).map((cat, i) => {
       const isActive = activeIndex === i;
 
       return (

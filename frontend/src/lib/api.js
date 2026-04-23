@@ -314,9 +314,18 @@ api.interceptors.response.use(
 
 // Auth APIs
 export const authAPI = {
-  login: (data) => api.post('/auth/login', data),
-  register: (data) => api.post('/auth/register', data),
-  registerOwner: (data) => api.post('/auth/register/owner', data),
+  login: async (data) => {
+    const response = await api.post('/auth/login', data);
+    return response?.data || {};
+  },
+  register: async (data) => {
+    const response = await api.post('/auth/register', data);
+    return response?.data || {};
+  },
+  registerOwner: async (data) => {
+    const response = await api.post('/auth/register/owner', data);
+    return response?.data || {};
+  },
   getMe: () => fetchWithCacheFallback({
     request: () => api.get('/auth/me'),
     cacheKey: 'gharsetu_auth_me_cache',
