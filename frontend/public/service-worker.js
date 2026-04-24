@@ -20,7 +20,7 @@ const PRECACHE_URLS = [
     '/index.html',
     '/offline.html',
     '/manifest.json',
-    '/icons/APP_ICON.png',
+    '/favicon.png',
 ];
 
 const OFFLINE_JSON = JSON.stringify({
