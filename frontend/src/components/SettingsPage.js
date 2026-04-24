@@ -30,7 +30,6 @@ export const SettingsPage = () => {
   const { user, updateProfile, isOwner } = useAuth();
   const [activeTab, setActiveTab] = useState('account');
   const [saving, setSaving] = useState(false);
-  const [loadingListings] = useState(false);
   const [ownedListings] = useState([]);
 
   const [accountForm, setAccountForm] = useState({
@@ -121,8 +120,8 @@ export const SettingsPage = () => {
       return;
     }
     
-    if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(passwordForm.new_password)) {
-      toast.error('New password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)');
+      if (!/[!@#$%^&*-]/.test(passwordForm.new_password)) {
+       toast.error('New password must contain at least one special character (!@#$%^&*-)');
       return;
     }
 
