@@ -329,8 +329,8 @@ export const OwnerDashboard = () => {
           </div>
         </aside>
 
-        {/* Main Content - with left margin to account for sidebar on desktop */}
-        <main className="flex-1 min-w-0 lg:ml-64 p-4 lg:p-8 pb-24 lg:pb-8 w-full">
+        {/* Main Content - flex-1 fills remaining space beside static sidebar */}
+        <main className="flex-1 min-w-0 p-4 lg:p-8 pb-24 lg:pb-8 w-full">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -580,7 +580,7 @@ export const OwnerDashboard = () => {
 
           {/* Subscription Tab */}
           {activeTab === 'subscription' && showSubscriptionTab && (
-            <div className="max-w-lg">
+            <div className="max-w-5xl">
               <SubscriptionCard onPaymentSuccess={fetchStatus} />
             </div>
           )}
@@ -1024,8 +1024,8 @@ const LeadsSection = ({ leads }) => {
                     <a
                       href={getTelHref(lead.customer_phone)}
                       className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${lead.customer_phone
-                          ? 'bg-primary text-white hover:bg-primary/90'
-                          : 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                        ? 'bg-primary text-white hover:bg-primary/90'
+                        : 'bg-stone-100 text-stone-400 cursor-not-allowed'
                         }`}
                       onClick={(e) => { if (!lead.customer_phone) e.preventDefault(); }}
                     >
@@ -1037,8 +1037,8 @@ const LeadsSection = ({ leads }) => {
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium border transition-colors ${lead.customer_email
-                          ? 'border-stone-200 text-stone-700 hover:bg-stone-50 hover:border-stone-300'
-                          : 'border-stone-100 text-stone-300 cursor-not-allowed'
+                        ? 'border-stone-200 text-stone-700 hover:bg-stone-50 hover:border-stone-300'
+                        : 'border-stone-100 text-stone-300 cursor-not-allowed'
                         }`}
                       onClick={(e) => { if (!lead.customer_email) e.preventDefault(); }}
                     >
@@ -1049,8 +1049,8 @@ const LeadsSection = ({ leads }) => {
                       onClick={() => handleChat(lead)}
                       disabled={!lead.customer_id}
                       className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium border transition-colors ${lead.customer_id
-                          ? 'border-stone-200 text-stone-700 hover:bg-stone-50 hover:border-stone-300'
-                          : 'border-stone-100 text-stone-300 cursor-not-allowed'
+                        ? 'border-stone-200 text-stone-700 hover:bg-stone-50 hover:border-stone-300'
+                        : 'border-stone-100 text-stone-300 cursor-not-allowed'
                         }`}
                     >
                       <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
