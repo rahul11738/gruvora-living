@@ -9116,6 +9116,8 @@ async def create_payment_order(
             if request.payment_type == "subscription"
             else 1,
             "booking_date": request.booking_date,
+            "guests": request.guests,
+            "notes": request.notes,
             "status": "created",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -9198,17 +9200,36 @@ async def verify_payment(
 
         if payment_type == "booking":
             booking_id = str(uuid.uuid4())
+            # Enrich booking with listing and owner details
+            listing = await db.listings.find_one({"id": payment["listing_id"]})
+            owner = None
+            if listing:
+                owner = await db.users.find_one({"id": listing.get("owner_id")})
+
+            amount_inr = payment["amount"] / 100
             booking = {
                 "id": booking_id,
                 "user_id": user_id,
                 "user_name": user.get("name"),
+                "user_email": user.get("email"),
                 "user_phone": user.get("phone"),
                 "listing_id": payment["listing_id"],
+                "listing_title": listing.get("title") if listing else "Unknown Listing",
+                "listing_category": listing.get("category") if listing else "stay",
+                "listing_image": listing.get("images", [None])[0] if listing else None,
+                "owner_id": listing.get("owner_id") if listing else None,
+                "owner_name": owner.get("name") if owner else "Unknown Owner",
+                "owner_email": owner.get("email") if owner else None,
+                "owner_phone": owner.get("phone") if owner else None,
                 "payment_id": payment["id"],
                 "razorpay_order_id": request.razorpay_order_id,
                 "razorpay_payment_id": request.razorpay_payment_id,
                 "booking_date": payment.get("booking_date"),
-                "amount_paid": payment["amount"],
+                "guests": payment.get("guests") or 1,
+                "notes": payment.get("notes"),
+                "amount_paid": amount_inr,
+                "total_price": amount_inr,
+                "currency": payment.get("currency", "INR"),
                 "status": "confirmed",
                 "created_at": now_iso,
             }
@@ -9238,14 +9259,14 @@ async def verify_payment(
                             )
                         )
 
-                commission_amount = int(payment["amount"] * (rate_val / 100))
+                commission_amount = amount_inr * (rate_val / 100)
                 await db.commissions.insert_one(
                     {
                         "id": str(uuid.uuid4()),
                         "booking_id": booking_id,
                         "owner_id": listing["owner_id"],
                         "listing_id": listing["id"],
-                        "total_amount": payment["amount"],
+                        "total_amount": amount_inr,
                         "commission_rate": rate_val,
                         "commission_amount": commission_amount,
                         "status": "pending",

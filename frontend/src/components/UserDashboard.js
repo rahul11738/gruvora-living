@@ -378,7 +378,12 @@ const BookingCard = ({ booking, user }) => {
             )}
           </div>
           <div className="text-right">
-            <p className="font-bold text-primary">₹{booking.total_price?.toLocaleString('en-IN') || booking.amount_paid?.toLocaleString('en-IN')}</p>
+            <p className="font-bold text-primary">
+              ₹{(() => {
+                const price = booking.total_price || (booking.amount_paid > 50000 && !booking.total_price ? booking.amount_paid / 100 : booking.amount_paid) || 0;
+                return price.toLocaleString('en-IN');
+              })()}
+            </p>
             <div className="flex flex-col gap-2 mt-2">
               <Link to={`/listing/${booking.listing_id}`}>
                 <Button variant="outline" size="sm" className="w-full">

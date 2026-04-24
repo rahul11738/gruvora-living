@@ -23,22 +23,18 @@ export default function SeoHead({
     og = [],
     twitter = [],
     robots = "index, follow",
-    children,
 }) {
     const canonicalUrl = canonical || (typeof window !== "undefined" ? window.location.origin + window.location.pathname : undefined);
     return (
-        <>
-            <Helmet>
-                {title && <title>{title}</title>}
-                {description && <meta name="description" content={description} />}
-                {keywords.length > 0 && <meta name="keywords" content={keywords.join(", ")} />}
-                {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
-                {robots && <meta name="robots" content={robots} />}
-                {meta.map((m, i) => <meta key={i} {...m} />)}
-                {og.map((o, i) => <meta key={"og" + i} property={o.property} content={o.content} />)}
-                {twitter.map((t, i) => <meta key={"tw" + i} name={t.name} content={t.content} />)}
-            </Helmet>
-            {children}
-        </>
+        <Helmet>
+            {title && <title>{title}</title>}
+            {description && <meta name="description" content={description} />}
+            {keywords.length > 0 && <meta name="keywords" content={keywords.join(", ")} />}
+            {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+            {robots && <meta name="robots" content={robots} />}
+            {meta.map((m, i) => <meta key={i} {...m} />)}
+            {og.map((o, i) => <meta key={"og" + i} property={o.property} content={o.content} />)}
+            {twitter.map((t, i) => <meta key={"tw" + i} name={t.name} content={t.content} />)}
+        </Helmet>
     );
 }

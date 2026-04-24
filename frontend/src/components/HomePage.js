@@ -80,9 +80,8 @@ const HomePage = memo(function HomePage() {
                     name: "twitter:description",
                     content: "Discover, search, and book premium rental properties and stays across India with Gruvora Living. Trusted, verified listings."
                 }]}
-            >
-                <JsonLd schema={orgSchema} />
-            </SeoHead>
+            />
+            <JsonLd schema={orgSchema} />
             <Header />
             <main className="home-main">
                 <Suspense fallback={<RouteSkeleton />}>

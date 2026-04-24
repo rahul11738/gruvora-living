@@ -100,7 +100,13 @@ export function generateBookingInvoicePDF(booking, user) {
 
   // ── Line items table ──────────────────────────────────────────────────────
   y += 36;
-  const totalAmount = booking.amount_paid || booking.total_price || 0;
+  
+  // Normalize price: prefer total_price (INR), fallback to amount_paid (paise for legacy)
+  let totalAmount = booking.total_price || booking.amount_paid || 0;
+  // Legacy check: if amount_paid is suspiciously large and total_price is missing, it's likely paise
+  if (!booking.total_price && booking.amount_paid > 50000) {
+      totalAmount = booking.amount_paid / 100;
+  }
 
   autoTable(doc, {
     startY: y,

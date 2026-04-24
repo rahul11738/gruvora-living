@@ -308,9 +308,8 @@ export const ListingDetailPage = () => {
           name: "twitter:image",
           content: image
         } : null].filter(Boolean)}
-      >
-        <JsonLd schema={listingSchema} />
-      </SeoHead>
+      />
+      <JsonLd schema={listingSchema} />
       <Header />
 
       {/* Back Button */}
