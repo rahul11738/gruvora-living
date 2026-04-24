@@ -104,70 +104,159 @@ export const TermsConditionsPage = () => (
     effectiveDate="April 2026"
     sections={[
       {
-        heading: "Welcome",
+        heading: "Welcome to GRUVORA LIVING",
         paragraphs: [
-          "Welcome to GRUVORA LIVING - Your Home Bridge. By accessing or using the GharSetu website and services, you agree to comply with these Terms and Conditions.",
+          "Welcome to GRUVORA LIVING – Your Home Bridge. These Terms & Conditions govern your access to and use of our platform, including our website, mobile application, and related services.",
+          "By accessing, browsing, registering, or using GRUVORA LIVING, you acknowledge that you have read, understood, and agreed to be legally bound by these Terms & Conditions, our Privacy Policy, and all applicable laws and regulations.",
+          "If you do not agree with these terms, you must discontinue use of the platform immediately.",
         ],
       },
       {
         heading: "1. Platform Overview",
-        paragraphs: ["GRUVORA LIVING is an online platform that allows users to list, search, and connect for:"],
-        bullets: [
-          "Residential Properties (Flats, PG, Houses - Rent / Sell)",
-          "Commercial Properties (Shops, Offices, Warehouses)",
-          "Stay Services (Hotels, Rooms, Guest Houses)",
-          "Event Spaces (Party Plots, Marriage Halls)",
-          "Local Services (Plumber, Electrician, Cleaning, Painter)",
-          "GRUVORA LIVING acts only as a digital marketplace and does not directly own or sell properties.",
-        ],
-      },
-      {
-        heading: "2. User Registration",
-        paragraphs: ["To use certain features of the platform, users must register and provide accurate information including:"],
-        bullets: ["Name", "Email Address", "Phone Number", "Address", "Users are responsible for maintaining the confidentiality of their login credentials."],
-      },
-      {
-        heading: "3. Property Listings",
-        paragraphs: ["Owners and service providers must ensure the following while listing:"],
-        bullets: [
-          "All information provided is accurate and genuine",
-          "Images and descriptions are not misleading",
-          "The property or service is legally available",
-          "GRUVORA reserves the right to remove any listing that violates these rules.",
-        ],
-      },
-      {
-        heading: "4. User Responsibilities",
-        bullets: [
-          "Do not post false or misleading information",
-          "Do not use the platform for illegal activities",
-          "Do not harass or misuse other users",
-          "Any violation may result in account suspension or removal.",
-        ],
-      },
-      {
-        heading: "5. Platform Limitation",
-        paragraphs: ["GRUVORA LIVING only provides a connection between users, property owners, and service providers. GRUVORA LIVING is not responsible for:"],
-        bullets: ["Property disputes", "Payment disagreements", "Service quality issues", "Users must verify details before making any decision."],
-      },
-      {
-        heading: "6. Privacy",
-        paragraphs: ["User information is collected and used according to the GRUVORA LIVING Privacy Policy. We do not sell personal user data to third parties."],
-      },
-      {
-        heading: "7. Changes to Terms",
-        paragraphs: ["GRUVORA LIVING reserves the right to modify these Terms & Conditions at any time. Updated terms will be posted on the website."],
-      },
-      {
-        heading: "8. Contact Information",
         paragraphs: [
-          "For any queries regarding these Terms & Conditions, please contact: gruvora@gmail.com",
-          "By using the GRUVORA LIVING platform, you acknowledge that you have read and agreed to these Terms & Conditions.",
+          "GRUVORA LIVING is a digital real estate and services marketplace designed to connect property owners, buyers, tenants, service providers, and customers through a secure and scalable SaaS platform.",
+          "The platform facilitates discovery, communication, booking, and lead generation for the following categories:",
+        ],
+        bullets: [
+          "Residential Properties (Flats, Apartments, Villas, PG, Houses for Rent / Sale)",
+          "Commercial Properties (Shops, Offices, Warehouses, Industrial Spaces)",
+          "Hospitality & Stay Services (Hotels, Guest Houses, Rooms, Vacation Stays)",
+          "Event Venues (Marriage Halls, Party Plots, Banquet Halls, Farmhouses)",
+          "Local Home Services (Plumber, Electrician, Painter, Cleaner, Carpenter, Movers)",
+          "Owner & Builder Listing Management",
+          "Verified Lead and Inquiry Management",
+        ],
+      },
+      {
+        heading: "2. Nature of Service",
+        paragraphs: [
+          "GRUVORA LIVING acts solely as an intermediary technology platform and does not directly own, control, verify, buy, sell, rent, or manage properties or services listed by users unless explicitly stated.",
+          "We are not a broker, agent, contractor, financial institution, or legal advisor. Users are solely responsible for independent verification before entering into any transaction.",
+        ],
+      },
+      {
+        heading: "3. User Registration & Account Responsibility",
+        paragraphs: [
+          "To access premium features, users must create an account by providing accurate, complete, and updated information.",
+        ],
+        bullets: [
+          "Full Name",
+          "Email Address",
+          "Mobile Number",
+          "Address / Business Details",
+          "Property Ownership or Service Information (where applicable)",
+          "Identity verification documents (if requested)",
+        ],
+        paragraphs2: [
+          "Users are fully responsible for maintaining the confidentiality of login credentials and for all activities conducted under their account.",
+          "GRUVORA reserves the right to suspend, restrict, or permanently terminate accounts containing false, misleading, or fraudulent information.",
+        ],
+      },
+      {
+        heading: "4. Property Listings & Service Listings",
+        paragraphs: [
+          "Owners, agents, builders, and service providers must ensure that all listings published on the platform comply with legal, ethical, and platform standards.",
+        ],
+        bullets: [
+          "All information provided must be accurate, lawful, and genuine",
+          "Images, pricing, descriptions, and amenities must not be misleading",
+          "The listed property/service must be legally available for rent, sale, booking, or service delivery",
+          "No duplicate, fake, spam, or unauthorized listings are allowed",
+          "Users must have legal authority to publish the listing",
+        ],
+      },
+      {
+        heading: "5. Payments, Bookings & Transactions",
+        paragraphs: [
+          "Certain features such as premium listings, booking confirmations, event reservations, and subscription plans may involve online payments through integrated payment gateways.",
+          "GRUVORA LIVING is not responsible for disputes arising between users related to direct transactions unless the transaction is explicitly processed under our protected payment system.",
+        ],
+        bullets: [
+          "Payment disputes",
+          "Refund disagreements",
+          "Booking cancellations",
+          "Offline cash transactions",
+          "Fraudulent external payment requests",
+        ],
+      },
+      {
+        heading: "6. User Responsibilities & Prohibited Activities",
+        bullets: [
+          "Posting false, misleading, or fraudulent information",
+          "Harassing, threatening, or abusing other users",
+          "Using the platform for illegal, unethical, or prohibited activities",
+          "Uploading copyrighted or unauthorized content",
+          "Attempting to hack, reverse engineer, or disrupt platform security",
+          "Circumventing platform fees or payment systems",
+          "Creating fake accounts or impersonating another person/business",
+        ],
+        paragraphs: [
+          "Violation of these rules may result in immediate suspension, permanent account termination, legal action, and reporting to relevant authorities where necessary.",
+        ],
+      },
+      {
+        heading: "7. Verification & Trust Disclaimer",
+        paragraphs: [
+          "While GRUVORA LIVING may provide verification badges, identity checks, and quality controls, we do not guarantee the authenticity, ownership, legal validity, or quality of every listing, property, service provider, or user.",
+          "Users must perform their own due diligence before making payments, bookings, agreements, or legal commitments.",
+        ],
+      },
+      {
+        heading: "8. Intellectual Property",
+        paragraphs: [
+          "All platform content including branding, logo, UI/UX, software systems, databases, designs, source architecture, and business workflows remain the exclusive intellectual property of GRUVORA LIVING unless otherwise stated.",
+          "Unauthorized copying, resale, scraping, reverse engineering, or commercial misuse is strictly prohibited.",
+        ],
+      },
+      {
+        heading: "9. Privacy & Data Protection",
+        paragraphs: [
+          "User information is collected, processed, and protected according to the GRUVORA LIVING Privacy Policy and applicable data protection laws.",
+          "We do not sell personal user data to third parties. However, certain operational data may be shared with payment processors, verification partners, and legal authorities where required.",
+        ],
+      },
+      {
+        heading: "10. Limitation of Liability",
+        paragraphs: [
+          "GRUVORA LIVING shall not be liable for any direct, indirect, incidental, legal, financial, or consequential damages arising from:",
+        ],
+        bullets: [
+          "Property disputes",
+          "Rental conflicts",
+          "Ownership verification issues",
+          "Construction or service quality disputes",
+          "Fraud by third-party users",
+          "Business loss or missed opportunities",
+          "Technical downtime or temporary service interruptions",
+        ],
+      },
+      {
+        heading: "11. Modification of Terms",
+        paragraphs: [
+          "GRUVORA LIVING reserves the right to modify, update, or replace these Terms & Conditions at any time based on business, legal, regulatory, or operational requirements.",
+          "Updated versions will be published on the platform with revised effective dates. Continued use of the platform constitutes acceptance of the revised terms.",
+        ],
+      },
+      {
+        heading: "12. Governing Law & Jurisdiction",
+        paragraphs: [
+          "These Terms & Conditions shall be governed by and interpreted in accordance with the laws of India.",
+          "Any disputes arising from platform usage shall be subject to the exclusive jurisdiction of the competent courts of Gujarat, India.",
+        ],
+      },
+      {
+        heading: "13. Contact Information",
+        paragraphs: [
+          "For legal queries, compliance concerns, or support regarding these Terms & Conditions, please contact:",
+          "Email: gruvora@gmail.com",
+          "Platform: GRUVORA LIVING – Your Home Bridge",
+          "By continuing to use GRUVORA LIVING, you confirm your acceptance of these Terms & Conditions.",
         ],
       },
     ]}
   />
 );
+
 
 export const PrivacyPolicyPage = () => (
   <StaticDocPage
