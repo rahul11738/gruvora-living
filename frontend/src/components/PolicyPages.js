@@ -249,7 +249,7 @@ export const TermsConditionsPage = () => (
         paragraphs: [
           "For legal queries, compliance concerns, or support regarding these Terms & Conditions, please contact:",
           "Email: gruvora@gmail.com",
-          "Platform: GRUVORA LIVING – Your Home Bridge",
+          "Platform: GRUVORA LIVING : Your Home Bridge",
           "By continuing to use GRUVORA LIVING, you confirm your acceptance of these Terms & Conditions.",
         ],
       },
@@ -360,7 +360,7 @@ export const AboutUsPage = () => (
     effectiveDate="April 2026"
     sections={[
       {
-        heading: "Welcome to GRUVORA LIVING - Your Home Bridge",
+        heading: "Welcome to GRUVORA LIVING : Your Home Bridge",
         paragraphs: [
           "GRUVORA LIVING is a smart digital platform designed to connect people with the right homes, businesses, stays, event spaces, and local services in one place.",
           "Our goal is to make property search and local service discovery simple, fast, and reliable.",
