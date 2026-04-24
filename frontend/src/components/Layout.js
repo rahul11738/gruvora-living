@@ -32,6 +32,7 @@ import {
   Instagram,
   Facebook,
   Mail,
+  ClipboardList,
 } from 'lucide-react';
 
 const categories = [
@@ -244,6 +245,12 @@ export const Header = () => {
                          <Link to={getDashboardLink()} className="flex items-center gap-2 rounded-lg px-2 py-2">
                            <LayoutDashboard className="w-4 h-4" />
                            Dashboard
+                         </Link>
+                       </DropdownMenuItem>
+                       <DropdownMenuItem asChild>
+                         <Link to="/dashboard?tab=bookings" className="flex items-center gap-2 rounded-lg px-2 py-2">
+                           <ClipboardList className="w-4 h-4" />
+                           Order History
                          </Link>
                        </DropdownMenuItem>
                        <DropdownMenuItem asChild>

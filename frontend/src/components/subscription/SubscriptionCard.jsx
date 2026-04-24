@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useAuth } from '../../context/AuthContext';
 import { subscriptionAPI } from '../../lib/api';
@@ -87,6 +87,48 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
     }
   ];
 
+  const stayEventPlans = [
+    {
+      id: 'basic',
+      name: 'Basic',
+      price: '₹199',
+      subtext: 'Entry Level',
+      features: [
+        '1 Property Listing (Stay or Event)',
+        '1 Reel Upload / week',
+        '2% Platform Fees'
+      ],
+      color: 'primary'
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      price: '₹499',
+      subtext: 'Growth Plan',
+      features: [
+        '5 Property Listings / week',
+        '5 Reel Uploads / week',
+        '2% Platform Fees',
+        'Featured Placement'
+      ],
+      color: 'primary',
+      recommended: true
+    },
+    {
+      id: 'advanced',
+      name: 'Advanced',
+      price: '₹999',
+      subtext: 'Unlimited Scaling',
+      features: [
+        'Unlimited Stay & Event Listings',
+        '10 Reel Uploads / week',
+        '2% Platform Fees',
+        'Priority Support'
+      ],
+      color: 'primary'
+    }
+  ];
+
   const servicePlans = [
     {
       id: 'service_basic',
@@ -109,7 +151,11 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
     }
   ];
 
-  const plansToDisplay = (role === 'service_provider') ? servicePlans : ownerPlans;
+  const plansToDisplay = (role === 'service_provider') 
+    ? servicePlans 
+    : (['stay_owner', 'hotel_owner', 'event_owner'].includes(role))
+      ? stayEventPlans
+      : ownerPlans;
   const isOwnerRole = ['property_owner', 'stay_owner', 'event_owner', 'hotel_owner'].includes(role);
 
   return (
@@ -198,10 +244,24 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
   const [invoices, setInvoices] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [showInvoices, setShowInvoices] = useState(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+
+  useEffect(() => {
+    // Load Razorpay script
+    if (!window.Razorpay) {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => setRazorpayLoaded(true);
+      document.body.appendChild(script);
+    } else {
+      setRazorpayLoaded(true);
+    }
+  }, []);
 
   const handlePay = async (plan = 'monthly') => {
-    if (!window.Razorpay) {
-      toast.error('Payment gateway not loaded');
+    if (!window.Razorpay && !razorpayLoaded) {
+      toast.error('Payment gateway is loading, please try again in a moment');
       return;
     }
 
@@ -209,14 +269,15 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
     try {
       const orderRes = await subscriptionAPI.createOrder(plan);
       const { order_id, amount, key_id } = orderRes.data;
+      console.log('Razorpay Order Details:', { order_id, amount, key_id });
 
       await new Promise((resolve, reject) => {
         const razorpay = new window.Razorpay({
           key: key_id,
           amount,
           currency: 'INR',
-          name: 'GharSetu',
-          description: `Monthly Subscription - ₹${amount / 100}`,
+          name: 'Gruvora Living',
+          description: `Subscription - ₹${amount / 100}`,
           order_id,
           handler: async (response) => {
             try {

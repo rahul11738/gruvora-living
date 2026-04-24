@@ -163,7 +163,7 @@ export const PaymentModal = ({
         key: paymentConfig.key_id,
         amount: orderData.amount, // Use the total amount (base + fees) returned from the backend
         currency: 'INR',
-        name: 'GharSetu',
+        name: 'Gruvora Living',
         description: paymentType === 'subscription' ? 'Subscription Payment' : 
                      paymentType === 'listing_fee' ? 'Listing Fee Payment' : 
                      paymentType === 'reel_boost' ? 'Reel Boost Payment' :
