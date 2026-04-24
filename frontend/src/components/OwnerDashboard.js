@@ -224,113 +224,114 @@ export const OwnerDashboard = () => {
 
       <div className="flex w-full min-h-screen">
         {/* Sidebar - static on desktop, slides on mobile */}
-        <aside className={`fixed lg:static inset-y-0 left-0 w-72 max-w-[85vw] bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 lg:min-h-screen lg:overflow-y-auto pb-24 lg:pb-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
-          <div className="p-6 min-h-full relative flex flex-col">
-            <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
-              <BrandedLogo variant="compact" />
-            </Link>
+<aside className={`fixed lg:static inset-y-0 left-0 w-72 max-w-[85vw] bg-white border-r border-stone-200 z-50 transform transition-transform lg:transform-none lg:w-64 lg:min-h-screen lg:overflow-hidden pb-12 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+  <div className="p-6 min-h-full relative flex flex-col h-full">
+    <Link to="/" className="mb-8 inline-flex items-center rounded-xl border border-stone-200 bg-stone-50 px-3 py-2">
+      <BrandedLogo variant="compact" />
+    </Link>
 
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden absolute top-4 right-4 p-2"
-            >
-              <X className="w-5 h-5" />
-            </button>
+    <button
+      onClick={() => setSidebarOpen(false)}
+      className="lg:hidden absolute top-4 right-4 p-2"
+    >
+      <X className="w-5 h-5" />
+    </button>
 
-            <nav className="space-y-2 flex-1">
-              <button
-                onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'overview' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                  }`}
-              >
-                <LayoutDashboard className="w-5 h-5" />
-                Overview
-              </button>
-              <button
-                onClick={() => { setActiveTab('analytics'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'analytics' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                  }`}
-              >
-                <BarChart3 className="w-5 h-5" />
-                Analytics
-              </button>
-              <button
-                onClick={() => { setActiveTab('listings'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'listings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                  }`}
-              >
-                <FileText className="w-5 h-5" />
-                My Listings
-              </button>
-              <Link
-                to={`/owner/${user?.id}`}
-                onClick={() => setSidebarOpen(false)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors hover:bg-stone-100 text-stone-700"
-              >
-                <Play className="w-5 h-5" />
-                My Reel Profile
-              </Link>
-              <button
-                onClick={() => { setActiveTab('bookings'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'bookings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                  }`}
-              >
-                <Clock className="w-5 h-5" />
-                Bookings
-                {stats?.pending_bookings > 0 && (
-                  <Badge variant="destructive" className="ml-auto">{stats.pending_bookings}</Badge>
-                )}
-              </button>
-              <button
-                onClick={() => { setActiveTab('leads'); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'leads' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                  }`}
-              >
-                <Users className="w-5 h-5" />
-                Leads
-                {leads.length > 0 && (
-                  <Badge className="ml-auto bg-blue-500">{leads.length}</Badge>
-                )}
-              </button>
-              {showSubscriptionTab && (
-                <button
-                  onClick={() => { setActiveTab('subscription'); setSidebarOpen(false); }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'subscription' ? 'bg-primary text-white' : 'hover:bg-stone-100'
-                    }`}
-                >
-                  <Crown className="w-5 h-5" />
-                  Subscription
-                  {subData?.has_subscription ? (
-                    <Badge className="ml-auto bg-green-500">Active</Badge>
-                  ) : subData?.model === 'commission' ? (
-                    <Badge className="ml-auto bg-green-500">Partner</Badge>
-                  ) : needsPayment ? (
-                    <Badge className="ml-auto bg-red-500">Due</Badge>
-                  ) : (
-                    <Badge className="ml-auto bg-blue-500">Trial</Badge>
-                  )}
-                </button>
-              )}
-            </nav>
-
-            <div className="mt-6 pt-4 pb-2 border-t border-stone-200">
-              <div className="p-4 bg-stone-50 rounded-xl mb-4">
-                <p className="font-medium">{user?.name}</p>
-                <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              >
-                <LogOut className="w-5 h-5" />
-                Logout
-              </button>
-            </div>
-          </div>
-        </aside>
+    <nav className="space-y-2 flex-1">
+      <button
+        onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'overview' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+        }`}
+      >
+        <LayoutDashboard className="w-5 h-5" />
+        Overview
+      </button>
+      <button
+        onClick={() => { setActiveTab('analytics'); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'analytics' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+        }`}
+      >
+        <BarChart3 className="w-5 h-5" />
+        Analytics
+      </button>
+      <button
+        onClick={() => { setActiveTab('listings'); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'listings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+        }`}
+      >
+        <FileText className="w-5 h-5" />
+        My Listings
+      </button>
+      <Link
+        to={`/owner/${user?.id}`}
+        onClick={() => setSidebarOpen(false)}
+        className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors hover:bg-stone-100 text-stone-700"
+      >
+        <Play className="w-5 h-5" />
+        My Reel Profile
+      </Link>
+      <button
+        onClick={() => { setActiveTab('bookings'); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'bookings' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+        }`}
+      >
+        <Clock className="w-5 h-5" />
+        Bookings
+        {stats?.pending_bookings > 0 && (
+          <Badge variant="destructive" className="ml-auto">{stats.pending_bookings}</Badge>
+        )}
+      </button>
+      <button
+        onClick={() => { setActiveTab('leads'); setSidebarOpen(false); }}
+        className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'leads' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+        }`}
+      >
+        <Users className="w-5 h-5" />
+        Leads
+        {leads.length > 0 && (
+          <Badge className="ml-auto bg-blue-500">{leads.length}</Badge>
+        )}
+      </button>
+      {showSubscriptionTab && (
+        <button
+          onClick={() => { setActiveTab('subscription'); setSidebarOpen(false); }}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'subscription' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+          }`}
+        >
+          <Crown className="w-5 h-5" />
+          Subscription
+          {subData?.has_subscription ? (
+            <Badge className="ml-auto bg-green-500">Active</Badge>
+          ) : subData?.model === 'commission' ? (
+            <Badge className="ml-auto bg-green-500">Partner</Badge>
+          ) : needsPayment ? (
+            <Badge className="ml-auto bg-red-500">Due</Badge>
+          ) : (
+            <Badge className="ml-auto bg-blue-500">Trial</Badge>
+          )}
+        </button>
+      )}
+      
+      {/* User Profile Card - Moved here from bottom */}
+      <div className="mt-6 pt-4 pb-2 border-t border-stone-200">
+        <div className="p-4 bg-stone-50 rounded-xl mb-4">
+          <p className="font-medium">{user?.name}</p>
+          <p className="text-sm text-muted-foreground truncate">{user?.email}</p>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        >
+          <LogOut className="w-5 h-5" />
+          Logout
+        </button>
+      </div>
+    </nav>
+  </div>
+</aside>
 
         {/* Main Content - flex-1 fills remaining space beside static sidebar */}
-        <main className="flex-1 min-w-0 p-4 lg:p-8 pb-24 lg:pb-8 w-full">
+        <main className="flex-1 min-w-0 p-4 lg:p-8 h-screen overflow-y-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
