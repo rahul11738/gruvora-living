@@ -3309,7 +3309,11 @@ async def get_user_bookings(user: dict = Depends(get_current_user)):
             {
                 "user_id": user["id"],
                 "status": {
-                    "$in": [BookingStatus.PENDING.value, BookingStatus.CONFIRMED.value]
+                    "$in": [
+                        BookingStatus.PENDING.value,
+                        BookingStatus.CONFIRMED.value,
+                        BookingStatus.COMPLETED.value,
+                    ]
                 },
             },
             {"_id": 0},
@@ -9197,23 +9201,32 @@ async def verify_payment(
         )
 
         payment_type = payment.get("payment_type", "booking")
+        logger.info(f"PAYMENT VERIFIED: Order {request.razorpay_order_id}, Type: {payment_type}")
 
         if payment_type == "booking":
             booking_id = str(uuid.uuid4())
+            listing_id = payment.get("listing_id")
+            
+            if not listing_id:
+                logger.error(f"VERIFY ERROR: listing_id missing in payment record {payment.get('id')}")
+                raise HTTPException(status_code=400, detail="Incomplete payment record: listing_id missing")
+
             # Enrich booking with listing and owner details
-            listing = await db.listings.find_one({"id": payment["listing_id"]})
+            listing = await db.listings.find_one({"id": listing_id})
             owner = None
             if listing:
                 owner = await db.users.find_one({"id": listing.get("owner_id")})
+            else:
+                logger.warning(f"VERIFY WARNING: Listing {listing_id} not found during verification")
 
-            amount_inr = payment["amount"] / 100
+            amount_inr = (payment.get("amount") or 0) / 100
             booking = {
                 "id": booking_id,
                 "user_id": user_id,
                 "user_name": user.get("name"),
                 "user_email": user.get("email"),
                 "user_phone": user.get("phone"),
-                "listing_id": payment["listing_id"],
+                "listing_id": listing_id,
                 "listing_title": listing.get("title") if listing else "Unknown Listing",
                 "listing_category": listing.get("category") if listing else "stay",
                 "listing_image": listing.get("images", [None])[0] if listing else None,
@@ -9230,10 +9243,11 @@ async def verify_payment(
                 "amount_paid": amount_inr,
                 "total_price": amount_inr,
                 "currency": payment.get("currency", "INR"),
-                "status": "confirmed",
+                "status": BookingStatus.CONFIRMED.value,
                 "created_at": now_iso,
             }
             await db.bookings.insert_one(booking)
+            logger.info(f"BOOKING CREATED: {booking_id} for user {user_id}")
 
             # Dynamic Commission Recording
             listing = await db.listings.find_one({"id": payment["listing_id"]})

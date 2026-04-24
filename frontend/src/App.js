@@ -42,6 +42,7 @@ const HomePage = lazyWithRetry(() => import("./components/HomePage"));
 const ReelsPage = lazyWithRetry(() => import("./components/ReelsPage").then((m) => ({ default: m.ReelsPage })));
 const UserDashboard = lazyWithRetry(() => import("./components/UserDashboard").then((m) => ({ default: m.UserDashboard })));
 const WishlistPage = lazyWithRetry(() => import("./components/UserDashboard").then((m) => ({ default: m.WishlistPage })));
+const OrdersPage = lazyWithRetry(() => import("./components/OrdersPage").then((m) => ({ default: m.OrdersPage })));
 const OwnerDashboard = lazyWithRetry(() => import("./components/OwnerDashboard").then((m) => ({ default: m.OwnerDashboard })));
 const OwnerProfilePage = lazyWithRetry(() => import("./components/OwnerProfilePage").then((m) => ({ default: m.OwnerProfilePage })));
 const DiscoverSearchPage = lazyWithRetry(() => import("./components/DiscoverSearchPage").then((m) => ({ default: m.DiscoverSearchPage })));
@@ -138,6 +139,14 @@ function AppRoutes() {
           element={
             <ProtectedRoute>
               <WishlistPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orders"
+          element={
+            <ProtectedRoute>
+              <OrdersPage />
             </ProtectedRoute>
           }
         />

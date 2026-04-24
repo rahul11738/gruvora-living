@@ -2,8 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useInteractions } from '../context/InteractionContext';
-import { wishlistAPI, bookingsAPI, videosAPI } from '../lib/api';
-import { generateBookingInvoicePDF } from '../lib/generateBookingInvoicePDF';
+import { wishlistAPI, videosAPI } from '../lib/api';
 import { prefetchReelsRoute } from '../lib/routePrefetch';
 import { markRouteNavigation } from '../lib/routeTelemetry';
 import { Button } from './ui/button';
@@ -27,12 +26,12 @@ import {
   Filter,
   Sparkles,
   MessageCircle,
-  FileText,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import SeoHead from './SeoHead';
 import { normalizeMediaUrl } from '../lib/media';
 import OptimizedImage from './OptimizedImage';
+import { OrdersList } from './OrdersPage';
 
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
@@ -44,20 +43,16 @@ export const UserDashboard = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || 'bookings');
-  const [bookings, setBookings] = useState([]);
   const [wishlist, setWishlist] = useState([]);
   const [savedReels, setSavedReels] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [bookingFilter, setBookingFilter] = useState('all');
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [bookingsRes, wishlistRes, savedReelsRes] = await Promise.all([
-        bookingsAPI.getUserBookings(),
+      const [wishlistRes, savedReelsRes] = await Promise.all([
         wishlistAPI.get(),
         videosAPI.getSaved().catch(() => ({ data: { videos: [] } })),
       ]);
-      setBookings(bookingsRes.data.bookings || []);
       setWishlist(wishlistRes.data.listings || []);
       setSavedReels(savedReelsRes.data.videos || []);
       refreshWishlist().catch(() => { });
@@ -103,10 +98,6 @@ export const UserDashboard = () => {
     navigate('/');
   };
 
-  const filteredBookings = useMemo(() => {
-    if (bookingFilter === 'all') return bookings;
-    return bookings.filter(b => b.listing_category?.toLowerCase() === bookingFilter);
-  }, [bookings, bookingFilter]);
 
   if (loading) {
     return (
@@ -153,9 +144,6 @@ export const UserDashboard = () => {
                   >
                     <Calendar className="w-5 h-5" />
                     My Bookings
-                    {bookings.length > 0 && (
-                      <Badge className="ml-auto">{bookings.length}</Badge>
-                    )}
                   </button>
                   <button
                     onClick={() => setActiveTab('wishlist')}
@@ -198,52 +186,10 @@ export const UserDashboard = () => {
           <main className="lg:col-span-3">
             {activeTab === 'bookings' && (
               <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center justify-between">
                   <h2 className="font-heading text-2xl font-bold">My Bookings</h2>
-                  <div className="flex items-center gap-2">
-                    <Filter className="w-4 h-4 text-muted-foreground" />
-                    <select
-                      value={bookingFilter}
-                      onChange={(e) => setBookingFilter(e.target.value)}
-                      className="bg-white border border-stone-200 rounded-lg px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="all">All Categories</option>
-                      <option value="stay">Stays / Hotels</option>
-                      <option value="event">Events</option>
-                      <option value="home">Property (Home)</option>
-                      <option value="business">Business</option>
-                    </select>
-                  </div>
                 </div>
-
-                {filteredBookings.length === 0 ? (
-                  <Card>
-                    <CardContent className="py-16 text-center">
-                      <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                      <h3 className="font-heading text-xl font-semibold mb-2">
-                        {bookingFilter === 'all' ? 'No Bookings Yet' : `No ${bookingFilter} bookings found`}
-                      </h3>
-                      <p className="text-muted-foreground mb-6">
-                        {bookingFilter === 'all' 
-                          ? 'Start exploring properties and make your first booking'
-                          : 'Try changing your filter to see other bookings'}
-                      </p>
-                      {bookingFilter === 'all' ? (
-                        <Link to="/">
-                          <Button className="btn-primary">Explore Properties</Button>
-                        </Link>
-                      ) : (
-                        <Button variant="outline" onClick={() => setBookingFilter('all')}>
-                          Clear Filter
-                        </Button>
-                      )}
-                    </CardContent>
-                  </Card>
-                ) : (
-                  filteredBookings.map((booking) => (
-                    <BookingCard key={booking.id} booking={booking} user={user} />
-                  ))
-                )}
+                <OrdersList isEmbedded={true} />
               </div>
             )}
 
@@ -325,90 +271,6 @@ export const UserDashboard = () => {
   );
 };
 
-const BookingCard = ({ booking, user }) => {
-  const isInvoiceEligible = ['stay', 'event'].includes(booking.listing_category?.toLowerCase());
-
-  const handleDownloadInvoice = () => {
-    try {
-      generateBookingInvoicePDF(booking, user);
-      toast.success('Invoice downloaded!');
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to generate invoice');
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    switch (status) {
-      case 'confirmed':
-        return <Badge className="bg-green-100 text-green-700">Confirmed</Badge>;
-      case 'pending':
-        return <Badge className="bg-yellow-100 text-yellow-700">Pending</Badge>;
-      case 'cancelled':
-        return <Badge className="bg-red-100 text-red-700">Cancelled</Badge>;
-      case 'completed':
-        return <Badge className="bg-blue-100 text-blue-700">Completed</Badge>;
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <Card data-testid={`booking-card-${booking.id}`}>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              {getStatusBadge(booking.status)}
-              <span className="text-sm text-muted-foreground capitalize">{booking.listing_category}</span>
-            </div>
-            <h3 className="font-heading font-semibold text-lg">{booking.listing_title}</h3>
-            <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                {booking.booking_date}
-              </span>
-              <span className="flex items-center gap-1">
-                <User className="w-4 h-4" />
-                {booking.guests} guests
-              </span>
-            </div>
-            {booking.notes && (
-              <p className="text-sm text-muted-foreground mt-2">Notes: {booking.notes}</p>
-            )}
-          </div>
-          <div className="text-right">
-            <p className="font-bold text-primary">
-              ₹{(() => {
-                const price = booking.total_price || (booking.amount_paid > 50000 && !booking.total_price ? booking.amount_paid / 100 : booking.amount_paid) || 0;
-                return price.toLocaleString('en-IN');
-              })()}
-            </p>
-            <div className="flex flex-col gap-2 mt-2">
-              <Link to={`/listing/${booking.listing_id}`}>
-                <Button variant="outline" size="sm" className="w-full">
-                  <Eye className="w-4 h-4 mr-1" />
-                  View
-                </Button>
-              </Link>
-              {isInvoiceEligible && (
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full text-primary border-primary/20 hover:bg-primary/5"
-                  onClick={handleDownloadInvoice}
-                >
-                  <FileText className="w-4 h-4 mr-1" />
-                  Invoice
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-};
 
 const WishlistCard = ({ listing, onRemove }) => {
   const showTransactionType = isPropertyTransactionCategory(listing.category);

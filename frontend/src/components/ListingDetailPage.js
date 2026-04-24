@@ -549,6 +549,7 @@ export const ListingDetailPage = () => {
                         toast.success('Booking confirmed! Check your email.');
                         fetchListing();
                         fetchUserBookings();
+                        navigate('/orders');
                       }}
                     >
                       <CreditCard className="w-5 h-5 mr-2" />
