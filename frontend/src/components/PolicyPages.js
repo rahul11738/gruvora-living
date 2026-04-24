@@ -241,7 +241,7 @@ export const TermsConditionsPage = () => (
         heading: "12. Governing Law & Jurisdiction",
         paragraphs: [
           "These Terms & Conditions shall be governed by and interpreted in accordance with the laws of India.",
-          "Any disputes arising from platform usage shall be subject to the exclusive jurisdiction of the competent courts of Gujarat, India.",
+          "Any disputes arising from platform usage shall be subject to the exclusive jurisdiction of the competent courts of Gujarat, India. ",
         ],
       },
       {
