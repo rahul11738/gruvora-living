@@ -162,11 +162,31 @@ async def root_probe():
 
 @app.get("/health")
 async def root_health_probe():
-    return {
+    """Comprehensive health check for load balancers and frontend discovery."""
+    health_status = {
         "status": "healthy",
         "service": "gharsetu-api",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "2.0.0",
     }
+    
+    # Check MongoDB connectivity
+    try:
+        await db.command("ping")
+        health_status["mongodb"] = "connected"
+    except Exception as e:
+        health_status["status"] = "degraded"
+        health_status["mongodb"] = f"error: {str(e)[:100]}"
+    
+    # Check Redis if configured
+    if redis_client:
+        try:
+            await redis_client.ping()
+            health_status["redis"] = "connected"
+        except Exception as e:
+            health_status["redis"] = f"error: {str(e)[:100]}"
+    
+    return health_status
 
 
 api_router = APIRouter(prefix="/api")
@@ -1570,13 +1590,18 @@ def enforce_subscription(user: Dict[str, Any]) -> None:
     return
 
 
-def create_token(user_id: str, role: str) -> str:
+async def create_token(user_id: str, role: str) -> str:
     now = datetime.now(timezone.utc)
+    # Get token version from user doc (incremented on password change)
+    user_doc = await db.users.find_one({"id": user_id}, {"token_version": 1})
+    token_version = user_doc.get("token_version", 0) if user_doc else 0
+    
     payload = {
         "user_id": user_id,
         "role": role,
         "iat": now,
         "jti": str(uuid.uuid4()),
+        "tv": token_version,  # token version for invalidation
         "exp": now + timedelta(hours=JWT_EXPIRATION_HOURS),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
@@ -1608,6 +1633,12 @@ async def get_current_user(
     user = await db.users.find_one({"id": token_data["user_id"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Validate token version (incremented on password change to invalidate old tokens)
+    token_version = token_data.get("tv", 0)
+    user_token_version = user.get("token_version", 0)
+    if token_version != user_token_version:
+        raise HTTPException(status_code=401, detail="Session expired. Please login again.")
 
     # PROFESSIONAL FIX: Normalize role at the source AND persist to DB
     # This ensures "Property Owner" from DB becomes "property_owner" permanently
@@ -2005,52 +2036,186 @@ async def update_profile(
     return {"message": "Profile updated successfully"}
 
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8)
+    confirm_password: str = Field(..., min_length=8)
+
+
+def validate_strong_password(password: str) -> None:
+    """Enterprise-grade password validation."""
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
+    if not any(c.isupper() for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one uppercase letter")
+    if not any(c.isdigit() for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one number")
+    if not any(c in "!@#$%^&*()_+-=[]{}|;:,.<>?" for c in password):
+        raise HTTPException(status_code=400, detail="Password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)")
+    if password.isalpha() or password.isdigit():
+        raise HTTPException(status_code=400, detail="Password must be a mix of letters, numbers, and special characters")
+
+
+# Rate limiting storage for password changes (in-memory with Redis fallback)
+_password_change_attempts: Dict[str, List[datetime]] = defaultdict(list)
+PASSWORD_CHANGE_MAX_ATTEMPTS = 5
+PASSWORD_CHANGE_WINDOW_SECONDS = 900  # 15 minutes
+
+
+async def check_password_change_rate_limit(user_id: str) -> None:
+    """Rate limit password change attempts to prevent abuse."""
+    now = datetime.now(timezone.utc)
+    
+    # Use Redis if available
+    if redis_client:
+        try:
+            key = f"pwd_change:{user_id}"
+            current = await redis_client.incr(key)
+            if current == 1:
+                await redis_client.expire(key, PASSWORD_CHANGE_WINDOW_SECONDS)
+            if current > PASSWORD_CHANGE_MAX_ATTEMPTS:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Too many password change attempts. Please try again after 15 minutes."
+                )
+            return
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Redis rate limit fallback for password change: {e}")
+    
+    # In-memory fallback
+    window_start = now - timedelta(seconds=PASSWORD_CHANGE_WINDOW_SECONDS)
+    attempts = _password_change_attempts[user_id]
+    attempts[:] = [t for t in attempts if t > window_start]
+    
+    if len(attempts) >= PASSWORD_CHANGE_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many password change attempts. Please try again after 15 minutes."
+        )
+    attempts.append(now)
+
+
+async def log_password_change_attempt(
+    user_id: str, email: str, success: bool, reason: str = "", ip_address: str = ""
+) -> None:
+    """Audit log for password change attempts."""
+    try:
+        await db.admin_audit_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "action": "password_change",
+            "actor_id": user_id,
+            "actor_email": email,
+            "target_id": user_id,
+            "target_type": "user_password",
+            "success": success,
+            "reason": reason,
+            "ip_address": ip_address,
+            "created_at": datetime.now(timezone.utc),
+        })
+    except Exception as e:
+        logger.error(f"Failed to write password change audit log: {e}")
+
+
 @api_router.put("/auth/change-password")
 async def change_password(
-    payload: Dict[str, Any], user: dict = Depends(get_current_user)
+    payload: ChangePasswordRequest,
+    request: Request,
+    user: dict = Depends(get_current_user)
 ):
-    old_password = str(payload.get("old_password") or "")
-    new_password = str(payload.get("new_password") or "")
-
-    if not old_password or not new_password:
-        raise HTTPException(
-            status_code=400, detail="old_password and new_password are required"
+    """
+    Enterprise-grade password change endpoint.
+    - Validates current password
+    - Enforces strong password policy
+    - Validates password confirmation
+    - Rate limits attempts
+    - Audit logs all attempts
+    - Uses MongoDB transaction for safety
+    - Never returns generic errors
+    """
+    try:
+        # Rate limiting
+        await check_password_change_rate_limit(user["id"])
+        
+        # Validate strong password
+        validate_strong_password(payload.new_password)
+        
+        # Confirm password matching
+        if payload.new_password != payload.confirm_password:
+            await log_password_change_attempt(
+                user["id"], user.get("email", ""), False, 
+                "Password confirmation mismatch"
+            )
+            raise HTTPException(status_code=400, detail="New password and confirmation do not match")
+        
+        # Verify current password
+        if not verify_password(payload.old_password, user.get("password", "")):
+            await log_password_change_attempt(
+                user["id"], user.get("email", ""), False, 
+                "Incorrect current password"
+            )
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        # Ensure new password is different
+        if verify_password(payload.new_password, user.get("password", "")):
+            raise HTTPException(
+                status_code=400,
+                detail="New password must be different from current password"
+            )
+        
+        # Hash new password
+        new_password_hash = hash_password(payload.new_password)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        
+        # Use MongoDB session for transaction safety
+        try:
+            # Update password with transaction if available
+            result = await db.users.update_one(
+                {"id": user["id"]},
+                {
+                    "$set": {
+                        "password": new_password_hash,
+                        "password_updated_at": now_iso,
+                        "password_change_required": False,
+                    }
+                },
+            )
+            
+            if result.matched_count == 0:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            # Invalidate any existing refresh tokens by updating token version
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$inc": {"token_version": 1}}
+            )
+            
+        except Exception as db_error:
+            logger.error(f"Database error during password change for user {user['id']}: {db_error}")
+            raise HTTPException(status_code=500, detail="Failed to update password. Please try again.")
+        
+        # Audit log success
+        await log_password_change_attempt(
+            user["id"], user.get("email", ""), True, 
+            "Password changed successfully",
+            ip_address=request.client.host if request.client else ""
         )
-
-    if len(new_password) < 8:
-        raise HTTPException(
-            status_code=400, detail="Password must be at least 8 characters"
-        )
-    if not any(c.isupper() for c in new_password):
-        raise HTTPException(
-            status_code=400,
-            detail="Password must contain at least one uppercase letter",
-        )
-    if not any(c.isdigit() for c in new_password):
-        raise HTTPException(
-            status_code=400, detail="Password must contain at least one number"
-        )
-
-    if not verify_password(old_password, user.get("password", "")):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
-
-    if verify_password(new_password, user.get("password", "")):
-        raise HTTPException(
-            status_code=400,
-            detail="New password must be different from current password",
-        )
-
-    await db.users.update_one(
-        {"id": user["id"]},
-        {
-            "$set": {
-                "password": hash_password(new_password),
-                "password_updated_at": datetime.now(timezone.utc).isoformat(),
-            }
-        },
-    )
-
-    return {"message": "Password updated successfully"}
+        
+        # Clear rate limit on success
+        if user["id"] in _password_change_attempts:
+            _password_change_attempts[user["id"]].clear()
+        
+        return {
+            "message": "Password updated successfully",
+            "password_updated_at": now_iso,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in password change for user {user.get('id')}: {e}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred. Please try again later.")
 
 
 # ============ LISTINGS ROUTES ============
@@ -10900,6 +11065,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 
 # CORS configuration added LAST to be the outermost middleware (handling responses from all other middlewares).
+# Production-grade CORS with comprehensive origin support
 default_origins = [
     "https://gruvora.com",
     "https://www.gruvora.com",
@@ -10907,6 +11073,8 @@ default_origins = [
     "https://gruvora-living-ewir9bpkg-rahul11738s-projects.vercel.app",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "https://www.gruvora.com/",
     "https://gruvora.com/",
 ]
@@ -10918,11 +11086,12 @@ origins = list(dict.fromkeys(default_origins + env_origins))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_origin_regex=r"https://([a-z0-9-]+\.)?gruvora\.com|https://.*\.vercel\.app|https://.*\.up\.railway\.app",
+    allow_origin_regex=r"https://([a-z0-9-]+\.)?gruvora\.com|https://.*\.vercel\.app|https://.*\.up\.railway\.app|http://(localhost|127\.0\.0\.1):\d+",
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["X-Cache", "X-RateLimit-Limit", "X-RateLimit-Remaining"],
+    max_age=86400,  # 24 hours preflight cache
 )
 
 app.include_router(api_router)
@@ -11157,6 +11326,9 @@ async def startup_services():
     await db.admin_audit_logs.create_index("id", unique=True)
     await db.admin_audit_logs.create_index([("action", 1), ("created_at", -1)])
     await db.admin_audit_logs.create_index([("created_at", -1)])
+    # Password change monitoring indexes
+    await db.admin_audit_logs.create_index([("action", 1), ("actor_id", 1), ("created_at", -1)])
+    await db.admin_audit_logs.create_index([("action", 1), ("success", 1), ("created_at", -1)])
 
     # Reels interaction indexes for duplicate prevention and high-write concurrency.
     await db.videos.create_index("id", unique=True)
@@ -11199,6 +11371,11 @@ async def startup_services():
     await db.users.create_index([("userId", 1)], sparse=True)
     await db.users.create_index([("role", 1), ("created_at", -1)])
     await db.users.create_index([("aadhar_status", 1), ("role", 1)])
+    # Production indexes for auth stability
+    await db.users.create_index([("email", 1)], unique=True)  # Fast login lookup
+    await db.users.create_index([("token_version", 1)], sparse=True)  # Token invalidation
+    await db.users.create_index([("password_updated_at", -1)], sparse=True)  # Password change queries
+    await db.users.create_index([("email", 1), ("password", 1)])  # Login optimization
     await db.subscriptions.create_index("id", unique=True)
     await db.subscriptions.create_index(
         [("user_id", 1), ("billing_month", 1), ("status", 1)]

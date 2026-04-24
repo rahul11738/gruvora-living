@@ -26,6 +26,8 @@ import {
   Filter,
   Sparkles,
   MessageCircle,
+  Settings,
+  ChevronRight,
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import SeoHead from './SeoHead';
@@ -116,18 +118,30 @@ export const UserDashboard = () => {
           <aside className="lg:col-span-1">
             <Card>
               <CardContent className="pt-6">
-                {/* User Info */}
-                <div className="text-center mb-6">
-                  <div className="w-20 h-20 bg-primary rounded-full flex items-center justify-center mx-auto mb-4">
-                    <User className="w-10 h-10 text-white" />
+                {/* User Info - SaaS Clean Profile Header */}
+                <div className="text-center mb-8">
+                  <div className="w-24 h-24 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
+                    <User className="w-12 h-12 text-white" />
                   </div>
-                  <h3 className="font-heading font-semibold text-lg">{user?.name}</h3>
-                  <p className="text-sm text-muted-foreground">{user?.email}</p>
-                  {!user?.is_verified && (
-                    <Badge variant="outline" className="mt-2 text-yellow-600 border-yellow-300">
-                      Email not verified
-                    </Badge>
-                  )}
+                  <h3 className="font-heading font-semibold text-xl mb-1">{user?.name}</h3>
+                  <p className="text-sm text-muted-foreground mb-4">{user?.email}</p>
+
+                  {/* Profile Management */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    {!user?.is_verified && (
+                      <Badge variant="outline" className="text-yellow-600 border-yellow-300 text-xs">
+                        Email not verified
+                      </Badge>
+                    )}
+                    <Link
+                      to="/profile"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/50 backdrop-blur-sm rounded-full text-sm font-medium text-primary border border-primary/30 hover:bg-white hover:shadow-sm transition-all text-center"
+                    >
+                      <Settings className="w-3.5 h-3.5" />
+                      Manage Profile
+                      <ChevronRight className="w-3 h-3" />
+                    </Link>
+                  </div>
                 </div>
 
                 {/* Navigation */}

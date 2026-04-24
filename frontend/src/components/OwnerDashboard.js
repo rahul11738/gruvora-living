@@ -116,18 +116,20 @@ export const OwnerDashboard = () => {
       setListings(listingsRes.data.listings || []);
       setBookings(bookingsRes.data.bookings);
 
-      // Generate mock leads from bookings for demo
-      const mockLeads = bookingsRes.data.bookings?.slice(0, 5).map((b, idx) => ({
+      // Generate leads from real booking data
+      const bookingLeads = bookingsRes.data.bookings?.slice(0, 20).map((b, idx) => ({
         id: b.id || `lead-${idx}`,
-        customer_name: b.customer_name || `Customer ${idx + 1}`,
-        customer_phone: b.customer_phone || '98765XXXXX',
-        customer_email: b.customer_email || 'hidden@email.com',
+        customer_id: b.user_id || '',
+        customer_name: b.user_name || b.customer_name || 'Unknown Customer',
+        customer_phone: b.user_phone || b.customer_phone || '',
+        customer_email: b.user_email || b.customer_email || '',
         listing_title: b.listing_title || 'Property Inquiry',
-        message: b.message || 'Interested in this property',
+        listing_id: b.listing_id || '',
+        message: b.notes || b.message || 'Interested in this listing',
         created_at: b.created_at || new Date().toISOString(),
         status: b.status || 'pending'
       })) || [];
-      setLeads(mockLeads);
+      setLeads(bookingLeads);
 
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
@@ -906,24 +908,43 @@ const AnalyticsSection = ({ stats, listings }) => {
 };
 
 // Leads Section Component
-const LeadsSection = ({ leads, subscription }) => {
+const LeadsSection = ({ leads }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const handleCall = (phone) => {
-    if (!phone || phone === '98XXXXXXXX' || phone === 'hidden') return;
-    const cleanPhone = phone.replace(/[^\d+]/g, '').replace(/\s/g, '');
-    window.location.href = `tel:+91${cleanPhone}`;
+  const formatPhone = (phone) => {
+    if (!phone) return '';
+    const digits = phone.replace(/[^\d]/g, '');
+    if (digits.length === 10) return `+91 ${digits}`;
+    if (digits.length === 12 && digits.startsWith('91')) return `+${digits.slice(0, 2)} ${digits.slice(2)}`;
+    return phone;
   };
 
-  const handleEmail = (email) => {
-    if (!email || email === 'xxx@email.com' || email === 'hidden@email.com') return;
-    window.location.href = `mailto:${email}?subject=Inquiry about your listing`;
+  const getTelHref = (phone) => {
+    if (!phone) return '#';
+    const digits = phone.replace(/[^\d]/g, '');
+    if (digits.length === 10) return `tel:+91${digits}`;
+    return `tel:${digits}`;
+  };
+
+  const getMailtoHref = (email, listingTitle) => {
+    if (!email) return '#';
+    const subject = encodeURIComponent(`Inquiry about ${listingTitle || 'your listing'}`);
+    return `mailto:${email}?subject=${subject}`;
+  };
+
+  const getGmailHref = (email, listingTitle) => {
+    if (!email) return '#';
+    const subject = encodeURIComponent(`Inquiry about ${listingTitle || 'your listing'}`);
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${subject}`;
   };
 
   const handleChat = (lead) => {
-    if (!lead?.id || !user?.id) return;
-    navigate(`/chat?leadId=${lead.id}&userId=${lead.customer_id || lead.id}&name=${encodeURIComponent(lead.customer_name)}`);
+    if (!lead?.customer_id || !user?.id) {
+      toast.error('Unable to start chat');
+      return;
+    }
+    navigate(`/chat?listing_id=${lead.listing_id}&user=${lead.customer_id}`);
   };
 
   return (
@@ -935,7 +956,7 @@ const LeadsSection = ({ leads, subscription }) => {
             Customer Inquiries
           </CardTitle>
           <CardDescription>
-            {leads.length} leads received - Full contact details visible
+            {leads.length} leads received — Full contact details visible
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -950,11 +971,12 @@ const LeadsSection = ({ leads, subscription }) => {
           ) : (
             <div className="space-y-4">
               {leads.map((lead) => (
-                <div key={lead.id} className="p-3 md:p-4 rounded-xl border border-stone-200 hover:border-primary/50 transition-colors">
+                <div key={lead.id} className="p-3 md:p-4 rounded-xl border border-stone-200 hover:border-primary/50 transition-colors bg-white">
+                  {/* Header */}
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="flex items-center gap-2 md:gap-3">
-                      <div className="w-9 h-9 md:w-10 md:h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Users className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                    <div className="flex items-center gap-2 md:gap-3 min-w-0">
+                      <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Users className="w-5 h-5 text-primary" />
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-medium text-sm md:text-base truncate">{lead.customer_name}</h4>
@@ -963,75 +985,77 @@ const LeadsSection = ({ leads, subscription }) => {
                         </p>
                       </div>
                     </div>
-                    <Badge className={lead.status === 'pending' ? 'bg-yellow-100 text-yellow-700 text-xs' : 'bg-green-100 text-green-700 text-xs'}>
+                    <Badge className={lead.status === 'pending' ? 'bg-yellow-100 text-yellow-700 text-xs whitespace-nowrap' : 'bg-green-100 text-green-700 text-xs whitespace-nowrap'}>
                       {lead.status}
                     </Badge>
                   </div>
 
-                  <div className="mt-3 md:mt-4 p-2 md:p-3 bg-stone-50 rounded-lg">
-                    <p className="text-xs md:text-sm text-stone-600">"{lead.message}"</p>
-                  </div>
+                  {/* Message */}
+                  {lead.message && (
+                    <div className="mt-3 p-3 bg-stone-50 rounded-lg">
+                      <p className="text-xs md:text-sm text-stone-600">"{lead.message}"</p>
+                    </div>
+                  )}
 
-                  <div className="mt-3 md:mt-4 flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
+                  {/* Contact Info */}
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <a
-                      href={`tel:+91${(lead.customer_phone || '').replace(/[^\d]/g, '')}`}
-                      className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                      onClick={(e) => {
-                        if (!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden') {
-                          e.preventDefault();
-                        }
-                      }}
+                      href={getTelHref(lead.customer_phone)}
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline py-1"
                     >
-                      <Phone className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                      <span>{lead.customer_phone || 'No phone'}</span>
+                      <Phone className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{formatPhone(lead.customer_phone) || 'No phone'}</span>
                     </a>
                     <a
-                      href={`mailto:${lead.customer_email}?subject=Inquiry about ${encodeURIComponent(lead.listing_title || 'your listing')}`}
-                      className="flex items-center gap-2 text-xs md:text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                      onClick={(e) => {
-                        if (!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com') {
-                          e.preventDefault();
-                        }
-                      }}
+                      href={getMailtoHref(lead.customer_email, lead.listing_title)}
+                      className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline py-1"
                     >
-                      <Mail className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                      <span>{lead.customer_email || 'No email'}</span>
+                      <Mail className="w-4 h-4 flex-shrink-0" />
+                      <span className="truncate">{lead.customer_email || 'No email'}</span>
                     </a>
-                    <div className="flex items-center gap-2 text-xs md:text-sm text-muted-foreground ml-auto">
-                      <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                      {lead.created_at ? new Date(lead.created_at).toLocaleDateString() : 'N/A'}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-1 sm:col-span-2">
+                      <Calendar className="w-4 h-4 flex-shrink-0" />
+                      <span>{lead.created_at ? new Date(lead.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</span>
                     </div>
                   </div>
 
-                  <div className="mt-3 md:mt-4 flex flex-col gap-2 md:flex-row">
-                    <Button
-                      size="sm"
-                      className="btn-primary w-full md:w-auto"
-                      onClick={() => handleCall(lead.customer_phone)}
-                      disabled={!lead.customer_phone || lead.customer_phone === '98XXXXXXXX' || lead.customer_phone === 'hidden'}
+                  {/* Action Buttons */}
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    <a
+                      href={getTelHref(lead.customer_phone)}
+                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-colors ${lead.customer_phone
+                          ? 'bg-primary text-white hover:bg-primary/90'
+                          : 'bg-stone-100 text-stone-400 cursor-not-allowed'
+                        }`}
+                      onClick={(e) => { if (!lead.customer_phone) e.preventDefault(); }}
                     >
-                      <Phone className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
+                      <Phone className="w-3.5 h-3.5 md:w-4 md:h-4" />
                       Call
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full md:w-auto"
-                      onClick={() => handleEmail(lead.customer_email)}
-                      disabled={!lead.customer_email || lead.customer_email === 'xxx@email.com' || lead.customer_email === 'hidden@email.com'}
+                    </a>
+                    <a
+                      href={lead.customer_email ? getGmailHref(lead.customer_email, lead.listing_title) : '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium border transition-colors ${lead.customer_email
+                          ? 'border-stone-200 text-stone-700 hover:bg-stone-50 hover:border-stone-300'
+                          : 'border-stone-100 text-stone-300 cursor-not-allowed'
+                        }`}
+                      onClick={(e) => { if (!lead.customer_email) e.preventDefault(); }}
                     >
-                      <Mail className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
-                      Email
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full md:w-auto"
+                      <Mail className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                      Gmail
+                    </a>
+                    <button
                       onClick={() => handleChat(lead)}
+                      disabled={!lead.customer_id}
+                      className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs md:text-sm font-medium border transition-colors ${lead.customer_id
+                          ? 'border-stone-200 text-stone-700 hover:bg-stone-50 hover:border-stone-300'
+                          : 'border-stone-100 text-stone-300 cursor-not-allowed'
+                        }`}
                     >
-                      <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4 mr-2" />
+                      <MessageCircle className="w-3.5 h-3.5 md:w-4 md:h-4" />
                       Chat
-                    </Button>
+                    </button>
                   </div>
                 </div>
               ))}

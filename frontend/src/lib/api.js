@@ -333,7 +333,11 @@ export const authAPI = {
   }),
   verifyEmail: (token) => api.get(`/auth/verify/${token}`),
   updateProfile: (data) => api.put('/auth/profile', data),
-  changePassword: (data) => api.put('/auth/change-password', data),
+  changePassword: (data) => api.put('/auth/change-password', {
+    old_password: data.old_password,
+    new_password: data.new_password,
+    confirm_password: data.confirm_password,
+  }),
 };
 
 // Listings APIs

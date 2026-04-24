@@ -99,21 +99,74 @@ export const SettingsPage = () => {
 
   const handlePasswordSave = useCallback(async (e) => {
     e.preventDefault();
+    
+    // Client-side validation
     if (passwordForm.new_password !== passwordForm.confirm_password) {
       toast.error('New password and confirmation do not match');
+      return;
+    }
+    
+    if (passwordForm.new_password.length < 8) {
+      toast.error('New password must be at least 8 characters');
+      return;
+    }
+    
+    if (!/[A-Z]/.test(passwordForm.new_password)) {
+      toast.error('New password must contain at least one uppercase letter');
+      return;
+    }
+    
+    if (!/[0-9]/.test(passwordForm.new_password)) {
+      toast.error('New password must contain at least one number');
+      return;
+    }
+    
+    if (!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(passwordForm.new_password)) {
+      toast.error('New password must contain at least one special character (!@#$%^&*()_+-=[]{}|;:,.<>?)');
       return;
     }
 
     setSaving(true);
     try {
-      await authAPI.changePassword({
+      const response = await authAPI.changePassword({
         old_password: passwordForm.old_password,
         new_password: passwordForm.new_password,
+        confirm_password: passwordForm.confirm_password,
       });
+      
+      // Clear form
       setPasswordForm({ old_password: '', new_password: '', confirm_password: '' });
-      toast.success('Password changed successfully');
+      
+      // Show success message
+      toast.success('Password changed successfully. You will be logged out in 3 seconds...');
+      
+      // Clear any backend outage state
+      if (window.localStorage) {
+        window.localStorage.removeItem('gharsetu_backend_outage');
+      }
+      
+      // Auto logout after 3 seconds
+      setTimeout(() => {
+        localStorage.removeItem('gharsetu_token');
+        localStorage.removeItem('gharsetu_user');
+        window.location.href = '/login?message=password_changed';
+      }, 3000);
+      
     } catch (error) {
-      toast.error(error?.response?.data?.detail || 'Failed to change password');
+      // Display exact backend error message
+      const errorMessage = error?.response?.data?.detail || 
+                          error?.message || 
+                          'Failed to change password. Please try again.';
+      toast.error(errorMessage);
+      
+      // If token expired or session invalid, redirect to login
+      if (error?.response?.status === 401) {
+        setTimeout(() => {
+          localStorage.removeItem('gharsetu_token');
+          localStorage.removeItem('gharsetu_user');
+          window.location.href = '/login?message=session_expired';
+        }, 2000);
+      }
     } finally {
       setSaving(false);
     }
