@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { authAPI } from '../lib/api';
+import { authAPI, ownerAPI } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { Header } from './Layout';
 import SeoHead from './SeoHead';
@@ -30,7 +30,8 @@ export const SettingsPage = () => {
   const { user, updateProfile, isOwner } = useAuth();
   const [activeTab, setActiveTab] = useState('account');
   const [saving, setSaving] = useState(false);
-  const [ownedListings] = useState([]);
+  const [loadingListings, setLoadingListings] = useState(false);
+  const [ownedListings, setOwnedListings] = useState([]);
 
   const [accountForm, setAccountForm] = useState({
     email: '',
@@ -66,9 +67,27 @@ export const SettingsPage = () => {
     });
   }, [user]);
 
+  useEffect(() => {
+    if (!user || !isOwner) {
+      setOwnedListings([]);
+      return;
+    }
 
+    const loadListings = async () => {
+      setLoadingListings(true);
+      try {
+        const response = await ownerAPI.getListings({ limit: 50, page: 1 });
+        setOwnedListings(response?.data?.listings || response?.data || []);
+      } catch (error) {
+        toast.error('Failed to load listings');
+        setOwnedListings([]);
+      } finally {
+        setLoadingListings(false);
+      }
+    };
 
-
+    loadListings();
+  }, [user, isOwner]);
 
   const handleAccountSave = useCallback(async (e) => {
     e.preventDefault();
@@ -127,7 +146,7 @@ export const SettingsPage = () => {
 
     setSaving(true);
     try {
-      const response = await authAPI.changePassword({
+      await authAPI.changePassword({
         old_password: passwordForm.old_password,
         new_password: passwordForm.new_password,
         confirm_password: passwordForm.confirm_password,
