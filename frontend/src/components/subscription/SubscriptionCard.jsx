@@ -304,8 +304,12 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
                 onPaymentSuccess();
               }
 
+              // Clear local cache to force fresh status fetch
+              if (user?.id) {
+                localStorage.removeItem(`gruvora_sub_status_${user.id}`);
+              }
+
               // Fetch fresh status after a short delay to let DB propagate,
-              // but only if the server confirms active - don't downgrade optimistic state
               setTimeout(async () => {
                 try {
                   await fetchStatus();
