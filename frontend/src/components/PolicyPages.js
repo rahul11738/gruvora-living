@@ -106,7 +106,7 @@ export const TermsConditionsPage = () => (
       {
         heading: "Welcome to GRUVORA LIVING",
         paragraphs: [
-          "Welcome to GRUVORA LIVING : Your Home Bridge. These Terms & Conditions govern your access to and use of our platform, including our website, mobile application, and related services.",
+          "Welcome to GRUVORA LIVING : Your Home Bridge.These Terms & Conditions govern your access to and use of our platform, including our website, mobile application, and related services.",
           "By accessing, browsing, registering, or using GRUVORA LIVING, you acknowledge that you have read, understood, and agreed to be legally bound by these Terms & Conditions, our Privacy Policy, and all applicable laws and regulations.",
           "If you do not agree with these terms, you must discontinue use of the platform immediately.",
         ],
