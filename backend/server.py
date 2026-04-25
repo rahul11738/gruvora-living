@@ -91,26 +91,22 @@ PAYTM_MID = os.getenv("PAYTM_MID", "").strip()
 PAYTM_MERCHANT_KEY = os.getenv("PAYTM_MERCHANT_KEY", "").strip()
 PAYTM_WEBSITE = os.getenv("PAYTM_WEBSITE", "WEBSTAGING").strip()
 PAYTM_HOST = os.getenv("PAYTM_HOST", "securegw-stage.paytm.in").strip()
-def _normalize_paytm_callback_url(raw_url: str) -> str:
-    callback_url = str(raw_url or "").strip()
-    if not callback_url:
-        return "http://localhost:8000/api/paytm/callback"
+def get_dynamic_callback_url(request: Request = None):
+    """Dynamically determine the callback URL based on the request host"""
+    env_callback = os.getenv("CALLBACK_URL", "").strip()
+    if env_callback:
+        return env_callback
+    
+    if request:
+        # Try to detect from request headers (handled by proxy if needed)
+        host = request.headers.get("x-forwarded-host") or request.headers.get("host") or "localhost:8000"
+        scheme = request.headers.get("x-forwarded-proto") or "https" if "gruvora.com" in host else "http"
+        return f"{scheme}://{host}/api/paytm/callback"
+        
+    return "http://localhost:8000/api/paytm/callback"
 
-    if "/api/paytm/callback" in callback_url or "/api/payment/callback" in callback_url:
-        return callback_url
-
-    if callback_url.endswith("/paytm/callback"):
-        return callback_url[: -len("/paytm/callback")] + "/api/paytm/callback"
-
-    if callback_url.endswith("/payment/callback"):
-        return callback_url[: -len("/payment/callback")] + "/api/payment/callback"
-
-    return callback_url
-
-
-PAYTM_CALLBACK_URL = _normalize_paytm_callback_url(
-    os.getenv("CALLBACK_URL", "http://localhost:8000/api/paytm/callback")
-)
+# Default fallback (updated in route handler)
+PAYTM_CALLBACK_URL = os.getenv("CALLBACK_URL", "http://localhost:8000/api/paytm/callback")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").strip()
 
 # Initialize Paytm SDK if available
@@ -9523,6 +9519,7 @@ async def verify_payment(
 @api_router.post("/paytm/initiate")
 async def initiate_paytm(
     request: PaytmInitiateRequest,
+    request_obj: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """Initiate a Paytm transaction and return txnToken"""
@@ -9544,12 +9541,15 @@ async def initiate_paytm(
         # Use 'WEBSTAGING' for staging as per recommended flow
         website = "WEBSTAGING" if "stage" in PAYTM_HOST else PAYTM_WEBSITE
 
+        # Use dynamic callback URL if not explicitly set in .env
+        callback_url = get_dynamic_callback_url(request_obj)
+        
         paytm_body = {
             "requestType": "Payment",
             "mid": PAYTM_MID,
             "websiteName": website,
             "orderId": order_id,
-            "callbackUrl": PAYTM_CALLBACK_URL,
+            "callbackUrl": callback_url,
             "txnAmount": {"value": amount_str, "currency": "INR"},
             "userInfo": {"custId": user_id}
         }
