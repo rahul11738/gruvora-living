@@ -9524,26 +9524,30 @@ async def initiate_paytm(
 ):
     """Initiate a Paytm transaction and return txnToken"""
     import json
+    import traceback
     try:
         user = await get_current_user(credentials)
         user_id = str(user["id"])
-        
         amount_str = f"{request.amount:.2f}"
         
+        # DEBUG LOGS FOR PRODUCTION
+        logger.info(f"🚀 PAYTM INITIATE START: User={user_id}, Amount={amount_str}")
+        logger.info(f"🔑 CONFIG CHECK: MID={'SET' if PAYTM_MID else 'MISSING'}, KEY={'SET' if PAYTM_MERCHANT_KEY else 'MISSING'}")
+
         if not PAYTM_MID or not PAYTM_MERCHANT_KEY:
-            return JSONResponse(
-                {"error": "PAYTM_MID or PAYTM_MERCHANT_KEY missing in .env"},
-                status_code=500
-            )
+            logger.error("❌ CRITICAL: PAYTM_MID or PAYTM_MERCHANT_KEY missing in production .env")
+            return JSONResponse({
+                "error": "Paytm credentials missing in server environment",
+                "mid_status": "present" if PAYTM_MID else "missing",
+                "key_status": "present" if PAYTM_MERCHANT_KEY else "missing"
+            }, status_code=500)
 
         order_id = f"ORD_{uuid.uuid4().hex[:16].upper()}"
-        
-        # Use 'WEBSTAGING' for staging as per recommended flow
         website = "WEBSTAGING" if "stage" in PAYTM_HOST else PAYTM_WEBSITE
-
-        # Use dynamic callback URL if not explicitly set in .env
         callback_url = get_dynamic_callback_url(request_obj)
         
+        logger.info(f"🔗 CALLBACK URL: {callback_url}")
+
         paytm_body = {
             "requestType": "Payment",
             "mid": PAYTM_MID,
@@ -9554,7 +9558,6 @@ async def initiate_paytm(
             "userInfo": {"custId": user_id}
         }
 
-        # Generate checksum using exact dump format recommended (no spaces)
         checksum = paytmchecksum.generateSignature(
             json.dumps(paytm_body, separators=(',', ':')), PAYTM_MERCHANT_KEY
         )
@@ -9564,63 +9567,43 @@ async def initiate_paytm(
             "head": {"signature": checksum}
         }
 
-        # Explicitly construct the URL without using templates that could leak '{url}'
         init_url = f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction?mid={PAYTM_MID}&orderId={order_id}"
-        
-        print(f"🔄 Paytm REST API: {init_url}")
-        print(f"📦 Payload: {json.dumps(payload, separators=(',', ':'))}")
+        logger.info(f"🔄 CALLING PAYTM: {init_url}")
 
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.post(init_url, json=payload)
             result = resp.json()
 
-        print("✅ Paytm raw response:", json.dumps(result, indent=2))
+        logger.info(f"✅ PAYTM RESPONSE RECEIVED: {json.dumps(result)}")
         
         result_info = result.get("body", {}).get("resultInfo", {})
         result_code = result_info.get("resultCode")
         result_msg  = result_info.get("resultMsg")
-        
         txn_token = result.get("body", {}).get("txnToken")
 
         if not txn_token:
+            logger.error(f"❌ PAYTM FAILURE: {result_msg} (Code: {result_code})")
             return JSONResponse({
                 "error": "Paytm did not return txnToken",
                 "resultCode": result_code,
                 "resultMsg": result_msg,
-                "fullResponse": result
+                "fullResponse": result,
+                "sentCallback": callback_url
             }, status_code=500)
             
-        # Fetch listing info for invoice display
-        listing_title = "Subscription" if request.payment_type == "subscription" else "Unknown Property"
-        if request.listing_id:
-            listing = await db.listings.find_one({"id": request.listing_id})
-            if listing:
-                listing_title = listing.get("title")
-
-        # Save record to DB
+        # Create record in DB
         payment_record = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
-            "user_name": user.get("name"),
-            "user_email": user.get("email"),
-            "listing_id": request.listing_id,
-            "listing_title": listing_title,
             "paytm_order_id": order_id,
-            "amount": int(request.amount * 100), # Store in paise for consistency
-            "currency": "INR",
+            "amount": int(request.amount * 100),
+            "status": "created",
             "payment_type": request.payment_type,
             "plan": request.plan,
-            "subscription_months": request.subscription_months,
-            "booking_date": request.booking_date,
-            "guests": request.guests,
-            "notes": request.notes,
-            "status": "created",
-            "gateway": "paytm",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         await db.payments.insert_one(payment_record)
 
-        # Create a pending subscription record if this is a subscription
         if request.payment_type == "subscription":
             subscription_record = {
                 "id": f"sub_{uuid.uuid4().hex[:12]}",
@@ -9632,7 +9615,6 @@ async def initiate_paytm(
                 "created_at": datetime.now(timezone.utc).isoformat(),
             }
             await db.subscriptions.insert_one(subscription_record)
-            logger.info(f"PAYTM INIT: Created pending subscription for {user.get('email')} (Order: {order_id})")
         
         return JSONResponse({
             "orderId": order_id,
@@ -9640,9 +9622,15 @@ async def initiate_paytm(
             "mid": PAYTM_MID,
             "amount": amount_str
         })
+
     except Exception as e:
-        import traceback
-        print("🔴 EXCEPTION:\n", traceback.format_exc())
+        err_trace = traceback.format_exc()
+        logger.error(f"🔴 CRITICAL BACKEND ERROR:\n{err_trace}")
+        return JSONResponse({
+            "error": "Internal Server Error during Paytm initiation",
+            "details": str(e),
+            "traceback": err_trace if os.getenv("DEBUG") == "True" else None
+        }, status_code=500)
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
