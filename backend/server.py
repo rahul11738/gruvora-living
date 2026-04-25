@@ -9545,7 +9545,7 @@ async def initiate_paytm(
         website = "WEBSTAGING" if "stage" in PAYTM_HOST else (PAYTM_WEBSITE if PAYTM_WEBSITE != "WEBSTAGING" else "DEFAULT")
         callback_url = get_dynamic_callback_url(request_obj)
         
-        # 4. LOCK THE BODY (Strict pattern to avoid Checksum 2005)
+        # 4. LOCK THE BODY (Bulletproof pattern for Production)
         paytm_body = {
             "requestType": "Payment",
             "mid": mid,
@@ -9556,30 +9556,39 @@ async def initiate_paytm(
             "userInfo": {"custId": user_id}
         }
 
-        # Generate Body String exactly once
-        body_str = json.dumps(paytm_body, separators=(',', ':'))
+        # Generate Body String with NO spaces and SORTED keys for absolute consistency
+        # sort_keys=True ensures that even if Python versions differ, the string is identical.
+        body_str = json.dumps(paytm_body, separators=(',', ':'), sort_keys=True)
         
-        # Generate Checksum
+        # Generate Checksum using this EXACT string
         checksum = paytmchecksum.generateSignature(body_str, key)
 
-        # 5. CONSTRUCT FINAL PAYLOAD (Use exactly what was signed)
-        payload = {
+        # 5. CONSTRUCT RAW PAYLOAD (CRITICAL: Do not let httpx re-serialize)
+        # We send the entire payload as a string to preserve the signed format.
+        full_payload_dict = {
             "body": json.loads(body_str),
             "head": {"signature": checksum}
         }
+        # Final raw string to be sent over the wire
+        raw_payload_str = json.dumps(full_payload_dict, separators=(',', ':'))
 
         init_url = f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction?mid={mid}&orderId={order_id}"
-        logger.info(f"🔄 PAYTM INIT: Order={order_id}, Amount={amount_str}, Host={PAYTM_HOST}")
+        logger.info(f"🔄 PAYTM RAW SEND: Order={order_id}, Amount={amount_str}")
 
         async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(init_url, json=payload)
+            # We use 'content' instead of 'json' to send the pre-serialized string
+            resp = await client.post(
+                init_url, 
+                content=raw_payload_str, 
+                headers={"Content-Type": "application/json"}
+            )
             try:
                 result = resp.json()
             except Exception:
-                logger.error(f"🔴 PAYTM NON-JSON RESPONSE: {resp.text}")
+                logger.error(f"🔴 PAYTM NON-JSON: {resp.text}")
                 return JSONResponse({
-                    "error": f"Paytm returned non-JSON response (Status: {resp.status_code})",
-                    "raw": resp.text[:500]
+                    "error": "Paytm returned non-JSON response",
+                    "raw": resp.text[:200]
                 }, status_code=500)
 
         logger.info(f"✅ PAYTM RESPONSE RECEIVED: {json.dumps(result)}")
