@@ -61,7 +61,7 @@ export function generateInvoicePDF(invoice, user) {
   doc.setTextColor(...GRAY);
   doc.text(fmtDate(paidAt), 14, 52);
   doc.text(fmtDate(expiresAt), 70, 52);
-  const paymentId = invoice.razorpay_payment_id || 'N/A';
+  const paymentId = invoice.paytm_txn_id || invoice.razorpay_payment_id || 'N/A';
   doc.text(paymentId.length > 22 ? paymentId.slice(0, 22) + '…' : paymentId, 126, 52);
 
   // ── Bill To ───────────────────────────────────────────────────────────────
@@ -156,7 +156,9 @@ export function generateInvoicePDF(invoice, user) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
-  doc.text(`Razorpay Order: ${invoice.razorpay_order_id || 'N/A'}`, 20, afterTable + 14);
+  const orderId = invoice.paytm_order_id || invoice.razorpay_order_id || 'N/A';
+  const gateway = invoice.paytm_order_id ? 'Paytm' : 'Razorpay';
+  doc.text(`${gateway} Order: ${orderId}`, 20, afterTable + 14);
 
   // ── Footer ────────────────────────────────────────────────────────────────
   doc.setFillColor(...PRIMARY);

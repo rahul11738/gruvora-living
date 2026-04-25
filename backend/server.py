@@ -11087,6 +11087,8 @@ async def get_subscription_invoices(
                 "amount": 1,
                 "razorpay_order_id": 1,
                 "razorpay_payment_id": 1,
+                "paytm_order_id": 1,
+                "paytm_txn_id": 1,
                 "activated_at": 1,
                 "paid_at": 1,
                 "expires_at": 1,
