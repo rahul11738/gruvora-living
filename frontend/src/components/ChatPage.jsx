@@ -371,7 +371,6 @@ export const ChatPage = () => {
       const res = await messagesAPI.getConversations();
       const convs = res?.data?.conversations || [];
       setConversations(convs);
-      publishUnreadChatTotal(convs);
       return convs;
     } catch {
       toast.error('Failed to load conversations');
@@ -470,6 +469,11 @@ export const ChatPage = () => {
     if (!paramConversationId && !paramListingId && !paramReceiverId) return;
     loadConversations().then(selectActiveConversation);
   }, [paramConversationId, paramListingId, paramReceiverId, loadConversations, selectActiveConversation]);
+
+  // ── Sync Unread Total ───────────────────────────────────────────────────
+  useEffect(() => {
+    publishUnreadChatTotal(conversations);
+  }, [conversations]);
 
   // ── Load messages when active conv changes ──────────────────────────────
   useEffect(() => {
@@ -778,7 +782,6 @@ export const ChatPage = () => {
         const next = (Array.isArray(prev) ? prev : []).map(item =>
           item?.id === conv.id ? { ...item, unread_count: 0 } : item
         );
-        publishUnreadChatTotal(next);
         return next;
       });
     }
@@ -797,7 +800,6 @@ export const ChatPage = () => {
       const next = (Array.isArray(prev) ? prev : []).map(item =>
         item?.id === activeConv.id ? { ...item, unread_count: 0 } : item
       );
-      publishUnreadChatTotal(next);
       return next;
     });
   }, [activeConv?.id]);

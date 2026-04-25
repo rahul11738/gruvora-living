@@ -26,12 +26,13 @@ import {
   Filter,
   Sparkles,
   MessageCircle,
+  FileText
 } from 'lucide-react';
 import { Header, Footer } from './Layout';
 import SeoHead from './SeoHead';
 import { normalizeMediaUrl } from '../lib/media';
 import OptimizedImage from './OptimizedImage';
-import { OrdersList } from './OrdersPage';
+import { OrdersList, InvoicesList } from './OrdersPage';
 
 const PROPERTY_TRANSACTION_CATEGORIES = new Set(['home', 'business']);
 const isPropertyTransactionCategory = (category) =>
@@ -167,6 +168,14 @@ export const UserDashboard = () => {
                       <Badge className="ml-auto">{savedReels.length}</Badge>
                     )}
                   </button>
+                  <button
+                    onClick={() => setActiveTab('invoices')}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeTab === 'invoices' ? 'bg-primary text-white' : 'hover:bg-stone-100'
+                      }`}
+                  >
+                    <FileText className="w-5 h-5" />
+                    My Invoices
+                  </button>
                 </nav>
 
                 <div className="mt-6 pt-6 border-t">
@@ -190,6 +199,15 @@ export const UserDashboard = () => {
                   <h2 className="font-heading text-2xl font-bold">My Bookings</h2>
                 </div>
                 <OrdersList isEmbedded={true} />
+              </div>
+            )}
+
+            {activeTab === 'invoices' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-heading text-2xl font-bold">My Invoices</h2>
+                </div>
+                <InvoicesList isEmbedded={true} />
               </div>
             )}
 

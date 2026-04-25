@@ -542,6 +542,7 @@ export const paymentsAPI = {
   createOrder: (data) => api.post('/payments/create-order', data),
   verify: (data) => api.post('/payments/verify', data),
   getConfig: () => api.get('/payments/config'),
+  getAll: () => api.get('/payments'),
 };
 
 // Notifications APIs

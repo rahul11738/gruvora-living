@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { useAuth } from '../../context/AuthContext';
 import { subscriptionAPI } from '../../lib/api';
 import { generateInvoicePDF } from '../../lib/generateInvoicePDF';
+import usePaytm from '../../hooks/usePaytm';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -27,7 +28,7 @@ const STATUS_CONFIG = {
   pending: { color: 'bg-yellow-100 text-yellow-700', icon: Clock, label: 'Payment Pending' },
 };
 
-const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) => {
+const PlanDetails = ({ subData, onPay, paying, role: rawRole }) => {
   const role = rawRole?.toLowerCase()?.replace(/\s+/g, '_') || '';
   
   // Robust plan identification with legacy mapping
@@ -205,22 +206,22 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
 
               <Button
                 onClick={() => onPay(plan.id)}
-                disabled={paying || (isCurrent && isActive) || paymentSuccess}
-                variant={(isCurrent && isActive) || paymentSuccess ? "outline" : isRecommended ? "default" : "outline"}
+                disabled={paying || (isCurrent && isActive)}
+                variant={(isCurrent && isActive) ? "outline" : isRecommended ? "default" : "outline"}
                 className={`w-full h-10 text-xs font-semibold rounded-xl transition-all ${
-                  (isCurrent && isActive) || paymentSuccess 
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50' 
+                  (isCurrent && isActive)
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
                     : isRecommended && !isCurrent ? 'btn-primary shadow-md hover:shadow-lg' : ''
                 }`}
               >
                 {paying ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin mr-2" />
-                ) : (isCurrent && isActive) || paymentSuccess ? (
+                ) : (isCurrent && isActive) ? (
                   <Check className="w-3.5 h-3.5 mr-2" />
                 ) : null}
-                
-                {(isCurrent && isActive) || paymentSuccess 
-                  ? 'Already Subscribed' 
+
+                {(isCurrent && isActive)
+                  ? 'Already Subscribed'
                   : (isActive ? 'Upgrade' : `Select ${plan.name}`)}
               </Button>
             </div>
@@ -230,114 +231,49 @@ const PlanDetails = ({ subData, onPay, paying, role: rawRole, paymentSuccess }) 
       
       <p className="text-[10px] text-center text-muted-foreground bg-stone-50 p-2 rounded-lg border border-stone-100">
         <Shield className="w-3 h-3 inline-block mr-1 text-emerald-500" />
-        Secure payments via Razorpay. Upgrade or downgrade anytime. 100% secure.
+        Secure payments via Paytm. Upgrade or downgrade anytime. 100% secure.
       </p>
     </div>
   );
 };
 
 export default function SubscriptionCard({ onPaymentSuccess }) {
-  const { user, refreshUser } = useAuth();
-  const { subData, loading, fetchStatus, updateSubData, isCommissionModel, isHybridModel, isBlocked, trialDaysLeft } = useSubscription();
+  const { user } = useAuth();
+  const { subData, loading, fetchStatus, isCommissionModel, isHybridModel, isBlocked, trialDaysLeft } = useSubscription();
   const [paying, setPaying] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [invoices, setInvoices] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [showInvoices, setShowInvoices] = useState(false);
-  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const { processPayment } = usePaytm();
 
-  useEffect(() => {
-    // Load Razorpay script
-    if (!window.Razorpay) {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
-      script.onload = () => setRazorpayLoaded(true);
-      document.body.appendChild(script);
-    } else {
-      setRazorpayLoaded(true);
-    }
-  }, []);
-
-  const handlePay = async (plan = 'monthly') => {
-    if (!window.Razorpay && !razorpayLoaded) {
-      toast.error('Payment gateway is loading, please try again in a moment');
-      return;
-    }
-
+  const handlePay = async (planId = 'monthly') => {
     setPaying(true);
     try {
-      const orderRes = await subscriptionAPI.createOrder(plan);
-      const { order_id, amount, key_id } = orderRes.data;
-      console.log('Razorpay Order Details:', { order_id, amount, key_id });
+      let amount = 999; // Default fallback
+      const isStayEvent = ['stay_owner', 'event_owner', 'hotel_owner'].includes(user?.role);
 
-      await new Promise((resolve, reject) => {
-        const razorpay = new window.Razorpay({
-          key: key_id,
-          amount,
-          currency: 'INR',
-          name: 'Gruvora Living',
-          description: `Subscription - ₹${amount / 100}`,
-          order_id,
-          handler: async (response) => {
-            try {
-              // Verify payment with backend
-              const verifyRes = await subscriptionAPI.verify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-              });
+      if (planId === 'basic') amount = 199;
+      else if (planId === 'pro') amount = isStayEvent ? 499 : 999;
+      else if (planId === 'advanced') amount = isStayEvent ? 999 : 1999;
+      else if (planId === 'service_basic') amount = 50;
+      else if (planId === 'service_verified') amount = 99;
+      else if (planId === 'service_top') amount = 149;
 
-              // Mark payment as successful immediately (optimistic update)
-              setPaymentSuccess(true);
-
-              // Force-set active status immediately so UI unblocks right away
-              const activeSub = verifyRes.data?.subscription?.status === 'active'
-                ? verifyRes.data.subscription
-                : { status: 'active', has_subscription: true, subscription_plan: plan };
-              updateSubData(activeSub);
-
-              toast.success('🎉 Subscription activated! You can now list properties.');
-
-              // Notify parent component to refresh subscription status
-              if (onPaymentSuccess) {
-                onPaymentSuccess();
-              }
-
-              // Clear local cache to force fresh status fetch
-              if (user?.id) {
-                localStorage.removeItem(`gruvora_sub_status_${user.id}`);
-              }
-
-              // Fetch fresh status after a short delay to let DB propagate,
-              setTimeout(async () => {
-                try {
-                  await fetchStatus();
-                  if (refreshUser) await refreshUser();
-                } catch (_) { /* silent - optimistic state already set */ }
-              }, 1500);
-
-              resolve();
-            } catch (error) {
-              console.error('Payment verification error:', error);
-              toast.error('Payment verification failed. Contact support if payment was deducted.');
-              reject(error);
-            }
-          },
-          prefill: { name: user?.name, email: user?.email, contact: user?.phone },
-          theme: { color: '#10b981' },
-          modal: { ondismiss: () => reject(new Error('dismissed')) },
-        });
-
-        razorpay.open();
+      // processPayment uses form-redirect: the browser navigates to Paytm's payment page.
+      // After payment Paytm redirects to /api/paytm/callback → /payment/success or /payment/failure.
+      // We do NOT await here — once the form submits the page navigates away.
+      processPayment({
+        payment_type: 'subscription',
+        plan: planId,
+        subscription_months: 1,
+        amount: amount,
       });
     } catch (error) {
-      if (error?.message !== 'dismissed') {
-        toast.error('Payment failed. Please try again.');
-      }
-    } finally {
+      toast.error('Payment initiation failed. Please try again.');
       setPaying(false);
     }
+    // Note: setPaying(false) is intentionally omitted here in the success path.
+    // The page will navigate away to Paytm, so showing a loading state is correct.
   };
 
   const handleToggleAutoRenew = async () => {
@@ -446,7 +382,7 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
 
           {isHybridModel && (
             <div className="pt-4 border-t">
-              <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} paymentSuccess={paymentSuccess} />
+              <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
             </div>
           )}
 
@@ -560,7 +496,7 @@ export default function SubscriptionCard({ onPaymentSuccess }) {
         </div>
 
         <div className="pt-2">
-          <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} paymentSuccess={paymentSuccess} />
+          <PlanDetails subData={subData} onPay={handlePay} paying={paying} role={user?.role} />
         </div>
 
         {subData.status === 'active' && (

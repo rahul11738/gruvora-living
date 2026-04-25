@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { paymentsAPI, listingsAPI, platformAPI } from '../lib/api';
+import { platformAPI } from '../lib/api';
+import usePaytm from '../hooks/usePaytm';
 import { Button } from './ui/button';
 import { toast } from 'sonner';
 import {
@@ -11,7 +12,6 @@ import {
   Loader2,
   Calendar,
   Lock,
-  CheckCircle,
 } from 'lucide-react';
 
 export const PaymentModal = ({
@@ -23,13 +23,9 @@ export const PaymentModal = ({
   subscriptionMonths = 1,
   onSuccess
 }) => {
-  const { user, token } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { token } = useAuth();
   const [paymentStep, setPaymentStep] = useState('details'); // details, processing, success
-  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
-  const [paymentConfig, setPaymentConfig] = useState(null);
-  const [revealedContact, setRevealedContact] = useState(null);
-  const [successDetails, setSuccessDetails] = useState(null);
+  const { processPayment, loading: paytmLoading } = usePaytm();
   const [fees, setFees] = useState({ 
     platform_fee: 50, 
     subscription_fee: 999, 
@@ -51,31 +47,6 @@ export const PaymentModal = ({
     };
     fetchFees();
   }, [listing]);
-
-  useEffect(() => {
-    // Load Razorpay script
-    if (!window.Razorpay) {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.async = true;
-      script.onload = () => setRazorpayLoaded(true);
-      document.body.appendChild(script);
-    } else {
-      setRazorpayLoaded(true);
-    }
-
-    // Fetch payment config
-    fetchPaymentConfig();
-  }, []);
-
-  const fetchPaymentConfig = async () => {
-    try {
-      const response = await paymentsAPI.getConfig();
-      setPaymentConfig(response?.data || null);
-    } catch (error) {
-      console.error('Failed to fetch payment config:', error);
-    }
-  };
 
   const formatPrice = (price) => {
     if (price >= 10000000) {
@@ -133,107 +104,18 @@ export const PaymentModal = ({
       return;
     }
 
-    if (!razorpayLoaded || !paymentConfig?.enabled) {
-      toast.error('Payment gateway not available');
-      return;
-    }
-
-    setLoading(true);
     setPaymentStep('processing');
-
-    try {
-      // Create order
-      // Note: For 'booking', we send the base listing price. 
-      // The backend adds the platform fee from its configuration and also handles listing locking.
-      const orderResponse = await paymentsAPI.createOrder({
-        amount: baseAmount * 100,
-        listing_id: listing?.id,
-        booking_type: paymentType === 'subscription' ? 'subscription' : (listing?.category || 'home'),
-        payment_type: paymentType,
-        subscription_months: typeof subscriptionMonths === 'number' ? subscriptionMonths : 1,
-        plan: typeof subscriptionMonths === 'string' ? subscriptionMonths : 'basic',
-        booking_date: bookingDetails?.date?.toISOString(),
-        guests: bookingDetails?.guests || 1,
-        notes: bookingDetails?.notes || '',
-      });
-      const orderData = orderResponse?.data || {};
-
-      // Open Razorpay checkout
-      const options = {
-        key: paymentConfig.key_id,
-        amount: orderData.amount, // Use the total amount (base + fees) returned from the backend
-        currency: 'INR',
-        name: 'Gruvora Living',
-        description: paymentType === 'subscription' ? 'Subscription Payment' : 
-                     paymentType === 'listing_fee' ? 'Listing Fee Payment' : 
-                     paymentType === 'reel_boost' ? 'Reel Boost Payment' :
-                     listing?.title || 'Booking Payment',
-        order_id: orderData.order_id,
-        handler: async function (response) {
-          // Verify payment
-          try {
-            const verifyResponse = await paymentsAPI.verify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            const verifyData = verifyResponse?.data || {};
-
-            if (verifyData.success) {
-              if (listing?.id) {
-                try {
-                  const revealResponse = await listingsAPI.revealContact(listing.id);
-                  setRevealedContact(revealResponse?.data || null);
-                } catch {
-                  setRevealedContact(null);
-                }
-              }
-              setSuccessDetails({
-                order_id: response.razorpay_order_id,
-                payment_id: response.razorpay_payment_id,
-                name: user?.name,
-                phone: user?.phone,
-                amount: totalAmount
-              });
-              setPaymentStep('success');
-              toast.success('Payment successful!');
-              // Keep the success screen visible for user to see details
-            } else {
-              throw new Error('Payment verification failed');
-            }
-          } catch (error) {
-            console.error('Verification error:', error);
-            toast.error('Payment verification failed');
-            setPaymentStep('details');
-          }
-        },
-        prefill: {
-          name: user?.name || '',
-          email: user?.email || '',
-          contact: user?.phone || ''
-        },
-        theme: {
-          color: '#0E7450'
-        },
-        modal: {
-          ondismiss: function () {
-            setPaymentStep('details');
-            setLoading(false);
-          }
-        }
-      };
-
-      const razorpay = new window.Razorpay(options);
-      razorpay.open();
-
-    } catch (err) {
-      console.error('Payment initialization error:', err);
-      const errorMessage = err.response?.data?.detail || err.message || 'Payment failed. Please try again.';
-      toast.error(errorMessage);
-      setPaymentStep('details');
-    } finally {
-      setLoading(false);
-    }
+    
+    processPayment({
+      amount: totalAmount,
+      listing_id: listing?.id,
+      payment_type: paymentType,
+      plan: typeof subscriptionMonths === 'string' ? subscriptionMonths : 'basic',
+      subscription_months: typeof subscriptionMonths === 'number' ? subscriptionMonths : 1,
+      booking_date: bookingDetails?.date?.toISOString(),
+      guests: bookingDetails?.guests || 1,
+      notes: bookingDetails?.notes || '',
+    });
   };
 
   if (!isOpen) return null;
@@ -268,7 +150,7 @@ export const PaymentModal = ({
             </div>
             <div className="flex items-center gap-2 text-emerald-100 text-xs md:text-sm">
               <Shield className="w-4 h-4" />
-              <span>256-bit SSL • Powered by Razorpay</span>
+              <span>256-bit SSL • Powered by Paytm</span>
             </div>
           </div>
 
@@ -333,11 +215,11 @@ export const PaymentModal = ({
                 {/* Pay Button */}
                 <Button
                   onClick={handlePayment}
-                  disabled={loading || !paymentConfig?.enabled}
+                  disabled={paytmLoading}
                   className="w-full btn-primary text-base md:text-lg py-5 md:py-6"
                   data-testid="pay-now-btn"
                 >
-                  {loading ? (
+                  {paytmLoading ? (
                     <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
                     <>
@@ -346,12 +228,6 @@ export const PaymentModal = ({
                     </>
                   )}
                 </Button>
-
-                {!paymentConfig?.enabled && (
-                  <p className="text-xs text-center text-amber-600">
-                    Payment gateway is being configured
-                  </p>
-                )}
               </motion.div>
             )}
 
@@ -365,69 +241,7 @@ export const PaymentModal = ({
                   <Loader2 className="w-8 h-8 md:w-10 md:h-10 text-primary animate-spin" />
                 </div>
                 <h3 className="font-heading text-lg md:text-xl font-bold mb-2">Processing Payment</h3>
-                <p className="text-sm text-muted-foreground">Please complete payment in Razorpay window...</p>
-              </motion.div>
-            )}
-
-            {paymentStep === 'success' && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-6 md:py-8"
-              >
-                <motion.div
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ type: 'spring', delay: 0.2 }}
-                  className="w-16 h-16 md:w-20 md:h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 md:mb-6"
-                >
-                  <CheckCircle className="w-8 h-8 md:w-10 md:h-10 text-green-600" />
-                </motion.div>
-                <h3 className="font-heading text-lg md:text-xl font-bold text-green-600 mb-2">Payment Successful!</h3>
-                
-                {successDetails && (
-                  <div className="bg-stone-50 rounded-xl p-4 mb-6 text-left space-y-2 border border-stone-100">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-stone-500">Order ID:</span>
-                      <span className="font-mono text-stone-700">{successDetails.order_id}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-stone-500">Payment ID:</span>
-                      <span className="font-mono text-stone-700">{successDetails.payment_id}</span>
-                    </div>
-                    <div className="flex justify-between text-xs border-t pt-2">
-                      <span className="text-stone-500">Name:</span>
-                      <span className="font-medium text-stone-900">{successDetails.name}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-stone-500">Phone:</span>
-                      <span className="font-medium text-stone-900">{successDetails.phone}</span>
-                    </div>
-                    <div className="flex justify-between text-sm border-t pt-2 font-bold">
-                      <span className="text-stone-900">Total Paid:</span>
-                      <span className="text-primary">₹{successDetails.amount.toLocaleString()}</span>
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-sm text-muted-foreground mb-6">Your booking has been confirmed. You can now contact the owner.</p>
-                
-                {revealedContact?.contact_phone && (
-                  <div className="bg-emerald-50 text-emerald-700 p-3 rounded-lg mb-6 flex items-center justify-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    <span className="text-sm font-bold">Owner Phone: {revealedContact.contact_phone}</span>
-                  </div>
-                )}
-
-                <Button 
-                  onClick={() => {
-                    onSuccess?.();
-                    onClose();
-                  }}
-                  className="w-full"
-                >
-                  Go to Dashboard
-                </Button>
+                <p className="text-sm text-muted-foreground">Please complete payment in Paytm window...</p>
               </motion.div>
             )}
           </div>

@@ -58,6 +58,9 @@ const DisclaimerPage = lazyWithRetry(() => import("./components/PolicyPages").th
 const AboutUsPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.AboutUsPage })));
 const UserVerificationPolicyPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.UserVerificationPolicyPage })));
 const CommunityGuidelinesPage = lazyWithRetry(() => import("./components/PolicyPages").then((m) => ({ default: m.CommunityGuidelinesPage })));
+const SuccessPage = lazyWithRetry(() => import("./components/payment/PaymentStatus").then((m) => ({ default: m.SuccessPage })));
+const FailurePage = lazyWithRetry(() => import("./components/payment/PaymentStatus").then((m) => ({ default: m.FailurePage })));
+const PendingPage = lazyWithRetry(() => import("./components/payment/PaymentStatus").then((m) => ({ default: m.PendingPage })));
 
 const RouteLoader = () => (
   <RouteSkeleton />
@@ -110,6 +113,11 @@ function AppRoutes() {
         <Route path="/privacy" element={<Navigate to="/privacy-policy" replace />} />
         <Route path="/terms" element={<Navigate to="/terms-conditions" replace />} />
         <Route path="/about" element={<Navigate to="/about-us" replace />} />
+
+        {/* Payment Status Routes */}
+        <Route path="/payment/success" element={<SuccessPage />} />
+        <Route path="/payment/failure" element={<FailurePage />} />
+        <Route path="/payment/pending" element={<PendingPage />} />
 
         {/* Category & Search */}
         <Route path="/category/:category" element={<CategoryPage />} />

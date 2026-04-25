@@ -60,7 +60,7 @@ export function generateBookingInvoicePDF(booking, user) {
   doc.setTextColor(...GRAY);
   doc.text(fmtDate(createdAt), 14, 52);
   doc.text(String(booking.listing_category || 'Stay').toUpperCase(), 70, 52);
-  const paymentId = booking.razorpay_payment_id || 'N/A';
+  const paymentId = booking.paytm_txn_id || booking.razorpay_payment_id || 'N/A';
   doc.text(paymentId.length > 22 ? paymentId.slice(0, 22) + '…' : paymentId, 126, 52);
 
   // ── Bill To ───────────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ export function generateBookingInvoicePDF(booking, user) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...GRAY);
-  doc.text(`Razorpay Order: ${booking.razorpay_order_id || 'N/A'}`, 20, afterTable + 14);
+  doc.text(`Transaction ID: ${booking.paytm_txn_id || booking.razorpay_order_id || 'N/A'}`, 20, afterTable + 14);
 
   // ── Footer ────────────────────────────────────────────────────────────────
   doc.setFillColor(...PRIMARY);

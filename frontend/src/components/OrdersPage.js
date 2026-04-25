@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
-import { bookingsAPI } from '../lib/api';
+import { bookingsAPI, paymentsAPI } from '../lib/api';
 import { generateBookingInvoicePDF } from '../lib/generateBookingInvoicePDF';
 import { Button } from './ui/button';
 import { 
+  Loader2,
   ClipboardList, 
   Search, 
   Download, 
@@ -312,6 +313,108 @@ export const OrdersPage = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+export const InvoicesList = ({ isEmbedded = false }) => {
+  const { user } = useAuth();
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchPayments = async () => {
+      try {
+        setLoading(true);
+        const res = await paymentsAPI.getAll();
+        setPayments(Array.isArray(res?.data?.payments) ? res.data.payments : []);
+      } catch (err) {
+        console.error('Error fetching payments:', err);
+        toast.error('Failed to load transaction history');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPayments();
+  }, []);
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    return new Date(dateStr).toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="py-12 flex flex-col items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+        <p className="text-stone-500 font-medium">Fetching invoices...</p>
+      </div>
+    );
+  }
+
+  if (payments.length === 0) {
+    return (
+      <div className="bg-white rounded-3xl border border-stone-200 p-12 text-center shadow-sm">
+        <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Download className="w-8 h-8 text-stone-400" />
+        </div>
+        <h3 className="text-xl font-semibold text-stone-900 mb-2">No invoices available</h3>
+        <p className="text-stone-500 mb-0 mx-auto">
+          Invoices appear here once you make a successful payment.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4">
+      {payments.map((payment, index) => (
+        <motion.div
+          key={payment.id}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: index * 0.05 }}
+          className="bg-white rounded-2xl border border-stone-200 p-4 md:p-5 flex flex-col md:flex-row items-center justify-between gap-4 hover:shadow-md transition-all"
+        >
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
+              <Download className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="font-bold text-stone-900">
+                {payment.listing_title || (
+                  payment.payment_type === 'subscription' ? 'Subscription Payment' : 
+                  payment.payment_type === 'listing_fee' ? 'Listing Fee' : 
+                  payment.payment_type === 'reel_boost' ? 'Reel Boost' :
+                  'Booking Payment'
+                )}
+              </h4>
+              <p className="text-xs text-stone-500 font-mono mt-0.5">
+                Ref: {payment.paytm_txn_id || payment.razorpay_payment_id || payment.order_id || 'N/A'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between w-full md:w-auto md:gap-8">
+            <div className="text-left md:text-right">
+              <div className="text-sm font-bold text-stone-900">₹{payment.amount?.toLocaleString('en-IN')}</div>
+              <div className="text-[10px] text-stone-400 uppercase font-bold tracking-wider">{formatDate(payment.created_at || payment.paid_at)}</div>
+            </div>
+            <Button 
+              onClick={() => generateBookingInvoicePDF(payment, user)}
+              size="sm" 
+              className="rounded-xl gap-2 h-10 px-5"
+            >
+              <Download className="w-4 h-4" />
+              Download PDF
+            </Button>
+          </div>
+        </motion.div>
+      ))}
     </div>
   );
 };

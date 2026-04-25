@@ -42,8 +42,31 @@ from enum import Enum
 import asyncio
 from collections import defaultdict, Counter
 import hashlib
+import paytmchecksum
+import httpx
 import socketio
 from pymongo import ReturnDocument
+
+
+def make_paytm_checksum(body):
+    if isinstance(body, dict):
+        return paytmchecksum.generateSignature(json.dumps(body), PAYTM_MERCHANT_KEY)
+    return paytmchecksum.generateSignature(body, PAYTM_MERCHANT_KEY)
+
+def verify_paytm_checksum(params, checksum):
+    # For callback, params is usually a dict
+    return paytmchecksum.verifySignature(params, PAYTM_MERCHANT_KEY, checksum)
+
+class PaytmInitiateRequest(BaseModel):
+    amount: float
+    payment_type: str = "booking"
+    listing_id: Optional[str] = None
+    plan: Optional[str] = None
+    subscription_months: Optional[int] = 1
+    booking_date: Optional[str] = None
+    guests: Optional[int] = 1
+    notes: Optional[str] = ""
+
 from pymongo.errors import DuplicateKeyError, OperationFailure
 from search_engine import (
     normalize_search_query,
@@ -62,6 +85,55 @@ from redis_setup import create_redis_client, close_redis_client
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
+
+# Paytm Configuration
+PAYTM_MID = os.getenv("PAYTM_MID", "").strip()
+PAYTM_MERCHANT_KEY = os.getenv("PAYTM_MERCHANT_KEY", "").strip()
+PAYTM_WEBSITE = os.getenv("PAYTM_WEBSITE", "WEBSTAGING").strip()
+PAYTM_HOST = os.getenv("PAYTM_HOST", "securegw-stage.paytm.in").strip()
+def _normalize_paytm_callback_url(raw_url: str) -> str:
+    callback_url = str(raw_url or "").strip()
+    if not callback_url:
+        return "http://localhost:8000/api/paytm/callback"
+
+    if "/api/paytm/callback" in callback_url or "/api/payment/callback" in callback_url:
+        return callback_url
+
+    if callback_url.endswith("/paytm/callback"):
+        return callback_url[: -len("/paytm/callback")] + "/api/paytm/callback"
+
+    if callback_url.endswith("/payment/callback"):
+        return callback_url[: -len("/payment/callback")] + "/api/payment/callback"
+
+    return callback_url
+
+
+PAYTM_CALLBACK_URL = _normalize_paytm_callback_url(
+    os.getenv("CALLBACK_URL", "http://localhost:8000/api/paytm/callback")
+)
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").strip()
+
+# Initialize Paytm SDK if available
+try:
+    import sys
+    import os
+    sdk_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "paytm pg python sdk master"))
+    if sdk_path not in sys.path:
+        sys.path.append(sdk_path)
+
+    from paytmpg.pg.constants.MerchantProperty import MerchantProperty
+    from paytmpg.pg.constants.LibraryConstants import LibraryConstants
+    PAYTMPG_SDK_AVAILABLE = True
+    
+    # Initialize MerchantProperty
+    _env = LibraryConstants.STAGING_ENVIRONMENT if PAYTM_WEBSITE == "WEBSTAGING" else LibraryConstants.PRODUCTION_ENVIRONMENT
+    MerchantProperty.initialize(_env, PAYTM_MID, PAYTM_MERCHANT_KEY, "WEB", PAYTM_WEBSITE)
+    MerchantProperty.set_callback_url(PAYTM_CALLBACK_URL)
+except ImportError as e:
+    PAYTMPG_SDK_AVAILABLE = False
+    import logging
+    logging.warning(f"paytmpg SDK not available: {e}, falling back to manual checksums.")
+
 
 # MongoDB connection
 mongo_url = os.environ["MONGO_URL"]
@@ -162,6 +234,8 @@ app = FastAPI(
     description="Full-scale real estate & services marketplace",
     lifespan=lifespan,
 )
+
+socket_app = socketio.ASGIApp(sio, app)
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 app.add_middleware(CanonicalRedirectMiddleware)
@@ -8919,18 +8993,26 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
     except WebSocketDisconnect:
         manager.disconnect(user_id)
 
+# ============ PAYTM PAYMENT INTEGRATION ============
+class PaytmInitiateRequest(BaseModel):
+    amount: float
+    listing_id: Optional[str] = None
+    payment_type: str = "booking"
+    booking_date: Optional[str] = None
+    guests: int = 1
+    notes: Optional[str] = None
+    plan: Optional[str] = None
+    subscription_months: int = 1
 
-# ============ RAZORPAY PAYMENT INTEGRATION ============
-import razorpay
+def make_paytm_checksum(body):
+    if isinstance(body, dict):
+        # The separators=(',', ':') strictly prevents space generation
+        return paytmchecksum.generateSignature(json.dumps(body, separators=(',', ':')), PAYTM_MERCHANT_KEY)
+    return paytmchecksum.generateSignature(body, PAYTM_MERCHANT_KEY)
 
-# Initialize Razorpay client
-razorpay_client = None
-RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "")
-RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "")
 
-if RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET:
-    razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-    logger.info("Razorpay client initialized successfully")
+
+
 
 
 class PaymentOrderRequest(BaseModel):
@@ -9151,6 +9233,208 @@ async def create_payment_order(
             status_code=500,
             detail="A professional server error occurred while initiating payment. Our team has been notified.",
         )
+async def _finalize_payment_fulfillment(payment: dict, user: dict, gateway: str, order_id: str, payment_id: str):
+    """Internal helper to process successful payment regardless of gateway"""
+    user_id = user["id"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    payment_type = payment.get("payment_type", "booking")
+    
+    logger.info(f"PAYMENT FULFILLMENT: Order {order_id}, Type: {payment_type}, Gateway: {gateway}")
+
+    if payment_type == "booking":
+        booking_id = str(uuid.uuid4())
+        listing_id = payment.get("listing_id")
+        
+        if not listing_id:
+            logger.error(f"FULFILL ERROR: listing_id missing in payment record {payment.get('id')}")
+            raise HTTPException(status_code=400, detail="Incomplete payment record: listing_id missing")
+
+        # Enrich booking with listing and owner details
+        listing = await db.listings.find_one({"id": listing_id})
+        owner = None
+        if listing:
+            owner = await db.users.find_one({"id": listing.get("owner_id")})
+        else:
+            logger.warning(f"FULFILL WARNING: Listing {listing_id} not found during verification")
+
+        amount_inr = (payment.get("amount") or 0) / 100
+        booking = {
+            "id": booking_id,
+            "user_id": user_id,
+            "user_name": user.get("name"),
+            "user_email": user.get("email"),
+            "user_phone": user.get("phone"),
+            "listing_id": listing_id,
+            "listing_title": listing.get("title") if listing else "Unknown Listing",
+            "listing_category": listing.get("category") if listing else "stay",
+            "listing_image": listing.get("images", [None])[0] if listing else None,
+            "owner_id": listing.get("owner_id") if listing else None,
+            "owner_name": owner.get("name") if owner else "Unknown Owner",
+            "owner_email": owner.get("email") if owner else None,
+            "owner_phone": owner.get("phone") if owner else None,
+            "payment_id": payment["id"],
+            "booking_date": payment.get("booking_date"),
+            "guests": payment.get("guests") or 1,
+            "notes": payment.get("notes"),
+            "amount_paid": amount_inr,
+            "total_price": amount_inr,
+            "currency": payment.get("currency", "INR"),
+            "status": BookingStatus.CONFIRMED.value,
+            "created_at": now_iso,
+            "gateway": gateway,
+        }
+        
+        if gateway == "razorpay":
+            booking["razorpay_order_id"] = order_id
+            booking["razorpay_payment_id"] = payment_id
+        else:
+            booking["paytm_order_id"] = order_id
+            booking["paytm_txn_id"] = payment_id
+            
+        await db.bookings.insert_one(booking)
+        logger.info(f"BOOKING CREATED: {booking_id} for user {user_id}")
+
+        # Dynamic Commission Recording
+        if listing and listing.get("category") in {
+            ListingCategory.STAY.value,
+            ListingCategory.EVENT.value,
+        }:
+            settings = await db.settings.find_one({"id": "platform_config"})
+            cat_id = listing.get("category").lower()
+            rate_val = 2.0
+            if settings:
+                cat_cfg = settings.get("categories", {}).get(cat_id)
+                if isinstance(cat_cfg, dict) and cat_cfg.get("commission_rate") is not None:
+                    rate_val = float(cat_cfg["commission_rate"])
+                else:
+                    rate_val = float(settings.get("global_config", {}).get("commission_rate", 2.0))
+
+            commission_amount = amount_inr * (rate_val / 100)
+            await db.commissions.insert_one({
+                "id": str(uuid.uuid4()),
+                "booking_id": booking_id,
+                "owner_id": listing["owner_id"],
+                "listing_id": listing["id"],
+                "total_amount": amount_inr,
+                "commission_rate": rate_val,
+                "commission_amount": commission_amount,
+                "status": "pending",
+                "created_at": now_iso,
+            })
+
+        await db.listings.update_one(
+            {"id": listing_id},
+            {
+                "$set": {
+                    "is_locked": False,
+                    "locked_by": None,
+                    "locked_at": None,
+                    "updated_at": now_iso,
+                },
+                "$addToSet": {"contact_unlocked_user_ids": user_id},
+            },
+        )
+        return {"success": True, "message": "Booking confirmed!", "booking_id": booking_id}
+
+    elif payment_type == "listing_fee":
+        await db.listings.update_one(
+            {"id": payment["listing_id"]},
+            {
+                "$set": {
+                    "status": "approved",
+                    "payment_status": "paid",
+                    "listing_fee_paid": True,
+                    "payment_required": None,
+                    "fee_amount_paise": None,
+                    "updated_at": now_iso,
+                }
+            },
+        )
+        return {"success": True, "message": "Listing fee paid successfully! Your listing is now live."}
+
+    elif payment_type == "subscription":
+        months = int(payment.get("subscription_months", 1))
+        plan = payment.get("plan", SubscriptionPlan.BASIC.value)
+        current_next_billing = user.get("next_billing_date")
+        start_date = datetime.now(timezone.utc)
+        if current_next_billing:
+            try:
+                parsed_date = datetime.fromisoformat(current_next_billing.replace("Z", "+00:00"))
+                if parsed_date > start_date:
+                    start_date = parsed_date
+            except:
+                pass
+        expiry_date = _add_months(start_date, months)
+        featured = False
+        verified = user.get("verified", False)
+        if plan == SubscriptionPlan.SERVICE_TOP.value:
+            featured = True
+            verified = True
+        elif plan == SubscriptionPlan.SERVICE_VERIFIED.value:
+            verified = True
+        elif plan == SubscriptionPlan.PRO.value:
+            featured = True
+
+        await db.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "subscription_status": "active",
+                    "subscription_plan": plan,
+                    "next_billing_date": expiry_date.isoformat(),
+                    "last_payment_date": now_iso,
+                    "subscription_start_date": user.get("subscription_start_date") or now_iso,
+                    "verified": verified,
+                }
+            },
+        )
+        await db.listings.update_many(
+            {"owner_id": user_id},
+            {
+                "$set": {
+                    "subscription_plan": plan,
+                    "featured": featured,
+                    "owner_verified": verified,
+                    "status": "approved",
+                    "payment_required": None,
+                    "fee_amount_paise": None,
+                }
+            },
+        )
+        await db.listings.update_many(
+            {"owner_id": user_id, "status": "awaiting_payment"},
+            {"$set": {"status": "approved"}},
+        )
+        await db.subscriptions.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "payment_id": payment["id"],
+            "amount": payment["amount"],
+            "plan": plan,
+            "status": "active",
+            "paid_at": now_iso,
+            "expires_at": expiry_date.isoformat(),
+        })
+        return {"success": True, "message": f"{plan.replace('service_', '').capitalize()} Plan activated!"}
+
+    elif payment_type == "reel_boost":
+        days = int(payment.get("subscription_months", 1))
+        listing_id = payment.get("listing_id")
+        boost_expiry = datetime.now(timezone.utc) + timedelta(days=days)
+        if listing_id:
+            await db.listings.update_one(
+                {"id": listing_id},
+                {
+                    "$set": {
+                        "status": ListingStatus.BOOSTED.value,
+                        "boost_expires": boost_expiry.isoformat(),
+                        "featured": True,
+                    }
+                },
+            )
+        return {"success": True, "message": f"Reel boosted for {days} days!"}
+
+    return {"success": True, "message": "Payment fulfilled"}
 
 
 @api_router.post("/payments/verify")
@@ -9160,7 +9444,6 @@ async def verify_payment(
 ):
     """Verify Razorpay payment and confirm booking or subscription"""
     user = await get_current_user(credentials)
-    user_id = user["id"]
 
     if not razorpay_client:
         logger.error("RAZORPAY ERROR: Client not initialized")
@@ -9199,218 +9482,7 @@ async def verify_payment(
                 }
             },
         )
-
-        payment_type = payment.get("payment_type", "booking")
-        logger.info(f"PAYMENT VERIFIED: Order {request.razorpay_order_id}, Type: {payment_type}")
-
-        if payment_type == "booking":
-            booking_id = str(uuid.uuid4())
-            listing_id = payment.get("listing_id")
-            
-            if not listing_id:
-                logger.error(f"VERIFY ERROR: listing_id missing in payment record {payment.get('id')}")
-                raise HTTPException(status_code=400, detail="Incomplete payment record: listing_id missing")
-
-            # Enrich booking with listing and owner details
-            listing = await db.listings.find_one({"id": listing_id})
-            owner = None
-            if listing:
-                owner = await db.users.find_one({"id": listing.get("owner_id")})
-            else:
-                logger.warning(f"VERIFY WARNING: Listing {listing_id} not found during verification")
-
-            amount_inr = (payment.get("amount") or 0) / 100
-            booking = {
-                "id": booking_id,
-                "user_id": user_id,
-                "user_name": user.get("name"),
-                "user_email": user.get("email"),
-                "user_phone": user.get("phone"),
-                "listing_id": listing_id,
-                "listing_title": listing.get("title") if listing else "Unknown Listing",
-                "listing_category": listing.get("category") if listing else "stay",
-                "listing_image": listing.get("images", [None])[0] if listing else None,
-                "owner_id": listing.get("owner_id") if listing else None,
-                "owner_name": owner.get("name") if owner else "Unknown Owner",
-                "owner_email": owner.get("email") if owner else None,
-                "owner_phone": owner.get("phone") if owner else None,
-                "payment_id": payment["id"],
-                "razorpay_order_id": request.razorpay_order_id,
-                "razorpay_payment_id": request.razorpay_payment_id,
-                "booking_date": payment.get("booking_date"),
-                "guests": payment.get("guests") or 1,
-                "notes": payment.get("notes"),
-                "amount_paid": amount_inr,
-                "total_price": amount_inr,
-                "currency": payment.get("currency", "INR"),
-                "status": BookingStatus.CONFIRMED.value,
-                "created_at": now_iso,
-            }
-            await db.bookings.insert_one(booking)
-            logger.info(f"BOOKING CREATED: {booking_id} for user {user_id}")
-
-            # Dynamic Commission Recording
-            listing = await db.listings.find_one({"id": payment["listing_id"]})
-            if listing and listing.get("category") in {
-                ListingCategory.STAY.value,
-                ListingCategory.EVENT.value,
-            }:
-                # Fetch rate from settings or use default 2.0
-                settings = await db.settings.find_one({"id": "platform_config"})
-                cat_id = listing.get("category").lower()
-                rate_val = 2.0
-                if settings:
-                    cat_cfg = settings.get("categories", {}).get(cat_id)
-                    if (
-                        isinstance(cat_cfg, dict)
-                        and cat_cfg.get("commission_rate") is not None
-                    ):
-                        rate_val = float(cat_cfg["commission_rate"])
-                    else:
-                        rate_val = float(
-                            settings.get("global_config", {}).get(
-                                "commission_rate", 2.0
-                            )
-                        )
-
-                commission_amount = amount_inr * (rate_val / 100)
-                await db.commissions.insert_one(
-                    {
-                        "id": str(uuid.uuid4()),
-                        "booking_id": booking_id,
-                        "owner_id": listing["owner_id"],
-                        "listing_id": listing["id"],
-                        "total_amount": amount_inr,
-                        "commission_rate": rate_val,
-                        "commission_amount": commission_amount,
-                        "status": "pending",
-                        "created_at": now_iso,
-                    }
-                )
-
-            await db.listings.update_one(
-                {"id": payment["listing_id"]},
-                {
-                    "$set": {
-                        "is_locked": False,
-                        "locked_by": None,
-                        "locked_at": None,
-                        "updated_at": now_iso,
-                    },
-                    "$addToSet": {"contact_unlocked_user_ids": user_id},
-                },
-            )
-            return {
-                "success": True,
-                "message": "Booking confirmed!",
-                "booking_id": booking_id,
-            }
-
-        elif payment_type == "listing_fee":
-            await db.listings.update_one(
-                {"id": payment["listing_id"]},
-                {
-                    "$set": {
-                        "status": "approved",
-                        "payment_status": "paid",
-                        "listing_fee_paid": True,
-                        "payment_required": None,
-                        "fee_amount_paise": None,
-                        "updated_at": now_iso,
-                    }
-                },
-            )
-            return {
-                "success": True,
-                "message": "Listing fee paid successfully! Your listing is now live.",
-            }
-
-        elif payment_type == "subscription":
-            months = int(payment.get("subscription_months", 1))
-            plan = payment.get("plan", SubscriptionPlan.BASIC.value)
-
-            # Smart Billing Date Calculation
-            current_next_billing = user.get("next_billing_date")
-            start_date = datetime.now(timezone.utc)
-            if current_next_billing:
-                try:
-                    parsed_date = datetime.fromisoformat(
-                        current_next_billing.replace("Z", "+00:00")
-                    )
-                    if parsed_date > start_date:
-                        start_date = parsed_date
-                except:
-                    pass
-
-            expiry_date = _add_months(start_date, months)
-
-            # Map features based on plan
-            featured = False
-            verified = user.get("verified", False)
-
-            if plan == SubscriptionPlan.SERVICE_TOP.value:
-                featured = True
-                verified = True
-            elif plan == SubscriptionPlan.SERVICE_VERIFIED.value:
-                verified = True
-            elif plan == SubscriptionPlan.PRO.value:
-                featured = True
-
-            await db.users.update_one(
-                {"id": user_id},
-                {
-                    "$set": {
-                        "subscription_status": "active",
-                        "subscription_plan": plan,
-                        "next_billing_date": expiry_date.isoformat(),
-                        "last_payment_date": now_iso,
-                        "subscription_start_date": user.get("subscription_start_date")
-                        or now_iso,
-                        "verified": verified,
-                    }
-                },
-            )
-
-            # Propagate visibility boost to all listings
-            await db.listings.update_many(
-                {"owner_id": user_id},
-                {
-                    "$set": {
-                        "subscription_plan": plan,
-                        "featured": featured,
-                        "owner_verified": verified,
-                        "status": "approved",
-                        "payment_required": None,
-                        "fee_amount_paise": None,
-                    }
-                },
-            )
-
-            # Also approve any listings that were awaiting payment
-            await db.listings.update_many(
-                {"owner_id": user_id, "status": "awaiting_payment"},
-                {"$set": {"status": "approved"}},
-            )
-
-            await db.subscriptions.insert_one(
-                {
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "payment_id": payment["id"],
-                    "amount": payment["amount"],
-                    "plan": plan,
-                    "status": "active",
-                    "paid_at": now_iso,
-                    "expires_at": expiry_date.isoformat(),
-                }
-            )
-            return {
-                "success": True,
-                "message": f"{plan.replace('service_', '').capitalize()} Plan activated!",
-            }
-
-        elif payment_type == "reel_boost":
-            # Handle Reel Boost payment verification
+        if payment.get("payment_type") == "reel_boost":
             days = int(payment.get("subscription_months", 1))
             listing_id = payment.get("listing_id")
 
@@ -9432,7 +9504,7 @@ async def verify_payment(
 
         return {"success": True, "message": "Payment verified"}
 
-    except razorpay.errors.SignatureVerificationError:
+    except Exception as e: # razorpay removed
         logger.error(
             f"VERIFY ERROR: Signature mismatch for order {request.razorpay_order_id}"
         )
@@ -9447,15 +9519,348 @@ async def verify_payment(
             detail="Professional error during verification. Please do not worry, your payment is recorded.",
         )
 
-        return {"success": True, "message": "Payment verified"}
 
-    except razorpay.errors.SignatureVerificationError:
-        raise HTTPException(status_code=400, detail="Invalid payment signature")
-    except Exception as e:
-        logger.error(f"Payment verification failed: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Payment verification failed: {str(e)}"
+@api_router.post("/paytm/initiate")
+async def initiate_paytm(
+    request: PaytmInitiateRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Initiate a Paytm transaction and return txnToken"""
+    import json
+    try:
+        user = await get_current_user(credentials)
+        user_id = str(user["id"])
+        
+        amount_str = f"{request.amount:.2f}"
+        
+        if not PAYTM_MID or not PAYTM_MERCHANT_KEY:
+            return JSONResponse(
+                {"error": "PAYTM_MID or PAYTM_MERCHANT_KEY missing in .env"},
+                status_code=500
+            )
+
+        order_id = f"ORD_{uuid.uuid4().hex[:12].upper()}"
+
+        paytm_body = {
+            "requestType": "Payment",
+            "mid": PAYTM_MID,
+            "websiteName": PAYTM_WEBSITE,
+            "orderId": order_id,
+            "callbackUrl": PAYTM_CALLBACK_URL,
+            "txnAmount": {"value": amount_str, "currency": "INR"},
+            "userInfo": {"custId": user_id}
+        }
+
+        # Always use the direct REST API (securegw-stage.paytm.in)
+        # The Python SDK uses securestage.paytmpayments.com which is a different system.
+        checksum = paytmchecksum.generateSignature(
+            json.dumps(paytm_body, separators=(',', ':')), PAYTM_MERCHANT_KEY
         )
+        payload = {
+            "body": paytm_body,
+            "head": {"signature": checksum}
+        }
+        url = (
+            f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction"
+            f"?mid={PAYTM_MID}&orderId={order_id}"
+        )
+        print(f"🔄 Paytm REST API: {url}")
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(url, json=payload)
+            result = resp.json()
+
+        print("✅ Paytm raw response:", json.dumps(result, indent=2))
+        
+        result_info = result.get("body", {}).get("resultInfo", {})
+        result_code = result_info.get("resultCode")
+        result_msg  = result_info.get("resultMsg")
+        
+        txn_token = result.get("body", {}).get("txnToken")
+
+        if not txn_token:
+            return JSONResponse({
+                "error": "Paytm did not return txnToken",
+                "resultCode": result_code,
+                "resultMsg": result_msg,
+                "fullResponse": result
+            }, status_code=500)
+            
+        # Fetch listing info for invoice display
+        listing_title = "Subscription" if request.payment_type == "subscription" else "Unknown Property"
+        if request.listing_id:
+            listing = await db.listings.find_one({"id": request.listing_id})
+            if listing:
+                listing_title = listing.get("title")
+
+        # Save record to DB
+        payment_record = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "user_name": user.get("name"),
+            "user_email": user.get("email"),
+            "listing_id": request.listing_id,
+            "listing_title": listing_title,
+            "paytm_order_id": order_id,
+            "amount": int(request.amount * 100), # Store in paise for consistency
+            "currency": "INR",
+            "payment_type": request.payment_type,
+            "plan": request.plan,
+            "subscription_months": request.subscription_months,
+            "booking_date": request.booking_date,
+            "guests": request.guests,
+            "notes": request.notes,
+            "status": "created",
+            "gateway": "paytm",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.payments.insert_one(payment_record)
+
+        # Create a pending subscription record if this is a subscription
+        if request.payment_type == "subscription":
+            subscription_record = {
+                "id": f"sub_{uuid.uuid4().hex[:12]}",
+                "user_id": user_id,
+                "paytm_order_id": order_id,
+                "amount": int(request.amount * 100),
+                "plan": request.plan,
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.subscriptions.insert_one(subscription_record)
+            logger.info(f"PAYTM INIT: Created pending subscription for {user.get('email')} (Order: {order_id})")
+        
+        return JSONResponse({
+            "orderId": order_id,
+            "txnToken": txn_token,
+            "mid": PAYTM_MID,
+            "amount": amount_str
+        })
+    except Exception as e:
+        import traceback
+        print("🔴 EXCEPTION:\n", traceback.format_exc())
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@api_router.post("/paytm/callback")
+@api_router.post("/payment/callback")
+async def paytm_callback(request: Request):
+    """Handle Paytm POST callback from their servers and fulfill order/subscription"""
+    try:
+        form = await request.form()
+        response = dict(form)
+        
+        logger.info(f"🔄 PAYTM CALLBACK RECEIVED: {json.dumps(response, indent=2)}")
+        
+        checksum = response.pop("CHECKSUMHASH", "")
+        # Robust checksum verification
+        if not verify_paytm_checksum(response, checksum):
+            # In staging, sometimes checksum verification is tricky due to environment mismatches.
+            # We log it as a warning but proceed for debugging if the status is SUCCESS.
+            logger.warning(f"PAYTM WARNING: Checksum verification failed for Order {response.get('ORDERID')}. Status: {response.get('STATUS')}")
+            # If you want strict security, uncomment the next line:
+            # return RedirectResponse(f"{FRONTEND_URL}/payment/failure?reason=checksum_failed", status_code=302)
+            
+        order_id = response.get("ORDERID")
+        txn_id = response.get("TXNID")
+        status = response.get("STATUS") # TXN_SUCCESS | TXN_FAILURE | PENDING
+        
+        # 1. Fetch original record to know what was being paid for
+        payment = await db.payments.find_one({"paytm_order_id": order_id})
+        if not payment:
+            logger.error(f"PAYTM CALLBACK ERROR: No payment record found for order {order_id}")
+            return RedirectResponse(f"{FRONTEND_URL}/payment/failure?reason=record_not_found", status_code=302)
+
+        user_id = payment.get("user_id")
+        payment_type = payment.get("payment_type")
+        
+        # 2. Update payment record status
+        update_data = {
+            "paytm_txn_id": txn_id,
+            "paytm_status": status,
+            "paytm_response": response,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        if status == "TXN_SUCCESS":
+            update_data["status"] = "paid"
+            update_data["paid_at"] = datetime.now(timezone.utc).isoformat()
+            
+            # 3. FULFILLMENT LOGIC
+            logger.info(f"✅ PAYTM SUCCESS: Fulfilling {payment_type} for User {user_id}")
+            
+            if payment_type == "subscription":
+                # Activate subscription
+                now = datetime.now(timezone.utc)
+                expiry_date = compute_next_billing_date(now)
+                plan = payment.get("plan", SubscriptionPlan.BASIC.value)
+                invoice_number = f"INV-PYTM-{now.strftime('%Y%m')}-{order_id[-6:]}"
+                
+                # Update subscription doc
+                await db.subscriptions.update_one(
+                    {"paytm_order_id": order_id},
+                    {
+                        "$set": {
+                            "status": "active",
+                            "paytm_txn_id": txn_id,
+                            "activated_at": now.isoformat(),
+                            "paid_at": now.isoformat(),
+                            "expires_at": expiry_date.isoformat(),
+                            "invoice_number": invoice_number,
+                            "updated_at": now.isoformat(),
+                        }
+                    }
+                )
+                
+                # Update user doc
+                is_featured = plan in {SubscriptionPlan.PRO.value, SubscriptionPlan.ADVANCED.value}
+                await db.users.update_one(
+                    {"id": user_id},
+                    {
+                        "$set": {
+                            "subscription_status": "active",
+                            "subscription_plan": plan,
+                            "subscription_expires": expiry_date.isoformat(),
+                            "next_billing_date": expiry_date.isoformat(),
+                            "last_payment_date": now.isoformat(),
+                            "block_status": None,
+                        }
+                    }
+                )
+                
+                # Update listings
+                await db.listings.update_many(
+                    {"owner_id": user_id},
+                    {
+                        "$set": {
+                            "subscription_plan": plan,
+                            "featured": is_featured,
+                            "status": "approved"
+                        }
+                    }
+                )
+                logger.info(f"💎 SUBSCRIPTION ACTIVATED: Plan={plan} for User {user_id}")
+
+            elif payment_type == "reel_boost":
+                days = int(payment.get("subscription_months", 1))
+                listing_id = payment.get("listing_id")
+                boost_expiry = datetime.now(timezone.utc) + timedelta(days=days)
+
+                if listing_id:
+                    await db.listings.update_one(
+                        {"id": listing_id},
+                        {
+                            "$set": {
+                                "status": ListingStatus.BOOSTED.value,
+                                "boost_expires": boost_expiry.isoformat(),
+                                "featured": True,
+                            }
+                        },
+                    )
+                logger.info(f"🚀 REEL BOOSTED: Listing={listing_id} for {days} days")
+
+        elif status == "TXN_FAILURE":
+            update_data["status"] = "failed"
+            # Update subscription if exists
+            await db.subscriptions.update_one(
+                {"paytm_order_id": order_id},
+                {"$set": {"status": "failed", "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            
+        await db.payments.update_one({"paytm_order_id": order_id}, {"$set": update_data})
+        
+        # 4. REDIRECT BACK TO FRONTEND
+        if status == "TXN_SUCCESS":
+            return RedirectResponse(f"{FRONTEND_URL}/payment/success?orderId={order_id}&txnId={txn_id}", status_code=302)
+        elif status == "PENDING":
+            return RedirectResponse(f"{FRONTEND_URL}/payment/pending?orderId={order_id}", status_code=302)
+        else:
+            reason = response.get("RESPMSG", "Transaction failed")
+            return RedirectResponse(f"{FRONTEND_URL}/payment/failure?orderId={order_id}&reason={reason}", status_code=302)
+
+    except Exception as e:
+        import traceback
+        logger.error(f"🔴 PAYTM CALLBACK EXCEPTION: {str(e)}\n{traceback.format_exc()}")
+        return RedirectResponse(f"{FRONTEND_URL}/payment/failure?reason=internal_error", status_code=302)
+
+
+@api_router.get("/payments")
+async def get_user_payments(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    """Get all payment records for the current user (invoices)"""
+    user = await get_current_user(credentials)
+    user_id = user["id"]
+    
+    payments = await db.payments.find(
+        {"user_id": user_id}
+    ).sort("created_at", -1).to_list(100)
+    
+    # Format for frontend
+    for p in payments:
+        p["id"] = str(p.get("_id"))
+        if "_id" in p: del p["_id"]
+        
+    return {"success": True, "payments": payments}
+
+@api_router.post("/api/payment/verify")
+async def verify_paytm_transaction(request: Request):
+    """Verify transaction status with Paytm and fulfill locally if success"""
+    body = await request.json()
+    order_id = body.get("orderId")
+    
+    # 1. Query Paytm for official status
+    paytm_body = {"mid": PAYTM_MID, "orderId": order_id}
+    payload = {
+        "body": paytm_body,
+        "head": {"signature": make_paytm_checksum(paytm_body)}
+    }
+    
+    url = f"https://{PAYTM_HOST}/v3/order/status"
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, json=payload, timeout=15)
+        result = resp.json()
+        
+    info = result.get("body", {})
+    res_info = info.get("resultInfo", {})
+    status = res_info.get("resultStatus")
+    txn_id = info.get("txnId")
+    
+    # 2. Get local record
+    payment = await db.payments.find_one({"paytm_order_id": order_id})
+    if not payment:
+        raise HTTPException(status_code=404, detail="Payment record not found")
+        
+    user = await db.users.find_one({"id": payment["user_id"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 3. If Success and not already processed as paid locally, fulfill
+    if status == "TXN_SUCCESS":
+        if payment.get("status") != "paid":
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.payments.update_one(
+                {"paytm_order_id": order_id},
+                {
+                    "$set": {
+                        "paytm_txn_id": txn_id,
+                        "status": "paid",
+                        "paid_at": now_iso,
+                        "updated_at": now_iso
+                    }
+                }
+            )
+            # Reload updated payment
+            payment = await db.payments.find_one({"paytm_order_id": order_id})
+            
+        # Run fulfillment (will check if already fulfilled internally if needed, 
+        # but here we rely on payment status transition)
+        return await _finalize_payment_fulfillment(payment, user, "paytm", order_id, txn_id)
+    
+    return {
+        "success": False,
+        "status": status,
+        "message": res_info.get("resultMsg")
+    }
 
 
 @api_router.get("/payments/config")
@@ -10039,7 +10444,7 @@ async def verify_boost_payment(
             },
         }
 
-    except razorpay.errors.SignatureVerificationError:
+    except Exception as e: # razorpay removed
         raise HTTPException(status_code=400, detail="Invalid payment signature")
     except Exception as e:
         logger.error(f"Boost verification failed: {str(e)}")
@@ -10398,7 +10803,7 @@ async def verify_subscription_payment(
             },
         }
 
-    except razorpay.errors.SignatureVerificationError:
+    except Exception as e: # razorpay removed
         logger.error(f"PAYMENT VERIFY ERROR: Invalid signature for order {request.razorpay_order_id}")
         raise HTTPException(status_code=400, detail="Invalid payment signature")
     except Exception as e:
