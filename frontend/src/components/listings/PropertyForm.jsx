@@ -32,10 +32,6 @@ function buildPayload(base, specific, category) {
   };
 }
 
-const HOME_CATEGORIES = [
-  { value: 'home', label: 'Home (Residential)' },
-];
-
 const PROPERTY_TYPES_HOME = ['flat', 'villa', 'rowhouse', 'bungalow', 'pg'];
 const PROPERTY_TYPES_BUSINESS = ['shop', 'office', 'warehouse', 'plot'];
 
