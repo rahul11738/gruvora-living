@@ -9528,36 +9528,27 @@ async def initiate_paytm(
     try:
         user = await get_current_user(credentials)
         user_id = str(user["id"])
-        amount_str = f"{request.amount:.2f}"
-        
-        # DEBUG LOGS FOR PRODUCTION
-        logger.info(f"🚀 PAYTM INITIATE START: User={user_id}, Amount={amount_str}")
-        logger.info(f"🔑 CONFIG CHECK: MID={'SET' if PAYTM_MID else 'MISSING'}, KEY={'SET' if PAYTM_MERCHANT_KEY else 'MISSING'}")
-
-        if not PAYTM_MID or not PAYTM_MERCHANT_KEY:
-            logger.error("❌ CRITICAL: PAYTM_MID or PAYTM_MERCHANT_KEY missing in production .env")
-            return JSONResponse({
-                "error": "Paytm credentials missing in server environment",
-                "mid_status": "present" if PAYTM_MID else "missing",
-                "key_status": "present" if PAYTM_MERCHANT_KEY else "missing"
-            }, status_code=500)
-
         order_id = f"ORD_{uuid.uuid4().hex[:16].upper()}"
-        # 1. Determine Website Name (Crucial for Production vs Staging)
-        # If Host is production but Website is still WEBSTAGING, it will fail.
-        if "stage" in PAYTM_HOST:
-            website = "WEBSTAGING"
-        else:
-            # For production, it's usually 'DEFAULT' unless specified
-            website = PAYTM_WEBSITE if PAYTM_WEBSITE != "WEBSTAGING" else "DEFAULT"
+        
+        # 1. Clean Credentials (prevent hidden spaces)
+        mid = PAYTM_MID.strip() if PAYTM_MID else ""
+        key = PAYTM_MERCHANT_KEY.strip() if PAYTM_MERCHANT_KEY else ""
 
+        if not mid or not key:
+            return JSONResponse({"error": "Paytm credentials missing"}, status_code=500)
+
+        # 2. Format Amount (Paytm prefers strings, avoid .00 if whole number)
+        amount_val = request.amount
+        amount_str = str(int(amount_val)) if amount_val == int(amount_val) else f"{amount_val:.2f}"
+
+        # 3. Determine Website
+        website = "WEBSTAGING" if "stage" in PAYTM_HOST else (PAYTM_WEBSITE if PAYTM_WEBSITE != "WEBSTAGING" else "DEFAULT")
         callback_url = get_dynamic_callback_url(request_obj)
-        logger.info(f"🔗 CALLBACK URL: {callback_url}")
-        logger.info(f"🌐 WEBSITE: {website}")
-
+        
+        # 4. LOCK THE BODY (Strict pattern to avoid Checksum 2005)
         paytm_body = {
             "requestType": "Payment",
-            "mid": PAYTM_MID,
+            "mid": mid,
             "websiteName": website,
             "orderId": order_id,
             "callbackUrl": callback_url,
@@ -9565,17 +9556,20 @@ async def initiate_paytm(
             "userInfo": {"custId": user_id}
         }
 
-        checksum = paytmchecksum.generateSignature(
-            json.dumps(paytm_body, separators=(',', ':')), PAYTM_MERCHANT_KEY
-        )
+        # Generate Body String exactly once
+        body_str = json.dumps(paytm_body, separators=(',', ':'))
+        
+        # Generate Checksum
+        checksum = paytmchecksum.generateSignature(body_str, key)
 
+        # 5. CONSTRUCT FINAL PAYLOAD (Use exactly what was signed)
         payload = {
-            "body": paytm_body,
+            "body": json.loads(body_str),
             "head": {"signature": checksum}
         }
 
-        init_url = f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction?mid={PAYTM_MID}&orderId={order_id}"
-        logger.info(f"🔄 CALLING PAYTM: {init_url}")
+        init_url = f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction?mid={mid}&orderId={order_id}"
+        logger.info(f"🔄 PAYTM INIT: Order={order_id}, Amount={amount_str}, Host={PAYTM_HOST}")
 
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.post(init_url, json=payload)
