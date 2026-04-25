@@ -32,7 +32,14 @@ function buildPayload(base, specific, category) {
   };
 }
 
-export default function PropertyForm({ category, onSuccess }) {
+const HOME_CATEGORIES = [
+  { value: 'home', label: 'Home (Residential)' },
+];
+
+const PROPERTY_TYPES_HOME = ['flat', 'villa', 'rowhouse', 'bungalow', 'pg'];
+const PROPERTY_TYPES_BUSINESS = ['shop', 'office', 'warehouse', 'plot'];
+
+export default function PropertyForm({ category: initialCategory, onSuccess }) {
   const { user } = useAuth();
   const {
     step,
@@ -46,7 +53,7 @@ export default function PropertyForm({ category, onSuccess }) {
     saveDraft,
     loadDraft,
     submit,
-  } = useListingForm({ category, role: user?.role, buildPayload, onSuccess });
+  } = useListingForm({ category: initialCategory || 'home', role: user?.role, buildPayload, onSuccess });
 
   useEffect(() => {
     loadDraft();
@@ -54,7 +61,29 @@ export default function PropertyForm({ category, onSuccess }) {
 
   const updateSpecific = (key, value) => setSpecificData((prev) => ({ ...prev, [key]: value }));
 
-  const isResidential = ['flat', 'villa', 'rowhouse', 'bungalow', 'pg'].includes(specificData.property_type);
+  // Determine category - if user can choose (property owner without initial category), allow selection
+  const canChooseCategory = user?.role === 'property_owner' && !initialCategory;
+  const selectedCategory = canChooseCategory ? (baseData.category || 'home') : (initialCategory || 'home');
+  const isResidential = PROPERTY_TYPES_HOME.includes(specificData.property_type);
+  const availablePropertyTypes = selectedCategory === 'business' ? PROPERTY_TYPES_BUSINESS : PROPERTY_TYPES_HOME;
+
+  const handleCategoryChange = (newCategory) => {
+    setBaseData((prev) => ({ ...prev, category: newCategory }));
+    // Reset property type when category changes
+    if (specificData.property_type) {
+      setSpecificData((prev) => {
+        const { property_type, ...rest } = prev;
+        return rest;
+      });
+    }
+  };
+
+  // Update baseData when initialCategory or user changes
+  useEffect(() => {
+    if (!canChooseCategory && initialCategory && baseData.category !== initialCategory) {
+      setBaseData((prev) => ({ ...prev, category: initialCategory }));
+    }
+  }, [initialCategory, canChooseCategory, setBaseData]);
 
   return (
     <div className="space-y-6">
@@ -79,7 +108,27 @@ export default function PropertyForm({ category, onSuccess }) {
         ))}
       </div>
 
-      {step === 0 && <BasicStep baseData={baseData} setBaseData={setBaseData} />}
+      {step === 0 && (
+        <div className="space-y-4">
+          <BasicStep baseData={baseData} setBaseData={setBaseData} />
+          
+          {/* Category selector for property owners */}
+          {canChooseCategory && (
+            <div>
+              <Label>Listing Category</Label>
+              <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Select category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="home">Home (Residential)</SelectItem>
+                  <SelectItem value="business">Business (Commercial)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      )}
 
       {step === 1 && (
         <div className="space-y-4">
@@ -89,7 +138,7 @@ export default function PropertyForm({ category, onSuccess }) {
               <Select value={specificData.property_type || ''} onValueChange={(v) => updateSpecific('property_type', v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select type" /></SelectTrigger>
                 <SelectContent>
-                  {PROPERTY_TYPES.map((type) => (
+                  {PROPERTY_TYPES.filter((type) => availablePropertyTypes.includes(type.value)).map((type) => (
                     <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
                   ))}
                 </SelectContent>

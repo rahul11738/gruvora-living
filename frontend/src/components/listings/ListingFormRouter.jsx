@@ -6,7 +6,7 @@ import ServiceForm from './ServiceForm';
 import StayForm from './StayForm';
 
 const ROLE_FORM_MAP = {
-  property_owner: { Form: PropertyForm, category: 'home' },
+  property_owner: { Form: PropertyForm },
   stay_owner: { Form: StayForm, category: 'stay' },
   hotel_owner: { Form: StayForm, category: 'stay' },
   service_provider: { Form: ServiceForm, category: 'services' },

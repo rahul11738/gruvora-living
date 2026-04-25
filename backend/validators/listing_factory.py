@@ -27,6 +27,9 @@ ROLE_SCHEMA_MAP: Dict[str, Tuple[str, Type[BaseModel]]] = {
     UserRole.EVENT_OWNER.value: ("event", EventSpecificFields),
 }
 
+# Property owners can create both home and business listings
+PROPERTY_OWNER_CATEGORIES = {"home", "business"}
+
 
 ADMIN_CATEGORY_MAP: Dict[str, Type[BaseModel]] = {
     "home": PropertySpecificFields,
@@ -51,6 +54,17 @@ def resolve_specific_schema(role: str, category: str) -> Type[BaseModel]:
         raise HTTPException(status_code=403, detail=f"Role '{role_value}' cannot create listings")
 
     allowed_category, schema = mapping
+    
+    # Property owners can create both home and business listings (both use PropertySpecificFields)
+    if role_value == UserRole.PROPERTY_OWNER.value:
+        if category_value not in PROPERTY_OWNER_CATEGORIES:
+            allowed_label = ", ".join(sorted(PROPERTY_OWNER_CATEGORIES))
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{role_value}' can only create '{allowed_label}' listings, got '{category_value}'",
+            )
+        return PropertySpecificFields
+    
     if category_value != allowed_category:
         raise HTTPException(
             status_code=403,
