@@ -9539,34 +9539,39 @@ async def initiate_paytm(
                 status_code=500
             )
 
-        order_id = f"ORD_{uuid.uuid4().hex[:12].upper()}"
+        order_id = f"ORD_{uuid.uuid4().hex[:16].upper()}"
+        
+        # Use 'WEBSTAGING' for staging as per recommended flow
+        website = "WEBSTAGING" if "stage" in PAYTM_HOST else PAYTM_WEBSITE
 
         paytm_body = {
             "requestType": "Payment",
             "mid": PAYTM_MID,
-            "websiteName": PAYTM_WEBSITE,
+            "websiteName": website,
             "orderId": order_id,
             "callbackUrl": PAYTM_CALLBACK_URL,
             "txnAmount": {"value": amount_str, "currency": "INR"},
             "userInfo": {"custId": user_id}
         }
 
-        # Always use the direct REST API (securegw-stage.paytm.in)
-        # The Python SDK uses securestage.paytmpayments.com which is a different system.
+        # Generate checksum using exact dump format recommended (no spaces)
         checksum = paytmchecksum.generateSignature(
             json.dumps(paytm_body, separators=(',', ':')), PAYTM_MERCHANT_KEY
         )
+
         payload = {
             "body": paytm_body,
             "head": {"signature": checksum}
         }
-        url = (
-            f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction"
-            f"?mid={PAYTM_MID}&orderId={order_id}"
-        )
-        print(f"🔄 Paytm REST API: {url}")
+
+        # Explicitly construct the URL without using templates that could leak '{url}'
+        init_url = f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction?mid={PAYTM_MID}&orderId={order_id}"
+        
+        print(f"🔄 Paytm REST API: {init_url}")
+        print(f"📦 Payload: {json.dumps(payload, separators=(',', ':'))}")
+
         async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(init_url, json=payload)
             result = resp.json()
 
         print("✅ Paytm raw response:", json.dumps(result, indent=2))
