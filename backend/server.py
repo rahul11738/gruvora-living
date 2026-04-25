@@ -9522,30 +9522,39 @@ async def initiate_paytm(
     request_obj: Request,
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
-    """Initiate a Paytm transaction and return txnToken"""
+    """
+    Standardized Paytm Initiation (Standalone Style)
+    Ensures absolute consistency between localhost and production.
+    """
     import json
+    import uuid
     import traceback
+    import httpx
+    
     try:
         user = await get_current_user(credentials)
         user_id = str(user["id"])
-        order_id = f"ORD_{uuid.uuid4().hex[:16].upper()}"
         
-        # 1. Clean Credentials (prevent hidden spaces)
+        # 1. Credentials (Strictly cleaned)
         mid = PAYTM_MID.strip() if PAYTM_MID else ""
         key = PAYTM_MERCHANT_KEY.strip() if PAYTM_MERCHANT_KEY else ""
-
+        
         if not mid or not key:
-            return JSONResponse({"error": "Paytm credentials missing"}, status_code=500)
+            logger.error("❌ PAYTM ERROR: MID or KEY not found in .env")
+            return JSONResponse({"error": "Paytm credentials missing in server environment"}, status_code=500)
 
-        # 2. Format Amount (Paytm prefers strings, avoid .00 if whole number)
-        amount_val = request.amount
-        amount_str = str(int(amount_val)) if amount_val == int(amount_val) else f"{amount_val:.2f}"
-
-        # 3. Determine Website
-        website = "WEBSTAGING" if "stage" in PAYTM_HOST else (PAYTM_WEBSITE if PAYTM_WEBSITE != "WEBSTAGING" else "DEFAULT")
+        # 2. Config (Production vs Staging)
+        host = PAYTM_HOST.strip()
+        website = "WEBSTAGING" if "stage" in host else "DEFAULT"
+        if PAY_ENV == "production": website = "DEFAULT"
+        
+        # Determine Callback URL
         callback_url = get_dynamic_callback_url(request_obj)
         
-        # 4. LOCK THE BODY (Bulletproof pattern for Production)
+        # 3. Payload Construction (Locked Pattern)
+        order_id = f"ORD_{uuid.uuid4().hex[:16].upper()}"
+        amount_str = str(int(request.amount)) if request.amount == int(request.amount) else f"{request.amount:.2f}"
+
         paytm_body = {
             "requestType": "Payment",
             "mid": mid,
@@ -9556,61 +9565,54 @@ async def initiate_paytm(
             "userInfo": {"custId": user_id}
         }
 
-        # Generate Body String with NO spaces and SORTED keys for absolute consistency
-        # sort_keys=True ensures that even if Python versions differ, the string is identical.
+        # 🔥 Stringify body EXACTLY ONCE with sorted keys and no spaces
         body_str = json.dumps(paytm_body, separators=(',', ':'), sort_keys=True)
         
-        # Generate Checksum using this EXACT string
+        # Generate Checksum using that exact string
         checksum = paytmchecksum.generateSignature(body_str, key)
 
-        # 5. CONSTRUCT RAW PAYLOAD (CRITICAL: Do not let httpx re-serialize)
-        # We send the entire payload as a string to preserve the signed format.
-        full_payload_dict = {
+        # 4. Final Payload (Must match body_str exactly)
+        full_payload = {
             "body": json.loads(body_str),
             "head": {"signature": checksum}
         }
-        # Final raw string to be sent over the wire
-        raw_payload_str = json.dumps(full_payload_dict, separators=(',', ':'))
+        raw_payload_str = json.dumps(full_payload, separators=(',', ':'))
 
-        init_url = f"https://{PAYTM_HOST}/theia/api/v1/initiateTransaction?mid={mid}&orderId={order_id}"
-        logger.info(f"🔄 PAYTM RAW SEND: Order={order_id}, Amount={amount_str}")
+        # 5. Execute API Call
+        init_url = f"https://{host}/theia/api/v1/initiateTransaction?mid={mid}&orderId={order_id}"
+        logger.info(f"🚀 PAYTM SENDING: {init_url}")
 
         async with httpx.AsyncClient(timeout=20) as client:
-            # We use 'content' instead of 'json' to send the pre-serialized string
             resp = await client.post(
-                init_url, 
-                content=raw_payload_str, 
+                init_url,
+                content=raw_payload_str,
                 headers={"Content-Type": "application/json"}
             )
+            
             try:
                 result = resp.json()
             except Exception:
                 logger.error(f"🔴 PAYTM NON-JSON: {resp.text}")
                 return JSONResponse({
-                    "error": "Paytm returned non-JSON response",
-                    "raw": resp.text[:200]
+                    "error": "Paytm returned non-JSON response (Server Error)",
+                    "status_code": resp.status_code,
+                    "preview": resp.text[:100]
                 }, status_code=500)
 
-        logger.info(f"✅ PAYTM RESPONSE RECEIVED: {json.dumps(result)}")
-        
-        result_info = result.get("body", {}).get("resultInfo", {})
-        result_code = result_info.get("resultCode")
-        result_msg  = result_info.get("resultMsg", "No message returned")
-        txn_token = result.get("body", {}).get("txnToken")
+        # 6. Evaluate Response
+        body_res = result.get("body", {})
+        txn_token = body_res.get("txnToken")
+        result_info = body_res.get("resultInfo", {})
 
         if not txn_token:
-            error_reason = f"Paytm Rejected: {result_msg} (Code: {result_code})"
-            logger.error(f"❌ {error_reason}")
+            err_msg = result_info.get("resultMsg", "Unknown Error")
+            logger.error(f"❌ PAYTM REJECTED: {err_msg}")
             return JSONResponse({
-                "error": error_reason,
-                "resultCode": result_code,
-                "resultMsg": result_msg,
-                "fullResponse": result,
-                "sentCallback": callback_url,
-                "sentWebsite": website
+                "error": f"Paytm Rejected: {err_msg}",
+                "fullResponse": result
             }, status_code=500)
-            
-        # Create record in DB
+
+        # 7. Record to DB
         payment_record = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
@@ -9624,7 +9626,7 @@ async def initiate_paytm(
         await db.payments.insert_one(payment_record)
 
         if request.payment_type == "subscription":
-            subscription_record = {
+            await db.subscriptions.insert_one({
                 "id": f"sub_{uuid.uuid4().hex[:12]}",
                 "user_id": user_id,
                 "paytm_order_id": order_id,
@@ -9632,25 +9634,17 @@ async def initiate_paytm(
                 "plan": request.plan,
                 "status": "pending",
                 "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            await db.subscriptions.insert_one(subscription_record)
-        
+            })
+
         return JSONResponse({
             "orderId": order_id,
             "txnToken": txn_token,
-            "mid": PAYTM_MID,
             "amount": amount_str
         })
 
     except Exception as e:
-        err_trace = traceback.format_exc()
-        logger.error(f"🔴 CRITICAL BACKEND ERROR:\n{err_trace}")
-        return JSONResponse({
-            "error": "Internal Server Error during Paytm initiation",
-            "details": str(e),
-            "traceback": err_trace if os.getenv("DEBUG") == "True" else None
-        }, status_code=500)
-        return JSONResponse({"error": str(e)}, status_code=500)
+        logger.error(f"🔴 BACKEND CRASH:\n{traceback.format_exc()}")
+        return JSONResponse({"error": f"Internal Server Error: {str(e)}"}, status_code=500)
 
 
 @api_router.post("/paytm/callback")
