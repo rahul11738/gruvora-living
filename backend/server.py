@@ -9543,10 +9543,17 @@ async def initiate_paytm(
             }, status_code=500)
 
         order_id = f"ORD_{uuid.uuid4().hex[:16].upper()}"
-        website = "WEBSTAGING" if "stage" in PAYTM_HOST else PAYTM_WEBSITE
+        # 1. Determine Website Name (Crucial for Production vs Staging)
+        # If Host is production but Website is still WEBSTAGING, it will fail.
+        if "stage" in PAYTM_HOST:
+            website = "WEBSTAGING"
+        else:
+            # For production, it's usually 'DEFAULT' unless specified
+            website = PAYTM_WEBSITE if PAYTM_WEBSITE != "WEBSTAGING" else "DEFAULT"
+
         callback_url = get_dynamic_callback_url(request_obj)
-        
         logger.info(f"🔗 CALLBACK URL: {callback_url}")
+        logger.info(f"🌐 WEBSITE: {website}")
 
         paytm_body = {
             "requestType": "Payment",
@@ -9572,23 +9579,32 @@ async def initiate_paytm(
 
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.post(init_url, json=payload)
-            result = resp.json()
+            try:
+                result = resp.json()
+            except Exception:
+                logger.error(f"🔴 PAYTM NON-JSON RESPONSE: {resp.text}")
+                return JSONResponse({
+                    "error": f"Paytm returned non-JSON response (Status: {resp.status_code})",
+                    "raw": resp.text[:500]
+                }, status_code=500)
 
         logger.info(f"✅ PAYTM RESPONSE RECEIVED: {json.dumps(result)}")
         
         result_info = result.get("body", {}).get("resultInfo", {})
         result_code = result_info.get("resultCode")
-        result_msg  = result_info.get("resultMsg")
+        result_msg  = result_info.get("resultMsg", "No message returned")
         txn_token = result.get("body", {}).get("txnToken")
 
         if not txn_token:
-            logger.error(f"❌ PAYTM FAILURE: {result_msg} (Code: {result_code})")
+            error_reason = f"Paytm Rejected: {result_msg} (Code: {result_code})"
+            logger.error(f"❌ {error_reason}")
             return JSONResponse({
-                "error": "Paytm did not return txnToken",
+                "error": error_reason,
                 "resultCode": result_code,
                 "resultMsg": result_msg,
                 "fullResponse": result,
-                "sentCallback": callback_url
+                "sentCallback": callback_url,
+                "sentWebsite": website
             }, status_code=500)
             
         # Create record in DB
