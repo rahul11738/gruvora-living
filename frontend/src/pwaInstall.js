@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 
 const getStandaloneMode = () => {
     if (typeof window === 'undefined') {
@@ -20,6 +20,7 @@ export function usePwaInstallPrompt() {
     const [installPrompt, setInstallPrompt] = useState(null);
     const [isInstalled, setIsInstalled] = useState(getStandaloneMode());
     const [canPrompt, setCanPrompt] = useState(false);
+    const eventHandledRef = useRef(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') {
@@ -27,21 +28,29 @@ export function usePwaInstallPrompt() {
         }
 
         const handleBeforeInstallPrompt = (event) => {
+            // Prevent the default mini-infobar/prompt from appearing
+            // Store the event for later programmatic use
             event.preventDefault();
-            setInstallPrompt(event);
-            setCanPrompt(true);
+            // Only handle once per page session
+            if (!eventHandledRef.current) {
+                eventHandledRef.current = true;
+                setInstallPrompt(event);
+                setCanPrompt(true);
+            }
         };
 
         const handleAppInstalled = () => {
             setInstallPrompt(null);
             setCanPrompt(false);
             setIsInstalled(true);
+            eventHandledRef.current = false;
         };
 
         const handleStandaloneChange = () => {
             setIsInstalled(getStandaloneMode());
         };
 
+        // Add listeners for PWA install events
         window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
         window.addEventListener('appinstalled', handleAppInstalled);
 
@@ -60,14 +69,26 @@ export function usePwaInstallPrompt() {
             return { outcome: 'unsupported', accepted: false };
         }
 
-        installPrompt.prompt();
-        const choice = await installPrompt.userChoice;
-        setInstallPrompt(null);
-        setCanPrompt(false);
-        return {
-            outcome: choice?.outcome || 'dismissed',
-            accepted: choice?.outcome === 'accepted',
-        };
+        try {
+            // Show the install prompt
+            installPrompt.prompt();
+            // Wait for the user to respond
+            const choice = await installPrompt.userChoice;
+            // Clear the saved prompt (can only be used once)
+            setInstallPrompt(null);
+            setCanPrompt(false);
+            eventHandledRef.current = false;
+            return {
+                outcome: choice?.outcome || 'dismissed',
+                accepted: choice?.outcome === 'accepted',
+            };
+        } catch (error) {
+            console.warn('[PWA Install] Prompt failed:', error);
+            setInstallPrompt(null);
+            setCanPrompt(false);
+            eventHandledRef.current = false;
+            return { outcome: 'error', accepted: false };
+        }
     }, [installPrompt]);
 
     return {

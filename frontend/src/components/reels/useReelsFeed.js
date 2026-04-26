@@ -132,14 +132,34 @@ export const useReelsFeed = ({ isAuthenticated, primeFromVideos, hydrateSnapshot
     }
 
     const preloadUrl = nextVideo.adaptive_url || nextVideo.video_url || nextVideo.url;
-    const link = document.createElement('link');
-    link.rel = 'preload';
-    link.as = 'video';
-    link.href = preloadUrl;
-    document.head.appendChild(link);
+    if (!preloadUrl || typeof preloadUrl !== 'string') {
+      return undefined;
+    }
+
+    let link = null;
+    try {
+      link = document.createElement('link');
+      link.rel = 'preload';
+      link.as = 'video';
+      link.href = preloadUrl;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    } catch (error) {
+      console.warn('[ReelsFeed] Failed to preload video:', error.message);
+      if (link?.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+      return undefined;
+    }
 
     return () => {
-      document.head.removeChild(link);
+      try {
+        if (link?.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     };
   }, [currentIndex, videos]);
 
