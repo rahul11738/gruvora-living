@@ -100,4 +100,63 @@ const HomePage = memo(function HomePage() {
     );
 });
 
+const HomePage = () => {
+  return (
+    <div className="homepage">
+      <SeoHead
+        title="GharSetu - Premium Property Platform in Gujarat"
+        description="Discover premium homes, business spaces, hotels, event venues, and professional services in Gujarat. Your trusted property platform."
+        url="https://gharsetu.com"
+        image="/og-image.jpg"
+      />
+      <JsonLd
+        type="website"
+        data={{
+          name: 'GharSetu',
+          description: 'Premium property platform for Gujarat - homes, business spaces, hotels, event venues, and services',
+          url: 'https://gharsetu.com',
+        }}
+      />
+
+      <Header />
+
+      <main>
+        <Suspense fallback={<RouteSkeleton />}>
+          <HeroSection />
+        </Suspense>
+
+        <Suspense fallback={<RouteSkeleton />}>
+          <CategoriesSection />
+        </Suspense>
+
+        <Suspense fallback={<RouteSkeleton />}>
+          <TrendingSection />
+        </Suspense>
+
+        <Suspense fallback={<RouteSkeleton />}>
+          <RecommendationsSection />
+        </Suspense>
+
+        <Suspense fallback={<RouteSkeleton />}>
+          <FeaturesSection />
+        </Suspense>
+
+        <Suspense fallback={<RouteSkeleton />}>
+          <ReelsPromoSection />
+        </Suspense>
+
+        <Suspense fallback={<RouteSkeleton />}>
+          <TrustSection />
+        </Suspense>
+
+        <Suspense fallback={<RouteSkeleton />}>
+          <CTASection />
+        </Suspense>
+      </main>
+
+      <Footer />
+    </div>
+  );
+};
+
 export default HomePage;
