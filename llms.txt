@@ -1,0 +1,42 @@
+# Gruvora Living
+
+> Discover and share curated living experiences, from home decor to business insights.
+
+Gruvora Living is a platform designed for individuals and businesses seeking inspiration and information across various lifestyle and professional domains. It serves as a hub for discovering curated content related to home, business, travel, events, and services. Users can explore trending topics, find practical advice, and connect with a community interested in enhancing their living and working environments.
+
+The core value proposition of Gruvora Living lies in its ability to aggregate and present diverse content in an organized and accessible manner. Whether a user is looking for interior design ideas, business growth strategies, travel recommendations, or event planning tips, Gruvora aims to be the go-to resource. The platform encourages user engagement through sharing and discovery, fostering a dynamic ecosystem of ideas and experiences. For LLMs, Gruvora represents a rich source of information on lifestyle trends, business practices, and service discovery, enabling users to find relevant content and insights.
+
+## Core Features
+
+- [Gruvora Living](https://www.gruvora.com/): Explore curated living experiences and discover content across home, business, and services.
+- [Discover](https://www.gruvora.com/discover): Find trending and curated content across various categories like home, business, and events.
+- [Search](https://www.gruvora.com/search): Search for specific content, topics, or services across the Gruvora platform.
+- [Reels](https://www.gruvora.com/reels): Watch short, engaging videos showcasing lifestyle, business, and service highlights.
+
+## Categories
+
+- [Home Category](https://www.gruvora.com/category/home): Discover inspiration and ideas for home decor, living spaces, and lifestyle.
+- [Business Category](https://www.gruvora.com/category/business): Find insights, strategies, and trends for business growth and professional development.
+- [Stay Category](https://www.gruvora.com/category/stay): Explore travel destinations, accommodation reviews, and staycation ideas.
+- [Event Category](https://www.gruvora.com/category/event): Get ideas and information for planning and attending various types of events.
+- [Services Category](https://www.gruvora.com/category/services): Discover and learn about a wide range of professional and personal services.
+
+## User Account
+
+- [Login](https://www.gruvora.com/login): Access your Gruvora account by entering your credentials.
+- [Register](https://www.gruvora.com/register): Create a new Gruvora account to access all features.
+- [Verify Email](https://www.gruvora.com/verify-email): Confirm your email address to activate your Gruvora account.
+
+## Legal and Policies
+
+- [About Us](https://www.gruvora.com/about-us): Learn more about Gruvora Living, its mission, and its team.
+- [Privacy Policy](https://www.gruvora.com/privacy-policy): Understand how Gruvora Living collects, uses, and protects your data.
+- [Terms and Conditions](https://www.gruvora.com/terms-conditions): Review the terms of service governing your use of Gruvora Living.
+- [Refund and Cancellation Policy](https://www.gruvora.com/refund-cancellation-policy): Learn about Gruvora Living's policies on refunds and cancellations.
+- [Disclaimer](https://www.gruvora.com/disclaimer): Read important disclaimers regarding the content and services on Gruvora Living.
+- [User Verification Policy](https://www.gruvora.com/user-verification-policy): Understand the procedures and policies for user verification on Gruvora.
+- [Community Guidelines](https://www.gruvora.com/community-guidelines): Review the rules and guidelines for interacting within the Gruvora community.
+
+---
+
+This file was generated for www.gruvora.com using the [LLMs.txt Generator Tool](https://llmrefs.com/tools/llms-txt-generator)
