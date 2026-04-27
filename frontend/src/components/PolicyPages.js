@@ -111,7 +111,7 @@ export const TermsConditionsPage = () => (
       },
       {
         heading: "1. Platform Overview",
-        paragraphs: ["GRUVORA LIVING is an online platform that allows users to list, search, and connect for:"],
+        paragraphs: ["GRUVORA LIVING is an online platform that allows users to list, search, and connect for :"],
         bullets: [
           "Residential Properties (Flats, PG, Houses - Rent / Sell)",
           "Commercial Properties (Shops, Offices, Warehouses)",
