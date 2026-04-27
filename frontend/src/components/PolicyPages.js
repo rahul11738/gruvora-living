@@ -106,12 +106,12 @@ export const TermsConditionsPage = () => (
       {
         heading: "Welcome",
         paragraphs: [
-          "Welcome to GRUVORA LIVING - Your Home Bridge. By accessing or using the GharSetu website and services, you agree to comply with these Terms and Conditions.",
+          "Welcome to GRUVORA LIVING - Your Home Bridge. By accessing or using the Gruvora Liveng website and services, you agree to comply with these Terms and Conditions.",
         ],
       },
       {
         heading: "1. Platform Overview",
-        paragraphs: ["GRUVORA LIVING is an online platform that allows users to list, search, and connect for :"],
+        paragraphs: ["GRUVORA LIVING is an online platform that allows users to list, search, and connect for:"],
         bullets: [
           "Residential Properties (Flats, PG, Houses - Rent / Sell)",
           "Commercial Properties (Shops, Offices, Warehouses)",
