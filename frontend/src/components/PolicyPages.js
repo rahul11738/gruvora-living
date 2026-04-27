@@ -133,7 +133,7 @@ export const TermsConditionsPage = () => (
           "All information provided is accurate and genuine",
           "Images and descriptions are not misleading",
           "The property or service is legally available",
-          "GRUVORA reserves the right to remove any listing that violates these rules.",
+          "Gruvora Living reserves the right to remove any listing that violates these rules.",
         ],
       },
       {
