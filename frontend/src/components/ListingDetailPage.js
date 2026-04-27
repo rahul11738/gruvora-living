@@ -116,118 +116,118 @@ export const ListingDetailPage = () => {
   }, [fetchUserBookings]);
 
   const isBooked = userBookings.some(
-    (b) =>
-      b.listing_id === id &&
-      ['pending', 'confirmed'].includes(String(b.status || '').toLowerCase())
-  );
-
-  const handleWishlist = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please login to add to wishlist');
-      return;
-    }
-    try {
-      const result = await toggleWishlist(id);
-      if (result.ok) {
-        toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist', {
-          duration: 1500,
-          id: `wishlist-${id}`,
-        });
-      }
-    } catch (error) {
-      toast.error('Failed to update wishlist');
-    }
-  };
-
-  const handleBooking = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please login to book');
-      return;
-    }
-    if (isBooked) {
-      toast.error('Already in process');
-      return;
-    }
-    if (!bookingDate) {
-      toast.error('Please select a date');
-      return;
-    }
-
-    setBookingLoading(true);
-    try {
-      await listingsAPI.lock(id);
-      await bookingsAPI.create({
-        listing_id: id,
-        booking_date: format(bookingDate, 'yyyy-MM-dd'),
-        guests: bookingGuests,
-        notes: bookingNotes,
-      });
-      toast.success('Booking request sent successfully!');
-      setShowBookingDialog(false);
-      setBookingDate(null);
-      setBookingNotes('');
-      fetchListing();
-      fetchUserBookings();
-    } catch (error) {
-      const detail = error?.response?.data?.detail || '';
-      if (error?.response?.status === 409 || detail.toLowerCase().includes('already in process')) {
-        toast.error('Already in process');
-      } else {
-        toast.error('Failed to create booking');
-      }
-    } finally {
-      setBookingLoading(false);
-    }
-  };
-
-  const handleShare = () => {
-    if (navigator.share) {
-      navigator.share({
-        title: listing?.title,
-        text: listing?.description,
-        url: window.location.href,
-      });
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success('Link copied to clipboard!');
-    }
-  };
-
-  const handleLike = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please login to like');
-      return;
-    }
-    try {
-      await listingsAPI.like(id);
-      setListing({ ...listing, likes: (listing.likes || 0) + 1 });
-      toast.success('Liked!');
-    } catch (error) {
-      console.error('Failed to like:', error);
-    }
-  };
-
-  const formatPrice = (price, type) => {
-    if (price >= 10000000) {
-      return `₹${(price / 10000000).toFixed(2)} Cr`;
-    } else if (price >= 100000) {
-      return `₹${(price / 100000).toFixed(2)} L`;
-    }
-    const monthlySuffix = type === 'rent' && isPropertyTransactionCategory(listing?.category) ? '/mo' : '';
-    return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
-  };
-
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-stone-50">
-        <Header />
-        <ListingDetailSkeleton />
+      return (
+    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
+      <Header />
+      <div className="text-center p-8">
+        <h2 className="text-xl font-semibold text-stone-900 mb-2">Listing not found</h2>
+        <p className="text-stone-600 mb-4">The property you are looking for does not exist or has been removed.</p>
+        <Button onClick={() => navigate("/")}>Back to Home</Button>
       </div>
-    );
+    </div>
+  );
+  try {
+    const result = await toggleWishlist(id);
+    if (result.ok) {
+      toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist', {
+        duration: 1500,
+        id: `wishlist-${id}`,
+      });
+    }
+  } catch (error) {
+    toast.error('Failed to update wishlist');
+  }
+};
+
+const handleBooking = async () => {
+  if (!isAuthenticated) {
+    toast.error('Please login to book');
+    return;
+  }
+  if (isBooked) {
+    toast.error('Already in process');
+    return;
+  }
+  if (!bookingDate) {
+    toast.error('Please select a date');
+    return;
   }
 
-  if (!listing) { \n    return (\n < div className = min - h - screen bg - stone - 50 flex items - center justify - center >\n < Header />\n < div className = text - center p - 8 >\n < h2 className = text - xl font - semibold text - stone - 900 mb - 2 > Listing not found</h2 >\n < p className = text - stone - 600 mb - 4 > The property you are looking for does not exist or has been removed.</p >\n < Button onClick = {() => navigate(\/\)}>Back to Home</Button >\n        </div >\n      </div >\n); \n  }
+  setBookingLoading(true);
+  try {
+    await listingsAPI.lock(id);
+    await bookingsAPI.create({
+      listing_id: id,
+      booking_date: format(bookingDate, 'yyyy-MM-dd'),
+      guests: bookingGuests,
+      notes: bookingNotes,
+    });
+    toast.success('Booking request sent successfully!');
+    setShowBookingDialog(false);
+    setBookingDate(null);
+    setBookingNotes('');
+    fetchListing();
+    fetchUserBookings();
+  } catch (error) {
+    const detail = error?.response?.data?.detail || '';
+    if (error?.response?.status === 409 || detail.toLowerCase().includes('already in process')) {
+      toast.error('Already in process');
+    } else {
+      toast.error('Failed to create booking');
+    }
+  } finally {
+    setBookingLoading(false);
+  }
+};
+
+const handleShare = () => {
+  if (navigator.share) {
+    navigator.share({
+      title: listing?.title,
+      text: listing?.description,
+      url: window.location.href,
+    });
+  } else {
+    navigator.clipboard.writeText(window.location.href);
+    toast.success('Link copied to clipboard!');
+  }
+};
+
+const handleLike = async () => {
+  if (!isAuthenticated) {
+    toast.error('Please login to like');
+    return;
+  }
+  try {
+    await listingsAPI.like(id);
+    setListing({ ...listing, likes: (listing.likes || 0) + 1 });
+    toast.success('Liked!');
+  } catch (error) {
+    console.error('Failed to like:', error);
+  }
+};
+
+const formatPrice = (price, type) => {
+  if (price >= 10000000) {
+    return `₹${(price / 10000000).toFixed(2)} Cr`;
+  } else if (price >= 100000) {
+    return `₹${(price / 100000).toFixed(2)} L`;
+  }
+  const monthlySuffix = type === 'rent' && isPropertyTransactionCategory(listing?.category) ? '/mo' : '';
+  return `₹${price?.toLocaleString('en-IN')}${monthlySuffix}`;
+};
+
+
+if (loading) {
+  return (
+    <div className="min-h-screen bg-stone-50">
+      <Header />
+      <ListingDetailSkeleton />
+    </div>
+  );
+}
+
+if (!listing) { \n    return (\n < div className = min - h - screen bg - stone - 50 flex items - center justify - center >\n < Header />\n < div className = text - center p - 8 >\n < h2 className = text - xl font - semibold text - stone - 900 mb - 2 > Listing not found</h2 >\n < p className = text - stone - 600 mb - 4 > The property you are looking for does not exist or has been removed.</p >\n < Button onClick = {() => navigate(\/\)}>Back to Home</Button >\n        </div >\n      </div >\n); \n }
 
 // SEO meta tags
 const canonicalUrl = `https://www.gruvora.com/listing/${id}`;
