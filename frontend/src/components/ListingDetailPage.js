@@ -227,438 +227,438 @@ export const ListingDetailPage = () => {
     );
   }
 
-  if (!listing) {\n    return (\n      <div className= min-h-screen bg-stone-50 flex items-center justify-center>\n        <Header />\n        <div className=text-center p-8>\n          <h2 className=text-xl font-semibold text-stone-900 mb-2>Listing not found</h2>\n          <p className=text-stone-600 mb-4>The property you are looking for does not exist or has been removed.</p>\n          <Button onClick={() => navigate(\/\)}>Back to Home</Button>\n        </div>\n      </div>\n    );\n  }
+  if (!listing) { \n    return (\n < div className = min - h - screen bg - stone - 50 flex items - center justify - center >\n < Header />\n < div className = text - center p - 8 >\n < h2 className = text - xl font - semibold text - stone - 900 mb - 2 > Listing not found</h2 >\n < p className = text - stone - 600 mb - 4 > The property you are looking for does not exist or has been removed.</p >\n < Button onClick = {() => navigate(\/\)}>Back to Home</Button >\n        </div >\n      </div >\n); \n  }
 
-  // SEO meta tags
-  const canonicalUrl = `https://www.gruvora.com/listing/${id}`;
-  const title = `${listing.title} – ${listing.city || ''} | Gruvora Living`;
-  const description = listing.description || `View details for ${listing.title} in ${listing.city || ''} on Gruvora Living.`;
-  const image = listing.images?.[0] ? `https://res.cloudinary.com/gharshetu/image/upload/${listing.images[0]}` : undefined;
+// SEO meta tags
+const canonicalUrl = `https://www.gruvora.com/listing/${id}`;
+const title = `${listing.title} – ${listing.city || ''} | Gruvora Living`;
+const description = listing.description || `View details for ${listing.title} in ${listing.city || ''} on Gruvora Living.`;
+const image = listing.images?.[0] ? `https://res.cloudinary.com/gharshetu/image/upload/${listing.images[0]}` : undefined;
 
-  // JSON-LD Listing schema
-  const listingSchema = {
-    "@context": "https://schema.org",
-    "@type": "Product",
-    "name": listing.title,
-    "description": description,
-    "image": listing.images?.map(img => `https://res.cloudinary.com/gharshetu/image/upload/${img}`),
-    "url": canonicalUrl,
-    "offers": {
-      "@type": "Offer",
-      "priceCurrency": "INR",
-      "price": listing.price,
-      "availability": "https://schema.org/InStock",
-      "url": canonicalUrl
-    },
-    "brand": {
-      "@type": "Organization",
-      "name": "Gruvora Living"
-    },
-    "category": listing.category,
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": listing.location,
-      "addressLocality": listing.city,
-      "addressRegion": listing.state,
-      "addressCountry": "IN"
-    }
-  };
+// JSON-LD Listing schema
+const listingSchema = {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  "name": listing.title,
+  "description": description,
+  "image": listing.images?.map(img => `https://res.cloudinary.com/gharshetu/image/upload/${img}`),
+  "url": canonicalUrl,
+  "offers": {
+    "@type": "Offer",
+    "priceCurrency": "INR",
+    "price": listing.price,
+    "availability": "https://schema.org/InStock",
+    "url": canonicalUrl
+  },
+  "brand": {
+    "@type": "Organization",
+    "name": "Gruvora Living"
+  },
+  "category": listing.category,
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": listing.location,
+    "addressLocality": listing.city,
+    "addressRegion": listing.state,
+    "addressCountry": "IN"
+  }
+};
 
-  const Icon = categoryIcons[listing.category] || Home;
-  const bgColor = categoryColors[listing.category] || 'bg-primary';
-  const wishlisted = isWishlisted(id);
-  const wishlistPending = Boolean(pendingWishlistMap[String(id)]);
-  const images = listing.images?.length > 0
-    ? listing.images
-    : ['gharshetu/placeholders/listing-detail'];
+const Icon = categoryIcons[listing.category] || Home;
+const bgColor = categoryColors[listing.category] || 'bg-primary';
+const wishlisted = isWishlisted(id);
+const wishlistPending = Boolean(pendingWishlistMap[String(id)]);
+const images = listing.images?.length > 0
+  ? listing.images
+  : ['gharshetu/placeholders/listing-detail'];
 
-  return (
-    <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="listing-detail-page">
-      <SeoHead
-        title={title}
-        description={description}
-        canonical={canonicalUrl}
-        keywords={[listing.title, listing.city, listing.category, "Gruvora", "property", "rental", "listing"]}
-        og={[{
-          property: "og:title",
-          content: title
-        }, {
-          property: "og:description",
-          content: description
-        }, image ? {
-          property: "og:image",
-          content: image
-        } : null, {
-          property: "og:url",
-          content: canonicalUrl
-        }, {
-          property: "og:type",
-          content: "article"
-        }].filter(Boolean)}
-        twitter={[{
-          name: "twitter:card",
-          content: "summary_large_image"
-        }, {
-          name: "twitter:title",
-          content: title
-        }, {
-          name: "twitter:description",
-          content: description
-        }, image ? {
-          name: "twitter:image",
-          content: image
-        } : null].filter(Boolean)}
-      />
-      <JsonLd schema={listingSchema} />
-      <Header />
+return (
+  <div className="min-h-screen bg-stone-50 overflow-x-hidden" data-testid="listing-detail-page">
+    <SeoHead
+      title={title}
+      description={description}
+      canonical={canonicalUrl}
+      keywords={[listing.title, listing.city, listing.category, "Gruvora", "property", "rental", "listing"]}
+      og={[{
+        property: "og:title",
+        content: title
+      }, {
+        property: "og:description",
+        content: description
+      }, image ? {
+        property: "og:image",
+        content: image
+      } : null, {
+        property: "og:url",
+        content: canonicalUrl
+      }, {
+        property: "og:type",
+        content: "article"
+      }].filter(Boolean)}
+      twitter={[{
+        name: "twitter:card",
+        content: "summary_large_image"
+      }, {
+        name: "twitter:title",
+        content: title
+      }, {
+        name: "twitter:description",
+        content: description
+      }, image ? {
+        name: "twitter:image",
+        content: image
+      } : null].filter(Boolean)}
+    />
+    <JsonLd schema={listingSchema} />
+    <Header />
 
-      {/* Back Button */}
-      <div className="container-main py-4">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft className="w-5 h-5" />
-          Back to listings
-        </button>
-      </div>
+    {/* Back Button */}
+    <div className="container-main py-4">
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <ChevronLeft className="w-5 h-5" />
+        Back to listings
+      </button>
+    </div>
 
-      {/* Image Gallery */}
-      <div className="container-main mb-8">
-        <div className="relative aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden">
-          <OptimizedImage
-            publicId={images[currentImageIndex]}
-            alt={listing.title}
-            className="w-full h-full object-cover"
-            width={1280}
-            sizes="100vw"
-          />
+    {/* Image Gallery */}
+    <div className="container-main mb-8">
+      <div className="relative aspect-[16/9] md:aspect-[21/9] rounded-2xl overflow-hidden">
+        <OptimizedImage
+          publicId={images[currentImageIndex]}
+          alt={listing.title}
+          className="w-full h-full object-cover"
+          width={1280}
+          sizes="100vw"
+        />
 
-          {images.length > 1 && (
-            <>
-              <button
-                onClick={() => setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))}
-                className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" />
-              </button>
-              <button
-                onClick={() => setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))}
-                className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
-              >
-                <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
-              </button>
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                {images.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentImageIndex(i)}
-                    className={`w-2 h-2 rounded-full transition-colors ${i === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                      }`}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Actions */}
-          <div className="absolute top-4 right-4 flex gap-2">
+        {images.length > 1 && (
+          <>
             <button
-              onClick={handleWishlist}
-              disabled={wishlistPending}
-              className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-colors ${wishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
-                }`}
-              data-testid="wishlist-btn"
+              onClick={() => setCurrentImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1))}
+              className="absolute left-3 md:left-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
             >
-              <Heart className={`w-5 h-5 md:w-6 md:h-6 ${wishlisted ? 'fill-white' : ''}`} />
+              <ChevronLeft className="w-5 h-5 md:w-6 md:h-6" />
             </button>
             <button
-              onClick={handleShare}
-              className="w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
+              onClick={() => setCurrentImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1))}
+              className="absolute right-3 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
             >
-              <Share2 className="w-5 h-5 md:w-6 md:h-6" />
+              <ChevronRight className="w-5 h-5 md:w-6 md:h-6" />
             </button>
-          </div>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+              {images.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCurrentImageIndex(i)}
+                  className={`w-2 h-2 rounded-full transition-colors ${i === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                    }`}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
-          {/* Category Badge */}
-          <div className={`absolute top-4 left-4 ${bgColor} px-4 py-2 rounded-full flex items-center gap-2`}>
-            <Icon className="w-5 h-5 text-white" />
-            <span className="text-white font-medium capitalize">{listing.category}</span>
-          </div>
+        {/* Actions */}
+        <div className="absolute top-4 right-4 flex gap-2">
+          <button
+            onClick={handleWishlist}
+            disabled={wishlistPending}
+            className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-colors ${wishlisted ? 'bg-red-500 text-white' : 'bg-white/80 hover:bg-white'
+              }`}
+            data-testid="wishlist-btn"
+          >
+            <Heart className={`w-5 h-5 md:w-6 md:h-6 ${wishlisted ? 'fill-white' : ''}`} />
+          </button>
+          <button
+            onClick={handleShare}
+            className="w-10 h-10 md:w-12 md:h-12 bg-white/80 rounded-full flex items-center justify-center hover:bg-white transition-colors"
+          >
+            <Share2 className="w-5 h-5 md:w-6 md:h-6" />
+          </button>
         </div>
 
-        {/* Thumbnail Strip */}
-        {images.length > 1 && (
-          <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
-            {images.map((img, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentImageIndex(i)}
-                className={`flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden border-2 transition-colors ${i === currentImageIndex ? 'border-primary' : 'border-transparent'
-                  }`}
-              >
-                <OptimizedImage publicId={img} alt="" className="w-full h-full object-cover" width={192} sizes="96px" />
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Category Badge */}
+        <div className={`absolute top-4 left-4 ${bgColor} px-4 py-2 rounded-full flex items-center gap-2`}>
+          <Icon className="w-5 h-5 text-white" />
+          <span className="text-white font-medium capitalize">{listing.category}</span>
+        </div>
       </div>
 
-      {/* Content */}
-      <div className="container-main pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Title & Price */}
-            <div>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
-                <div className="min-w-0">
-                  <h1 className="font-heading text-3xl md:text-4xl font-bold text-stone-900">
-                    {listing.title}
-                  </h1>
-                  <div className="flex items-center gap-2 mt-2 text-muted-foreground flex-wrap">
-                    <MapPin className="w-5 h-5" />
-                    <span>{listing.location}, {listing.city}, {listing.state}</span>
-                  </div>
-                </div>
-                <div className="text-left sm:text-right">
-                  <p className="font-heading text-2xl md:text-3xl font-bold text-primary">
-                    {formatPrice(listing.price, listing.listing_type)}
-                  </p>
-                  {isPropertyTransactionCategory(listing.category) && (
-                    <span className="text-sm text-muted-foreground capitalize">
-                      {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
-                    </span>
-                  )}
+      {/* Thumbnail Strip */}
+      {images.length > 1 && (
+        <div className="flex gap-2 mt-4 overflow-x-auto pb-2">
+          {images.map((img, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrentImageIndex(i)}
+              className={`flex-shrink-0 w-24 h-16 rounded-lg overflow-hidden border-2 transition-colors ${i === currentImageIndex ? 'border-primary' : 'border-transparent'
+                }`}
+            >
+              <OptimizedImage publicId={img} alt="" className="w-full h-full object-cover" width={192} sizes="96px" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+
+    {/* Content */}
+    <div className="container-main pb-16">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main Content */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Title & Price */}
+          <div>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between mb-4">
+              <div className="min-w-0">
+                <h1 className="font-heading text-3xl md:text-4xl font-bold text-stone-900">
+                  {listing.title}
+                </h1>
+                <div className="flex items-center gap-2 mt-2 text-muted-foreground flex-wrap">
+                  <MapPin className="w-5 h-5" />
+                  <span>{listing.location}, {listing.city}, {listing.state}</span>
                 </div>
               </div>
-
-              {/* Stats */}
-              <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Eye className="w-4 h-4" />
-                  {listing.views} views
-                </span>
-                <button onClick={handleLike} className="flex items-center gap-1 hover:text-red-500 transition-colors">
-                  <Heart className="w-4 h-4" />
-                  {listing.likes} likes
-                </button>
-                <span className="flex items-center gap-1">
-                  <MessageCircle className="w-4 h-4" />
-                  {listing.inquiries} inquiries
-                </span>
+              <div className="text-left sm:text-right">
+                <p className="font-heading text-2xl md:text-3xl font-bold text-primary">
+                  {formatPrice(listing.price, listing.listing_type)}
+                </p>
+                {isPropertyTransactionCategory(listing.category) && (
+                  <span className="text-sm text-muted-foreground capitalize">
+                    {listing.listing_type === 'rent' ? 'For Rent' : 'For Sale'}
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Description */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Description</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-                  {listing.description}
-                </p>
-              </CardContent>
-            </Card>
-
-            {/* Amenities */}
-            {listing.amenities?.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Amenities</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {listing.amenities.map((amenity, i) => (
-                      <div key={i} className="flex items-center gap-2 text-muted-foreground">
-                        <Check className="w-5 h-5 text-primary" />
-                        <span>{amenity}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Specifications */}
-            {listing.specifications && Object.keys(listing.specifications).length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Specifications</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {Object.entries(listing.specifications).map(([key, value]) => (
-                      <div key={key} className="flex justify-between border-b pb-2">
-                        <span className="text-muted-foreground capitalize">{key.replace('_', ' ')}</span>
-                        <span className="font-medium">{value}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {/* Stats */}
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6 text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Eye className="w-4 h-4" />
+                {listing.views} views
+              </span>
+              <button onClick={handleLike} className="flex items-center gap-1 hover:text-red-500 transition-colors">
+                <Heart className="w-4 h-4" />
+                {listing.likes} likes
+              </button>
+              <span className="flex items-center gap-1">
+                <MessageCircle className="w-4 h-4" />
+                {listing.inquiries} inquiries
+              </span>
+            </div>
           </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Owner Card - NO CONTACT INFO SHOWN */}
+          {/* Description */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Description</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
+                {listing.description}
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Amenities */}
+          {listing.amenities?.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  Verified Owner
-                </CardTitle>
+                <CardTitle>Amenities</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center">
-                    <User className="w-7 h-7 text-white" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-lg">{listing.owner_name}</p>
-                    <p className="text-sm text-muted-foreground">Property Owner</p>
-                  </div>
-                </div>
-
-                {/* Info Box - Contact only via Chat */}
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
-                  <p className="text-sm text-amber-800">
-                    Chat to connect securely.
-                  </p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {listing.amenities.map((amenity, i) => (
+                    <div key={i} className="flex items-center gap-2 text-muted-foreground">
+                      <Check className="w-5 h-5 text-primary" />
+                      <span>{amenity}</span>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
+          )}
 
-            {/* Booking Card */}
-            <Card className="border-primary">
-              <CardContent className="pt-6 space-y-3">
-                {/* Instant Payment for Stay/Event/Services */}
-                {(listing.category === 'stay' || listing.category === 'event' || listing.category === 'services') && (
-                  isBooked ? (
-                    <Button className="w-full" disabled>
-                      Booking in progress
-                    </Button>
-                  ) : (
-                    <PaymentButton
-                      listing={listing}
-                      bookingDetails={{ date: bookingDate, guests: bookingGuests, notes: bookingNotes }}
-                      className="w-full btn-primary text-base md:text-lg py-5 md:py-6"
-                      onSuccess={() => {
-                        toast.success('Booking confirmed! Check your email.');
-                        fetchListing();
-                        fetchUserBookings();
-                        navigate('/orders');
-                      }}
+          {/* Specifications */}
+          {listing.specifications && Object.keys(listing.specifications).length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Specifications</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {Object.entries(listing.specifications).map(([key, value]) => (
+                    <div key={key} className="flex justify-between border-b pb-2">
+                      <span className="text-muted-foreground capitalize">{key.replace('_', ' ')}</span>
+                      <span className="font-medium">{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <div className="space-y-6">
+          {/* Owner Card - NO CONTACT INFO SHOWN */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="w-5 h-5 text-primary" />
+                Verified Owner
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center">
+                  <User className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <p className="font-medium text-lg">{listing.owner_name}</p>
+                  <p className="text-sm text-muted-foreground">Property Owner</p>
+                </div>
+              </div>
+
+              {/* Info Box - Contact only via Chat */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">
+                <p className="text-sm text-amber-800">
+                  Chat to connect securely.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Booking Card */}
+          <Card className="border-primary">
+            <CardContent className="pt-6 space-y-3">
+              {/* Instant Payment for Stay/Event/Services */}
+              {(listing.category === 'stay' || listing.category === 'event' || listing.category === 'services') && (
+                isBooked ? (
+                  <Button className="w-full" disabled>
+                    Booking in progress
+                  </Button>
+                ) : (
+                  <PaymentButton
+                    listing={listing}
+                    bookingDetails={{ date: bookingDate, guests: bookingGuests, notes: bookingNotes }}
+                    className="w-full btn-primary text-base md:text-lg py-5 md:py-6"
+                    onSuccess={() => {
+                      toast.success('Booking confirmed! Check your email.');
+                      fetchListing();
+                      fetchUserBookings();
+                      navigate('/orders');
+                    }}
+                  >
+                    <CreditCard className="w-5 h-5 mr-2" />
+                    Proceed to booking
+                  </PaymentButton>
+                )
+              )}
+
+              {/* Chat should always be available */}
+              <ChatWithOwnerButton
+                ownerId={listing.owner_id}
+                ownerName={listing.owner_name}
+                listingId={listing.id}
+                listingTitle={listing.title}
+                className="w-full btn-secondary text-base py-5"
+              />
+
+              {/* Inquiry/Schedule Visit for Home/Business */}
+              {(listing.category === 'home' || listing.category === 'business') && (
+                <Dialog open={showBookingDialog} onOpenChange={setShowBookingDialog}>
+                  <DialogTrigger asChild>
+                    <Button
+                      className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-5"
+                      data-testid="book-now-btn"
+                      disabled={isBooked}
                     >
-                      <CreditCard className="w-5 h-5 mr-2" />
-                      Proceed to booking
-                    </PaymentButton>
-                  )
-                )}
-
-                {/* Chat should always be available */}
-                <ChatWithOwnerButton
-                  ownerId={listing.owner_id}
-                  ownerName={listing.owner_name}
-                  listingId={listing.id}
-                  listingTitle={listing.title}
-                  className="w-full btn-secondary text-base py-5"
-                />
-
-                {/* Inquiry/Schedule Visit for Home/Business */}
-                {(listing.category === 'home' || listing.category === 'business') && (
-                  <Dialog open={showBookingDialog} onOpenChange={setShowBookingDialog}>
-                    <DialogTrigger asChild>
-                      <Button
-                        className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-5"
-                        data-testid="book-now-btn"
-                        disabled={isBooked}
-                      >
-                        <CalendarIcon className="w-5 h-5 mr-2" />
-                        {isBooked ? 'Booking in progress' : 'Schedule Visit'}
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>Schedule Property Visit</DialogTitle>
-                        <DialogDescription>
-                          Pick a date for site visit
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-4 mt-4">
-                        <div>
-                          <Label>Select Date</Label>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="outline" className="w-full justify-start text-left font-normal mt-2">
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {bookingDate ? format(bookingDate, 'PPP') : 'Pick a date'}
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                              <Calendar
-                                mode="single"
-                                selected={bookingDate}
-                                onSelect={setBookingDate}
-                                disabled={(date) => date < new Date()}
-                              />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <div>
-                          <Label>Additional Notes</Label>
-                          <Textarea
-                            placeholder="Preferred time, questions..."
-                            value={bookingNotes}
-                            onChange={(e) => setBookingNotes(e.target.value)}
-                            className="mt-2"
-                          />
-                        </div>
-                        <Button
-                          onClick={handleBooking}
-                          className="w-full btn-primary"
-                          disabled={bookingLoading}
-                          data-testid="confirm-booking-btn"
-                        >
-                          {bookingLoading ? 'Sending...' : 'Send Visit Request'}
-                        </Button>
+                      <CalendarIcon className="w-5 h-5 mr-2" />
+                      {isBooked ? 'Booking in progress' : 'Schedule Visit'}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Schedule Property Visit</DialogTitle>
+                      <DialogDescription>
+                        Pick a date for site visit
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 mt-4">
+                      <div>
+                        <Label>Select Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start text-left font-normal mt-2">
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {bookingDate ? format(bookingDate, 'PPP') : 'Pick a date'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar
+                              mode="single"
+                              selected={bookingDate}
+                              onSelect={setBookingDate}
+                              disabled={(date) => date < new Date()}
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
+                      <div>
+                        <Label>Additional Notes</Label>
+                        <Textarea
+                          placeholder="Preferred time, questions..."
+                          value={bookingNotes}
+                          onChange={(e) => setBookingNotes(e.target.value)}
+                          className="mt-2"
+                        />
+                      </div>
+                      <Button
+                        onClick={handleBooking}
+                        className="w-full btn-primary"
+                        disabled={bookingLoading}
+                        data-testid="confirm-booking-btn"
+                      >
+                        {bookingLoading ? 'Sending...' : 'Send Visit Request'}
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
 
-                <p className="text-center text-xs text-muted-foreground">
-                  {(listing.category === 'home' || listing.category === 'business')
-                    ? 'No direct booking • Connect via visit request'
-                    : 'Secure payment • Instant confirmation'}
-                </p>
-              </CardContent>
-            </Card>
+              <p className="text-center text-xs text-muted-foreground">
+                {(listing.category === 'home' || listing.category === 'business')
+                  ? 'No direct booking • Connect via visit request'
+                  : 'Secure payment • Instant confirmation'}
+              </p>
+            </CardContent>
+          </Card>
 
-            {/* Safety Tips */}
-            <Card className="bg-secondary/5 border-secondary/20">
-              <CardContent className="pt-6">
-                <h4 className="font-semibold mb-3 flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-secondary" />
-                  Safety Tips
-                </h4>
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li>• Always visit the property before making any payment</li>
-                  <li>• Verify owner documents and ownership proof</li>
-                  <li>• Don't share OTPs or sensitive information</li>
-                  <li>• Report suspicious listings to GRUVORA LIVING</li>
-                </ul>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Safety Tips */}
+          <Card className="bg-secondary/5 border-secondary/20">
+            <CardContent className="pt-6">
+              <h4 className="font-semibold mb-3 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-secondary" />
+                Safety Tips
+              </h4>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li>• Always visit the property before making any payment</li>
+                <li>• Verify owner documents and ownership proof</li>
+                <li>• Don't share OTPs or sensitive information</li>
+                <li>• Report suspicious listings to GRUVORA LIVING</li>
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </div>
-
-      <Footer />
     </div>
-  );
+
+    <Footer />
+  </div>
+);
 };
 
 export default ListingDetailPage;

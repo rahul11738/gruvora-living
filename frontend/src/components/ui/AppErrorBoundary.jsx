@@ -84,5 +84,3 @@ export class AppErrorBoundary extends React.Component {
 }
 
 export default AppErrorBoundary;
-
-export default AppErrorBoundary;
