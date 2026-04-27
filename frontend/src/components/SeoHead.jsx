@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useContext } from "react";
 import { Helmet } from "react-helmet-async";
 
 /**
@@ -12,13 +12,6 @@ import { Helmet } from "react-helmet-async";
  * @param {object[]} [props.og] - Open Graph tags (auto-populates standard OG)
  * @param {object[]} [props.twitter] - Twitter Card tags (auto-populates standard Twitter)
  * @param {string} [props.robots] - Robots meta value
- * @param {string} [props.image] - Social share image URL
- * @param {string} [props.url] - Full page URL for canonical/OG
- * @param {string} [props.type="website"] - OG type (website, article, etc.)
- * @param {string} [props.locale="en_IN"] - OG locale
- * @param {string[]} [props.alternateLocales] - Alternate locale codes for hreflang
- * @param {boolean} [props.noindex=false] - Set robots to noindex,nofollow
- * @param {React.ReactNode} [props.children] - Extra tags (e.g., JSON-LD)
  */
 export default function SeoHead({
     title,
@@ -28,9 +21,6 @@ export default function SeoHead({
     meta = [],
     og = [],
     twitter = [],
-    robots = "index, follow",
-    twitter = [],
-    robots = "index, follow",
     image,
     url,
     type = "website",
@@ -38,63 +28,82 @@ export default function SeoHead({
     alternateLocales = [],
     noindex = false,
     children,
+    robots = "index, follow",
+    siteName = "Gruvora Living",
+    siteUrl = "https://www.gruvora.com/",
+    twitterSite = "@gruvoraliving",
+    twitterCreator = "@gruvoraliving",
+    themeColor = "#10b981",
 }) {
-    const siteName = "GharSetu";
-    const siteUrl = "https://gharsetu.com";
+    // Advanced: Try to auto-detect tenant from context if available
+    let tenantContext = {};
+    try {
+        // If you have a TenantContext, use it. Otherwise, fallback to props/defaults.
+        // Example: const TenantContext = React.createContext();
+        // tenantContext = useContext(TenantContext) || {};
+    } catch { }
 
-    // Build full title with site name suffix
+    const _siteName = siteName || tenantContext.siteName || "Gruvora Living";
+    const _siteUrl = siteUrl || tenantContext.siteUrl || "https://www.gruvora.com/";
+    const _twitterSite = twitterSite || tenantContext.twitterSite || "@gruvoraliving";
+    const _twitterCreator = twitterCreator || tenantContext.twitterCreator || "@gruvoraliving";
+    const _themeColor = themeColor || tenantContext.themeColor || "#10b981";
+
+    // Advanced: Runtime prop validation and warnings
+    if (process.env.NODE_ENV !== "production") {
+        if (!title) console.warn("[SeoHead] Missing required prop: title");
+        if (!description) console.warn("[SeoHead] Missing required prop: description");
+        if (!_siteName) console.warn("[SeoHead] siteName is missing or empty");
+        if (!_siteUrl) console.warn("[SeoHead] siteUrl is missing or empty");
+    }
+
     const fullTitle = useMemo(() => {
-        if (!title) return siteName;
+        if (!title) return _siteName;
         const t = String(title).trim();
-        return t.toLowerCase().includes(siteName.toLowerCase()) ? t : `${t} | ${siteName}`;
-    }, [title]);
+        return t.toLowerCase().includes(_siteName.toLowerCase()) ? t : `${t} | ${_siteName}`;
+    }, [title, _siteName]);
 
-    // Build canonical URL
     const canonicalUrl = useMemo(() => {
         if (canonical) return canonical;
         if (url) return url;
         if (typeof window !== "undefined" && window.location) {
             return window.location.origin + window.location.pathname + window.location.search;
         }
-        return siteUrl;
-    }, [canonical, url]);
+        return _siteUrl;
+    }, [canonical, url, _siteUrl]);
 
-    // Build absolute image URL
     const absoluteImage = useMemo(() => {
-        if (!image) return `${siteUrl}/og-image.jpg`;
-        return image.startsWith("http") ? image : `${siteUrl}${image.startsWith("/") ? "" : "/"}${image}`;
-    }, [image]);
+        if (!image) return `${_siteUrl}/og-image.jpg`;
+        return image.startsWith("http") ? image : `${_siteUrl}${image.startsWith("/") ? "" : "/"}${image}`;
+    }, [image, _siteUrl]);
 
     const effectiveRobots = useMemo(() => {
         if (noindex) return "noindex, nofollow";
         return robots;
     }, [noindex, robots]);
 
-    // Standard OG tags
     const standardOgTags = useMemo(() => [
         { property: "og:type", content: type },
         { property: "og:locale", content: locale },
-        { property: "og:site_name", content: siteName },
+        { property: "og:site_name", content: _siteName },
         { property: "og:url", content: canonicalUrl },
         { property: "og:title", content: fullTitle },
         { property: "og:image", content: absoluteImage },
         { property: "og:image:width", content: "1200" },
         { property: "og:image:height", content: "630" },
-        { property: "og:image:alt", content: `${siteName} - ${fullTitle}` },
+        { property: "og:image:alt", content: `${_siteName} - ${fullTitle}` },
         ...(description ? [{ property: "og:description", content: description }] : []),
-    ], [type, locale, siteName, canonicalUrl, fullTitle, absoluteImage, description]);
+    ], [type, locale, _siteName, canonicalUrl, fullTitle, absoluteImage, description]);
 
-    // Standard Twitter Card tags
     const standardTwitterTags = useMemo(() => [
         { name: "twitter:card", content: "summary_large_image" },
-        { name: "twitter:site", content: "@GharSetu" },
-        { name: "twitter:creator", content: "@GharSetu" },
+        { name: "twitter:site", content: _twitterSite },
+        { name: "twitter:creator", content: _twitterCreator },
         { name: "twitter:title", content: fullTitle },
         { name: "twitter:image", content: absoluteImage },
         ...(description ? [{ name: "twitter:description", content: description }] : []),
-    ], [fullTitle, absoluteImage, description]);
+    ], [fullTitle, absoluteImage, description, _twitterSite, _twitterCreator]);
 
-    // Build hreflang alternate links
     const hreflangLinks = useMemo(() => {
         const links = [{ rel: "alternate", hrefLang: "en", href: canonicalUrl }];
         if (alternateLocales.length > 0) {
@@ -109,14 +118,14 @@ export default function SeoHead({
         const base = [
             ...meta,
             { name: "viewport", content: "width=device-width, initial-scale=1.0" },
-            { name: "theme-color", content: "#10b981" },
-            { name: "msapplication-TileColor", content: "#10b981" },
+            { name: "theme-color", content: _themeColor },
+            { name: "msapplication-TileColor", content: _themeColor },
         ];
         if (keywords.length > 0) {
             base.push({ name: "keywords", content: keywords.join(", ") });
         }
         return base;
-    }, [meta, keywords]);
+    }, [meta, keywords, _themeColor]);
 
     const allOgTags = useMemo(() => [...standardOgTags, ...og], [standardOgTags, og]);
     const allTwitterTags = useMemo(() => [...standardTwitterTags, ...twitter], [standardTwitterTags, twitter]);
