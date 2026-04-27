@@ -115,28 +115,17 @@ export const ListingDetailPage = () => {
     fetchUserBookings();
   }, [fetchUserBookings]);
 
-  const isBooked = userBookings.some(
-      return (
-    <div className="min-h-screen bg-stone-50 flex items-center justify-center">
-      <Header />
-      <div className="text-center p-8">
-        <h2 className="text-xl font-semibold text-stone-900 mb-2">Listing not found</h2>
-        <p className="text-stone-600 mb-4">The property you are looking for does not exist or has been removed.</p>
-        <Button onClick={() => navigate("/")}>Back to Home</Button>
-      </div>
-    </div>
-  );
-  try {
-    const result = await toggleWishlist(id);
-    if (result.ok) {
-      toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist', {
-        duration: 1500,
-        id: `wishlist-${id}`,
-      });
-    }
-  } catch (error) {
-    toast.error('Failed to update wishlist');
+  // Check if the user has already booked this listing
+  const isBooked = userBookings.some(b => b.listing_id === id);
+  if (result.ok) {
+    toast.success(result.wishlisted ? 'Added to wishlist!' : 'Removed from wishlist', {
+      duration: 1500,
+      id: `wishlist-${id}`,
+    });
   }
+} catch (error) {
+  toast.error('Failed to update wishlist');
+}
 };
 
 const handleBooking = async () => {
